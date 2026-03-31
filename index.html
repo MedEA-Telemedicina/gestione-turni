@@ -4238,6 +4238,7 @@ function init() {
   if (rawLocal) {
     try {
       const d = JSON.parse(rawLocal);
+      if (d.doctors) state.doctors = d.doctors;
       if (d.weeks) state.weeks = d.weeks;
       if (d.holterWeeks) state.holterWeeks = d.holterWeeks;
       if (d.hcWeeks) state.hcWeeks = d.hcWeeks;
@@ -4271,6 +4272,7 @@ function init() {
     // Decodifica le chiavi (i "." erano stati codificati con "·" al salvataggio)
     data = decodeKeys(data);
     // Applica i dati remoti allo state
+    if (data.doctors) state.doctors = data.doctors;
     if (data.weeks) state.weeks = data.weeks;
     if (data.holterWeeks) state.holterWeeks = data.holterWeeks;
     if (data.hcWeeks) state.hcWeeks = data.hcWeeks;
@@ -4291,6 +4293,7 @@ function init() {
     renderSpiroTable();
     renderPlsTable();
     renderStats();
+    populateDoctorSelects();
     const el = document.getElementById('save-indicator');
     if (el) el.textContent = '🔄 Sincronizzato';
   });
