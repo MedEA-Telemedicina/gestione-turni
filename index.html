@@ -859,23 +859,59 @@ function getDoctorData(name) {
 // =============================================
 // PERSISTENCE
 // =============================================
+// Firebase non ammette "." nelle chiavi → rimpiazza con "·" (U+00B7) e viceversa
+function encodeKeys(obj) {
+  if (typeof obj !== 'object' || obj === null) return obj;
+  if (Array.isArray(obj)) return obj.map(encodeKeys);
+  const out = {};
+  for (const k of Object.keys(obj)) {
+    out[k.replace(/\./g, '·')] = encodeKeys(obj[k]);
+  }
+  return out;
+}
+function decodeKeys(obj) {
+  if (typeof obj !== 'object' || obj === null) return obj;
+  if (Array.isArray(obj)) return obj.map(decodeKeys);
+  const out = {};
+  for (const k of Object.keys(obj)) {
+    out[k.replace(/·/g, '.')] = decodeKeys(obj[k]);
+  }
+  return out;
+}
+
 function saveData(silent) {
+  // ── 1. Cache locale (best-effort, può fallire se localStorage è pieno) ──
   try {
-    const stateToSave = JSON.parse(JSON.stringify(state));
-    localStorage.setItem('cardio_state', JSON.stringify(stateToSave));
-    // Salva su Firebase (sincronizzazione multi-utente)
+    localStorage.setItem('cardio_state', JSON.stringify(state));
+  } catch(e) {
+    console.warn('⚠️ localStorage pieno o non disponibile:', e);
+  }
+
+  // ── 2. Firebase (principale — salvataggio reale) ──
+  try {
+    // Clona state senza funzioni/riferimenti circolari + sanifica chiavi per Firebase
+    const stateToSave = encodeKeys(JSON.parse(JSON.stringify(state)));
     _isSaving = true;
     db.ref('cardio_state').set(stateToSave)
-      .catch(e => console.warn('⚠️ Errore sync Firebase:', e))
+      .then(() => {
+        const now = new Date();
+        const hh = String(now.getHours()).padStart(2,'0');
+        const mm = String(now.getMinutes()).padStart(2,'0');
+        const el = document.getElementById('save-indicator');
+        if (el) el.textContent = `💾 Salvato ${hh}:${mm}`;
+        if (!silent) showToast('✓ Salvato!');
+      })
+      .catch(e => {
+        console.error('⚠️ Errore Firebase:', e);
+        const msg = `ERRORE FIREBASE:\nCodice: ${e.code || 'N/A'}\nMessaggio: ${e.message || JSON.stringify(e)}`;
+        alert(msg);
+        showToast('⚠️ Errore Firebase', 'danger');
+      })
       .finally(() => { setTimeout(() => { _isSaving = false; }, 1000); });
-    const now = new Date();
-    const hh = String(now.getHours()).padStart(2,'0');
-    const mm = String(now.getMinutes()).padStart(2,'0');
-    const el = document.getElementById('save-indicator');
-    if (el) el.textContent = `💾 Salvato ${hh}:${mm}`;
-    if (!silent) showToast('✓ Salvato!');
   } catch(e) {
-    showToast('⚠️ Errore salvataggio', 'danger');
+    console.error('⚠️ Errore salvataggio:', e);
+    alert('ERRORE SALVATAGGIO:\n' + (e.message || JSON.stringify(e)));
+    showToast('⚠️ Errore: ' + (e.message || e), 'danger');
   }
 }
 
@@ -1044,6 +1080,8 @@ async function loadData() {
     const snapshot = await db.ref('cardio_state').once('value');
     loaded = snapshot.val();
     if (loaded) {
+      // Decodifica le chiavi (Firebase non ammette "." → erano codificate con "·")
+      loaded = decodeKeys(loaded);
       // Aggiorna anche la cache locale
       localStorage.setItem('cardio_state', JSON.stringify(loaded));
     }
@@ -4209,8 +4247,10 @@ async function init() {
   // ── Listener real-time per sincronizzazione multi-utente ──
   db.ref('cardio_state').on('value', (snapshot) => {
     if (_isSaving) return; // skip aggiornamenti generati da noi stessi
-    const data = snapshot.val();
+    let data = snapshot.val();
     if (!data) return;
+    // Decodifica le chiavi (i "." erano stati codificati con "·" al salvataggio)
+    data = decodeKeys(data);
     // Applica i dati remoti allo state
     if (data.weeks) state.weeks = data.weeks;
     if (data.holterWeeks) state.holterWeeks = data.holterWeeks;
