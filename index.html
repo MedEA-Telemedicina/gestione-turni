@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="it">
 <head>
@@ -465,6 +466,9 @@
 </style>
 <!-- Google Identity Services -->
 <script src="https://accounts.google.com/gsi/client" async defer></script>
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 </head>
 <body>
 
@@ -857,7 +861,13 @@ function getDoctorData(name) {
 // =============================================
 function saveData(silent) {
   try {
-    localStorage.setItem('cardio_state', JSON.stringify(state));
+    const stateToSave = JSON.parse(JSON.stringify(state));
+    localStorage.setItem('cardio_state', JSON.stringify(stateToSave));
+    // Salva su Firebase (sincronizzazione multi-utente)
+    _isSaving = true;
+    db.ref('cardio_state').set(stateToSave)
+      .catch(e => console.warn('⚠️ Errore sync Firebase:', e))
+      .finally(() => { setTimeout(() => { _isSaving = false; }, 1000); });
     const now = new Date();
     const hh = String(now.getHours()).padStart(2,'0');
     const mm = String(now.getMinutes()).padStart(2,'0');
@@ -983,7 +993,23 @@ function migrateDefaultConsuntivo(doctorsList) {
   doctorsList.sort((a, b) => a.localeCompare(b));
 }
 
-function loadData() {
+// =============================================
+// FIREBASE SETUP
+// =============================================
+const firebaseConfig = {
+  apiKey: "AIzaSyBkwjLCFjun0RpVkEmwnaRJln-FV7Z7NQE",
+  authDomain: "gestione-turni-345c2.firebaseapp.com",
+  databaseURL: "https://gestione-turni-345c2-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "gestione-turni-345c2",
+  storageBucket: "gestione-turni-345c2.firebasestorage.app",
+  messagingSenderId: "477007515938",
+  appId: "1:477007515938:web:10cb2ff25e4f2e73d9557b"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+let _isSaving = false; // flag per evitare re-render sui propri salvataggi
+
+async function loadData() {
   const FULL_DOCTORS = [
     "AMATO F.","ANGELI F.","ANGELLOTTI D.","ANNUNZIATA M.","AZZARÀ G.",
     "BALLERINI A.","BARKI M.","BARTOLI L.","BATTAGLIA D.","BERLONI M.",
@@ -1012,10 +1038,25 @@ function loadData() {
   ];
 
 
-  const raw = localStorage.getItem('cardio_state');
-  if (raw) {
+  // Carica da Firebase, con fallback a localStorage se offline
+  let loaded = null;
+  try {
+    const snapshot = await db.ref('cardio_state').once('value');
+    loaded = snapshot.val();
+    if (loaded) {
+      // Aggiorna anche la cache locale
+      localStorage.setItem('cardio_state', JSON.stringify(loaded));
+    }
+  } catch(e) {
+    console.warn('⚠️ Firebase non raggiungibile, uso cache locale:', e);
+  }
+  if (!loaded) {
+    const raw = localStorage.getItem('cardio_state');
+    if (raw) { try { loaded = JSON.parse(raw); } catch(e) {} }
+  }
+
+  if (loaded) {
     try {
-      const loaded = JSON.parse(raw);
       if (loaded.weeks) state.weeks = loaded.weeks;
       if (loaded.requestTemplate) state.requestTemplate = loaded.requestTemplate;
       if (loaded.confirmTemplate) state.confirmTemplate = loaded.confirmTemplate;
@@ -4151,8 +4192,8 @@ function runAllTests() {
       ${passed}/${cases.length} test superati ${failed > 0 ? `— ${failed} falliti` : '✅'}
     </div>` + html;
 }
-function init() {
-  loadData();
+async function init() {
+  await loadData();
   currentWeek = getMondayStr(new Date());
   document.getElementById('week-picker').value = currentWeek;
   updateHeaderWeek();
@@ -4164,9 +4205,39 @@ function init() {
   renderPlsTable();
   renderStats();
   populateDoctorSelects();
+
+  // ── Listener real-time per sincronizzazione multi-utente ──
+  db.ref('cardio_state').on('value', (snapshot) => {
+    if (_isSaving) return; // skip aggiornamenti generati da noi stessi
+    const data = snapshot.val();
+    if (!data) return;
+    // Applica i dati remoti allo state
+    if (data.weeks) state.weeks = data.weeks;
+    if (data.holterWeeks) state.holterWeeks = data.holterWeeks;
+    if (data.hcWeeks) state.hcWeeks = data.hcWeeks;
+    if (data.hpWeeks) state.hpWeeks = data.hpWeeks;
+    if (data.spiroWeeks) state.spiroWeeks = data.spiroWeeks;
+    if (data.plsWeeks) state.plsWeeks = data.plsWeeks;
+    if (data.doctorExtra) state.doctorExtra = data.doctorExtra;
+    if (data.doctorTypes) state.doctorTypes = data.doctorTypes;
+    if (data.requestTemplate) state.requestTemplate = data.requestTemplate;
+    if (data.confirmTemplate) state.confirmTemplate = data.confirmTemplate;
+    // Aggiorna la cache locale
+    localStorage.setItem('cardio_state', JSON.stringify(data));
+    // Re-render tutte le tabelle
+    renderTable();
+    renderHolterTable();
+    renderHcTable();
+    renderHpTable();
+    renderSpiroTable();
+    renderPlsTable();
+    renderStats();
+    const el = document.getElementById('save-indicator');
+    if (el) el.textContent = '🔄 Sincronizzato';
+  });
 }
 
-init();
+init().catch(e => console.error('Errore inizializzazione:', e));
 </script>
 </body>
 </html>
