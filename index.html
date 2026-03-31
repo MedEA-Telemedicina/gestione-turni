@@ -4300,21 +4300,7 @@ function runAllTests() {
       ${passed}/${cases.length} test superati ${failed > 0 ? `— ${failed} falliti` : '✅'}
     </div>` + html;
 }
-// ── Debug temporaneo ──
-function _dbg(msg) {
-  let el = document.getElementById('_debug');
-  if (!el) {
-    el = document.createElement('div');
-    el.id = '_debug';
-    el.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:#1e293b;color:#22d3ee;font-family:monospace;font-size:11px;padding:6px 12px;z-index:99999;max-height:180px;overflow-y:auto;border-top:2px solid #22d3ee;';
-    document.body.appendChild(el);
-  }
-  el.innerHTML += msg + '<br>';
-  console.log('[DBG]', msg);
-}
-
 function init() {
-  _dbg('init() start');
   // 1. Carica cache locale SINCRONA e renderizza subito
   let loaded = null;
   const rawLocal = localStorage.getItem('cardio_state');
@@ -4351,34 +4337,26 @@ function init() {
         setTimeout(() => saveData(true), 500);
       }
     } catch(e) {
-      _dbg('ERRORE init localStorage: ' + e.message);
       state.doctors = [...FULL_DOCTORS];
       DEFAULT_HOLTER.forEach(d => { state.holterEnabled[d] = true; });
       migrateDefaultConsuntivo(state.doctors);
       state._consuntivoMigrated = true;
     }
   } else {
-    _dbg('Nessun localStorage → primo avvio');
     // Primo avvio: nessun dato salvato
     state.doctors = [...FULL_DOCTORS];
     DEFAULT_HOLTER.forEach(d => { state.holterEnabled[d] = true; });
     migrateDefaultConsuntivo(state.doctors);
     state._consuntivoMigrated = true;
   }
-
-  _dbg('state.doctors.length = ' + state.doctors.length);
-  const _nessuno = state.doctors.filter(d => (state.doctorTypes[d] || 'completo') === 'nessuno').length;
-  _dbg('doctorTypes "nessuno": ' + _nessuno + ' / doctorTypes keys: ' + Object.keys(state.doctorTypes).length);
-
   currentWeek = getMondayStr(new Date());
-  _dbg('currentWeek = ' + currentWeek + ' | allowedWeeks = ' + JSON.stringify(getAllowedWeeks()));
   const _wp = document.getElementById('week-picker');
   const _aw = getAllowedWeeks();
   _wp.value = currentWeek;
   _wp.min = _aw[0];
   _wp.max = _aw[2];
   updateHeaderWeek();
-  try { renderTable(); _dbg('renderTable OK'); } catch(e) { _dbg('ERRORE renderTable: ' + e.message); }
+  renderTable();
   renderHolterTable();
   renderHcTable();
   renderHpTable();
@@ -4389,18 +4367,14 @@ function init() {
 
   // ── Listener real-time per sincronizzazione multi-utente ──
   db.ref('cardio_state').on('value', (snapshot) => {
-    _dbg('Firebase listener fired | _isSaving=' + _isSaving);
     if (_isSaving) return; // skip aggiornamenti generati da noi stessi
     try {
       let data = snapshot.val();
-      if (!data) { _dbg('Firebase: data is null'); return; }
-      _dbg('Firebase keys: ' + Object.keys(data).join(', '));
-      _dbg('Firebase doctors type: ' + (Array.isArray(data.doctors) ? 'array' : typeof data.doctors) + ' | len=' + (data.doctors ? (data.doctors.length || Object.keys(data.doctors).length) : 0));
+      if (!data) return;
       // Decodifica le chiavi (i "." erano stati codificati con "·" al salvataggio)
       data = decodeKeys(data);
       // Applica i dati remoti allo state (solo le 3 settimane consentite)
       state.doctors = mergeDoctors(data.doctors);
-      _dbg('Dopo mergeDoctors: state.doctors.length = ' + state.doctors.length);
       if (data.weeks) state.weeks = pruneToAllowedWeeks(data.weeks);
       if (data.holterWeeks) state.holterWeeks = pruneToAllowedWeeks(data.holterWeeks);
       if (data.hcWeeks) state.hcWeeks = pruneToAllowedWeeks(data.hcWeeks);
@@ -4416,7 +4390,6 @@ function init() {
       localStorage.setItem('cardio_state', JSON.stringify(data));
       // Re-render tutte le tabelle
       renderTable();
-      _dbg('Firebase renderTable OK');
       renderHolterTable();
       renderHcTable();
       renderHpTable();
@@ -4427,7 +4400,6 @@ function init() {
       const el = document.getElementById('save-indicator');
       if (el) el.textContent = '🔄 Sincronizzato';
     } catch(e) {
-      _dbg('ERRORE Firebase listener: ' + e.message + ' | ' + e.stack);
     }
   });
 }
