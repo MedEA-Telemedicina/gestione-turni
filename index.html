@@ -788,6 +788,37 @@ function getTipoLabel(tipo) {
        : 'Turno completo';
 }
 
+const FULL_DOCTORS = [
+  "AMATO F.","ANGELI F.","ANGELLOTTI D.","ANNUNZIATA M.","AZZARÀ G.",
+  "BALLERINI A.","BARKI M.","BARTOLI L.","BATTAGLIA D.","BERLONI M.",
+  "BINI R.","BUCCI M.","BUZZELLI L.","CAGNETTA V.","CALABRÒ G.",
+  "CANOVI L.","CAPASSO R.","CARDILLO M.","CARDONE U.","CATALDI C.",
+  "CIANFANELLI L.","COCCHIARELLA L.","CORLIANÒ A.","D'ANGELI I.",
+  "DE BLASIS E.","DELLI VENERI A.","FANTI D.","FARINA J.","FERRERA A.",
+  "FORMISANO R.","FUSI C.","GALASSO M.","GAREZZO R.","GIAQUINTO A.",
+  "GISMONDI A.","GOLINO P.","GREGORI M.","IANNOTTA M.","IELAPI J.",
+  "IMPELLIZZERI A.","INGALLINA G.","IONICO T.","JACOMELLI I.",
+  "LA ROSA G.","LABRIOLA A.","LAVIOLA D.","LENCI L.","LENTINI E.",
+  "LO CASTO M.","MAIANDI C.","MANCUSO F.","MANGO F.","MARCHESE A.",
+  "MARRA A.","MARRONE A.","MAZZOCCHI L.","MEOSSI S.","MEZZANI A.","MONTAINA M.",
+  "MUSUMECI C.","NICOLÌ L.","PALDINO A.","PANGALLO G.","PARISI V.",
+  "PATANÈ A.","PERGOLA V.","PEROTTO M.","PICA A.","PIDONE C.",
+  "RIVARA D.","ROCCA B.","RUOCCO G.","SANGUETTOLI F.","SANTACROCE F.",
+  "SAVONITTO G.","SCARDIA A.","SERRATORE S.","SETZU T.","SGREVA S.",
+  "SILVESTRO C.","TARANTINI R.","TEMPO E.","TINTI L.","TORLONE F.",
+  "TUCCI S.","TUSA F.","VISELLI A.","VITALE G."
+];
+const DEFAULT_HOLTER = [
+  "MEZZANI A.","BUCCI M.","FERRERA A.","GOLINO P.","JACOMELLI I.",
+  "MUSUMECI C.","NICOLÌ L.","RUOCCO G.","SCARDIA A.","TORLONE F.","TUCCI S."
+];
+
+// Merge doctors: FULL_DOCTORS + eventuali extra, ordinati
+function mergeDoctors(savedDoctors) {
+  const extra = (savedDoctors || []).filter(d => !FULL_DOCTORS.includes(d));
+  return [...FULL_DOCTORS, ...extra].sort((a, b) => a.localeCompare(b));
+}
+
 let state = {
   doctors: [],
   weeks: {},
@@ -843,6 +874,21 @@ function addDays(str, n) {
   return `${y}-${m}-${day}`;
 }
 
+// ── Finestra 3 settimane: precedente, corrente, successiva ──
+function getAllowedWeeks() {
+  const today = getMondayStr(new Date());
+  return [addDays(today, -7), today, addDays(today, 7)];
+}
+function pruneToAllowedWeeks(obj) {
+  if (!obj || typeof obj !== 'object') return obj;
+  const allowed = new Set(getAllowedWeeks());
+  const pruned = {};
+  for (const k of Object.keys(obj)) {
+    if (allowed.has(k)) pruned[k] = obj[k];
+  }
+  return pruned;
+}
+
 let currentWeek = getMondayStr(new Date());
 
 function getWeekData() {
@@ -889,8 +935,15 @@ function saveData(silent) {
 
   // ── 2. Firebase (principale — salvataggio reale) ──
   try {
-    // Clona state senza funzioni/riferimenti circolari + sanifica chiavi per Firebase
-    const stateToSave = encodeKeys(JSON.parse(JSON.stringify(state)));
+    // Clona state, mantieni solo le 3 settimane consentite, sanifica chiavi per Firebase
+    const cloned = JSON.parse(JSON.stringify(state));
+    cloned.weeks = pruneToAllowedWeeks(cloned.weeks);
+    cloned.holterWeeks = pruneToAllowedWeeks(cloned.holterWeeks);
+    cloned.hcWeeks = pruneToAllowedWeeks(cloned.hcWeeks);
+    cloned.hpWeeks = pruneToAllowedWeeks(cloned.hpWeeks);
+    cloned.spiroWeeks = pruneToAllowedWeeks(cloned.spiroWeeks);
+    cloned.plsWeeks = pruneToAllowedWeeks(cloned.plsWeeks);
+    const stateToSave = encodeKeys(cloned);
     _isSaving = true;
     db.ref('cardio_state').set(stateToSave)
       .then(() => {
@@ -1181,7 +1234,11 @@ function switchTab(id) {
 function onWeekChange() {
   const val = document.getElementById('week-picker').value;
   if (!val) return;
-  currentWeek = getMondayStr(parseLocalDate(val));
+  const allowed = getAllowedWeeks();
+  let week = getMondayStr(parseLocalDate(val));
+  if (week < allowed[0]) week = allowed[0];
+  if (week > allowed[2]) week = allowed[2];
+  currentWeek = week;
   document.getElementById('week-picker').value = currentWeek;
   updateHeaderWeek();
   renderTable();
@@ -1194,6 +1251,8 @@ function onWeekChange() {
 }
 
 function prevWeek() {
+  const allowed = getAllowedWeeks();
+  if (currentWeek <= allowed[0]) return; // già alla settimana più vecchia consentita
   currentWeek = addDays(currentWeek, -7);
   document.getElementById('week-picker').value = currentWeek;
   updateHeaderWeek();
@@ -1207,6 +1266,8 @@ function prevWeek() {
 }
 
 function nextWeek() {
+  const allowed = getAllowedWeeks();
+  if (currentWeek >= allowed[2]) return; // già alla settimana più futura consentita
   currentWeek = addDays(currentWeek, 7);
   document.getElementById('week-picker').value = currentWeek;
   updateHeaderWeek();
@@ -4232,30 +4293,85 @@ function runAllTests() {
       ${passed}/${cases.length} test superati ${failed > 0 ? `— ${failed} falliti` : '✅'}
     </div>` + html;
 }
-function init() {
-  // 1. Carica cache locale SINCRONA e renderizza subito (pagina visibile immediatamente)
-  const rawLocal = localStorage.getItem('cardio_state');
-  if (rawLocal) {
-    try {
-      const d = JSON.parse(rawLocal);
-      if (d.doctors) state.doctors = d.doctors;
-      if (d.weeks) state.weeks = d.weeks;
-      if (d.holterWeeks) state.holterWeeks = d.holterWeeks;
-      if (d.hcWeeks) state.hcWeeks = d.hcWeeks;
-      if (d.hpWeeks) state.hpWeeks = d.hpWeeks;
-      if (d.spiroWeeks) state.spiroWeeks = d.spiroWeeks;
-      if (d.plsWeeks) state.plsWeeks = d.plsWeeks;
-      if (d.doctorTypes) state.doctorTypes = d.doctorTypes;
-      if (d.doctorExtra) state.doctorExtra = d.doctorExtra;
-      if (d.requestTemplate) state.requestTemplate = d.requestTemplate;
-      if (d.confirmTemplate) state.confirmTemplate = d.confirmTemplate;
-      if (d.holterEnabled) state.holterEnabled = d.holterEnabled;
-    } catch(e) { console.warn('Cache locale corrotta:', e); }
+// ── Debug temporaneo ──
+function _dbg(msg) {
+  let el = document.getElementById('_debug');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = '_debug';
+    el.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:#1e293b;color:#22d3ee;font-family:monospace;font-size:11px;padding:6px 12px;z-index:99999;max-height:180px;overflow-y:auto;border-top:2px solid #22d3ee;';
+    document.body.appendChild(el);
   }
+  el.innerHTML += msg + '<br>';
+  console.log('[DBG]', msg);
+}
+
+function init() {
+  _dbg('init() start');
+  // 1. Carica cache locale SINCRONA e renderizza subito
+  let loaded = null;
+  const rawLocal = localStorage.getItem('cardio_state');
+  if (rawLocal) { try { loaded = JSON.parse(rawLocal); } catch(e) {} }
+
+  if (loaded) {
+    try {
+      if (loaded.weeks) state.weeks = pruneToAllowedWeeks(loaded.weeks);
+      if (loaded.holterWeeks) state.holterWeeks = pruneToAllowedWeeks(loaded.holterWeeks);
+      if (loaded.hcWeeks) state.hcWeeks = pruneToAllowedWeeks(loaded.hcWeeks);
+      if (loaded.hpWeeks) state.hpWeeks = pruneToAllowedWeeks(loaded.hpWeeks);
+      if (loaded.spiroWeeks) state.spiroWeeks = pruneToAllowedWeeks(loaded.spiroWeeks);
+      if (loaded.plsWeeks) state.plsWeeks = pruneToAllowedWeeks(loaded.plsWeeks);
+      if (loaded.requestTemplate) state.requestTemplate = loaded.requestTemplate;
+      if (loaded.confirmTemplate) state.confirmTemplate = loaded.confirmTemplate;
+      if (loaded.doctorTypes) state.doctorTypes = loaded.doctorTypes;
+      if (loaded.doctorExtra) state.doctorExtra = loaded.doctorExtra;
+      state.doctors = mergeDoctors(loaded.doctors);
+      // Holter
+      if (loaded.holterEnabled) {
+        state.holterEnabled = loaded.holterEnabled;
+        DEFAULT_HOLTER.forEach(d => { if (state.holterEnabled[d] === undefined) state.holterEnabled[d] = true; });
+      } else if (loaded.holterDoctors && loaded.holterDoctors.length > 0) {
+        loaded.holterDoctors.forEach(d => { state.holterEnabled[d] = true; });
+        loaded.holterDoctors.forEach(d => { if (!state.doctors.includes(d)) state.doctors.push(d); });
+        state.doctors.sort((a, b) => a.localeCompare(b));
+      } else {
+        DEFAULT_HOLTER.forEach(d => { state.holterEnabled[d] = true; });
+      }
+      // Migrazione consuntivo
+      if (!loaded._consuntivoMigrated) {
+        migrateDefaultConsuntivo(state.doctors);
+        state._consuntivoMigrated = true;
+        setTimeout(() => saveData(true), 500);
+      }
+    } catch(e) {
+      _dbg('ERRORE init localStorage: ' + e.message);
+      state.doctors = [...FULL_DOCTORS];
+      DEFAULT_HOLTER.forEach(d => { state.holterEnabled[d] = true; });
+      migrateDefaultConsuntivo(state.doctors);
+      state._consuntivoMigrated = true;
+    }
+  } else {
+    _dbg('Nessun localStorage → primo avvio');
+    // Primo avvio: nessun dato salvato
+    state.doctors = [...FULL_DOCTORS];
+    DEFAULT_HOLTER.forEach(d => { state.holterEnabled[d] = true; });
+    migrateDefaultConsuntivo(state.doctors);
+    state._consuntivoMigrated = true;
+  }
+
+  _dbg('state.doctors.length = ' + state.doctors.length);
+  const _nessuno = state.doctors.filter(d => (state.doctorTypes[d] || 'completo') === 'nessuno').length;
+  _dbg('doctorTypes "nessuno": ' + _nessuno + ' / doctorTypes keys: ' + Object.keys(state.doctorTypes).length);
+
   currentWeek = getMondayStr(new Date());
-  document.getElementById('week-picker').value = currentWeek;
+  _dbg('currentWeek = ' + currentWeek + ' | allowedWeeks = ' + JSON.stringify(getAllowedWeeks()));
+  const _wp = document.getElementById('week-picker');
+  const _aw = getAllowedWeeks();
+  _wp.value = currentWeek;
+  _wp.min = _aw[0];
+  _wp.max = _aw[2];
   updateHeaderWeek();
-  renderTable();
+  try { renderTable(); _dbg('renderTable OK'); } catch(e) { _dbg('ERRORE renderTable: ' + e.message); }
   renderHolterTable();
   renderHcTable();
   renderHpTable();
@@ -4266,36 +4382,46 @@ function init() {
 
   // ── Listener real-time per sincronizzazione multi-utente ──
   db.ref('cardio_state').on('value', (snapshot) => {
+    _dbg('Firebase listener fired | _isSaving=' + _isSaving);
     if (_isSaving) return; // skip aggiornamenti generati da noi stessi
-    let data = snapshot.val();
-    if (!data) return;
-    // Decodifica le chiavi (i "." erano stati codificati con "·" al salvataggio)
-    data = decodeKeys(data);
-    // Applica i dati remoti allo state
-    if (data.doctors) state.doctors = data.doctors;
-    if (data.weeks) state.weeks = data.weeks;
-    if (data.holterWeeks) state.holterWeeks = data.holterWeeks;
-    if (data.hcWeeks) state.hcWeeks = data.hcWeeks;
-    if (data.hpWeeks) state.hpWeeks = data.hpWeeks;
-    if (data.spiroWeeks) state.spiroWeeks = data.spiroWeeks;
-    if (data.plsWeeks) state.plsWeeks = data.plsWeeks;
-    if (data.doctorExtra) state.doctorExtra = data.doctorExtra;
-    if (data.doctorTypes) state.doctorTypes = data.doctorTypes;
-    if (data.requestTemplate) state.requestTemplate = data.requestTemplate;
-    if (data.confirmTemplate) state.confirmTemplate = data.confirmTemplate;
-    // Aggiorna la cache locale
-    localStorage.setItem('cardio_state', JSON.stringify(data));
-    // Re-render tutte le tabelle
-    renderTable();
-    renderHolterTable();
-    renderHcTable();
-    renderHpTable();
-    renderSpiroTable();
-    renderPlsTable();
-    renderStats();
-    populateDoctorSelects();
-    const el = document.getElementById('save-indicator');
-    if (el) el.textContent = '🔄 Sincronizzato';
+    try {
+      let data = snapshot.val();
+      if (!data) { _dbg('Firebase: data is null'); return; }
+      _dbg('Firebase keys: ' + Object.keys(data).join(', '));
+      _dbg('Firebase doctors type: ' + (Array.isArray(data.doctors) ? 'array' : typeof data.doctors) + ' | len=' + (data.doctors ? (data.doctors.length || Object.keys(data.doctors).length) : 0));
+      // Decodifica le chiavi (i "." erano stati codificati con "·" al salvataggio)
+      data = decodeKeys(data);
+      // Applica i dati remoti allo state (solo le 3 settimane consentite)
+      state.doctors = mergeDoctors(data.doctors);
+      _dbg('Dopo mergeDoctors: state.doctors.length = ' + state.doctors.length);
+      if (data.weeks) state.weeks = pruneToAllowedWeeks(data.weeks);
+      if (data.holterWeeks) state.holterWeeks = pruneToAllowedWeeks(data.holterWeeks);
+      if (data.hcWeeks) state.hcWeeks = pruneToAllowedWeeks(data.hcWeeks);
+      if (data.hpWeeks) state.hpWeeks = pruneToAllowedWeeks(data.hpWeeks);
+      if (data.spiroWeeks) state.spiroWeeks = pruneToAllowedWeeks(data.spiroWeeks);
+      if (data.plsWeeks) state.plsWeeks = pruneToAllowedWeeks(data.plsWeeks);
+      if (data.doctorExtra) state.doctorExtra = data.doctorExtra;
+      if (data.doctorTypes) state.doctorTypes = data.doctorTypes;
+      if (data.holterEnabled) state.holterEnabled = data.holterEnabled;
+      if (data.requestTemplate) state.requestTemplate = data.requestTemplate;
+      if (data.confirmTemplate) state.confirmTemplate = data.confirmTemplate;
+      // Aggiorna la cache locale
+      localStorage.setItem('cardio_state', JSON.stringify(data));
+      // Re-render tutte le tabelle
+      renderTable();
+      _dbg('Firebase renderTable OK');
+      renderHolterTable();
+      renderHcTable();
+      renderHpTable();
+      renderSpiroTable();
+      renderPlsTable();
+      renderStats();
+      populateDoctorSelects();
+      const el = document.getElementById('save-indicator');
+      if (el) el.textContent = '🔄 Sincronizzato';
+    } catch(e) {
+      _dbg('ERRORE Firebase listener: ' + e.message + ' | ' + e.stack);
+    }
   });
 }
 
