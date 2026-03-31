@@ -1074,23 +1074,25 @@ async function loadData() {
   ];
 
 
-  // Carica da Firebase, con fallback a localStorage se offline
+  // Carica da localStorage immediatamente (render veloce)
   let loaded = null;
+  const rawLocal = localStorage.getItem('cardio_state');
+  if (rawLocal) { try { loaded = JSON.parse(rawLocal); } catch(e) {} }
+
+  // Poi prova Firebase con timeout di 5 secondi
   try {
-    const snapshot = await db.ref('cardio_state').once('value');
-    loaded = snapshot.val();
-    if (loaded) {
+    const fbPromise = db.ref('cardio_state').once('value');
+    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000));
+    const snapshot = await Promise.race([fbPromise, timeoutPromise]);
+    const fbLoaded = snapshot.val();
+    if (fbLoaded) {
       // Decodifica le chiavi (Firebase non ammette "." → erano codificate con "·")
-      loaded = decodeKeys(loaded);
+      loaded = decodeKeys(fbLoaded);
       // Aggiorna anche la cache locale
       localStorage.setItem('cardio_state', JSON.stringify(loaded));
     }
   } catch(e) {
-    console.warn('⚠️ Firebase non raggiungibile, uso cache locale:', e);
-  }
-  if (!loaded) {
-    const raw = localStorage.getItem('cardio_state');
-    if (raw) { try { loaded = JSON.parse(raw); } catch(e) {} }
+    console.warn('⚠️ Firebase non raggiungibile o timeout, uso cache locale:', e);
   }
 
   if (loaded) {
@@ -4230,8 +4232,25 @@ function runAllTests() {
       ${passed}/${cases.length} test superati ${failed > 0 ? `— ${failed} falliti` : '✅'}
     </div>` + html;
 }
-async function init() {
-  await loadData();
+function init() {
+  // 1. Carica cache locale SINCRONA e renderizza subito (pagina visibile immediatamente)
+  const rawLocal = localStorage.getItem('cardio_state');
+  if (rawLocal) {
+    try {
+      const d = JSON.parse(rawLocal);
+      if (d.weeks) state.weeks = d.weeks;
+      if (d.holterWeeks) state.holterWeeks = d.holterWeeks;
+      if (d.hcWeeks) state.hcWeeks = d.hcWeeks;
+      if (d.hpWeeks) state.hpWeeks = d.hpWeeks;
+      if (d.spiroWeeks) state.spiroWeeks = d.spiroWeeks;
+      if (d.plsWeeks) state.plsWeeks = d.plsWeeks;
+      if (d.doctorTypes) state.doctorTypes = d.doctorTypes;
+      if (d.doctorExtra) state.doctorExtra = d.doctorExtra;
+      if (d.requestTemplate) state.requestTemplate = d.requestTemplate;
+      if (d.confirmTemplate) state.confirmTemplate = d.confirmTemplate;
+      if (d.holterEnabled) state.holterEnabled = d.holterEnabled;
+    } catch(e) { console.warn('Cache locale corrotta:', e); }
+  }
   currentWeek = getMondayStr(new Date());
   document.getElementById('week-picker').value = currentWeek;
   updateHeaderWeek();
@@ -4277,7 +4296,7 @@ async function init() {
   });
 }
 
-init().catch(e => console.error('Errore inizializzazione:', e));
+init();
 </script>
 </body>
 </html>
