@@ -1,0 +1,4172 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Disponibilità medici — Medea</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f4f5f8;
+    --surface: #ffffff;
+    --surface2: #eef0f5;
+    --border: #d8dce8;
+    --accent: #2563eb;
+    --accent2: #7c3aed;
+    --success: #059669;
+    --warn: #d97706;
+    --danger: #dc2626;
+    --text: #111827;
+    --muted: #6b7280;
+    --font-display: 'Syne', sans-serif;
+    --font-mono: 'DM Mono', monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    min-height: 100vh;
+  }
+
+  /* ---- HEADER ---- */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  header h1 {
+    font-family: var(--font-display);
+    font-size: 18px;
+    font-weight: 400;
+    letter-spacing: 0.2px;
+    color: var(--accent);
+  }
+  header .week-display {
+    font-size: 12px;
+    color: var(--muted);
+  }
+  header .week-display strong { color: var(--accent); }
+
+  /* ---- TABS ---- */
+  .tabs {
+    display: flex;
+    gap: 2px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+  }
+  .tab-btn {
+    padding: 10px 16px;
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* ---- MAIN ---- */
+  main { padding: 24px; }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* ---- WEEK SELECTOR ---- */
+  .week-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+  .week-bar label { color: var(--muted); font-size: 11px; }
+  .week-bar input[type=date] {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+  }
+  .btn {
+    padding: 7px 14px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 500;
+    transition: all 0.15s;
+  }
+  .btn-primary { background: var(--accent); color: #ffffff; }
+  .btn-primary:hover { opacity: 0.85; }
+  .btn-ghost { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+  .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-success { background: var(--success); color: #ffffff; }
+  .btn-success:hover { opacity: 0.85; }
+  .btn-warn { background: var(--warn); color: #ffffff; }
+  .btn-danger { background: var(--danger); color: #ffffff; }
+  .btn-sm { padding: 4px 10px; font-size: 11px; }
+
+  /* ---- CARDS ---- */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  .card-title {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--accent);
+    margin-bottom: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  /* ---- DISPONIBILITÀ GRID ---- */
+  .disp-table-wrap { overflow-x: auto; }
+  .disp-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    min-width: 820px;
+  }
+  .disp-table th {
+    background: var(--surface2);
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    padding: 6px 4px;
+    text-align: center;
+    border: 1px solid var(--border);
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  .disp-table th.day-header {
+    color: var(--accent);
+    background: rgba(37,99,235,0.07);
+    font-size: 11px;
+    font-weight: 600;
+    min-width: 70px;
+  }
+  .disp-table td {
+    border: 1px solid var(--border);
+    padding: 3px 2px;
+    text-align: center;
+    vertical-align: middle;
+    overflow: hidden;
+  }
+  .disp-table th.name-col-header {
+    width: 150px;
+    min-width: 150px;
+  }
+  .disp-table td.name-cell {
+    text-align: left;
+    padding: 6px 8px;
+    font-size: 12px;
+    color: var(--text);
+    white-space: nowrap;
+    width: 120px;
+    min-width: 120px;
+    max-width: 140px;
+    background: var(--surface2);
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .disp-table tr:hover td.name-cell { filter: brightness(0.93); }
+
+  .slot-btn {
+    width: 100%;
+    min-width: 0;
+    height: 26px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: transparent;
+    cursor: pointer;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    transition: all 0.12s;
+    color: var(--muted);
+    box-sizing: border-box;
+  }
+  .slot-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .slot-btn.disponibile { background: rgba(5,150,105,0.12); border-color: var(--success); color: var(--success); font-weight:700; }
+  .slot-btn.solo-ecg { background: rgba(217,119,6,0.12); border-color: var(--warn); color: var(--warn); font-weight:700; }
+  .slot-btn.confermato { background: rgba(37,99,235,0.14); border-color: var(--accent); color: var(--accent); font-weight:700; }
+  .slot-btn.confermato-ecg { background: rgba(124,58,237,0.14); border-color: var(--accent2); color: var(--accent2); font-weight:700; }
+  .slot-btn.ferie { background: rgba(220,38,38,0.12); border-color: var(--danger); color: var(--danger); font-weight:700; }
+
+  .ferie-td { padding: 4px 6px; }
+  .ferie-check { width: 16px; height: 16px; accent-color: var(--danger); cursor: pointer; }
+
+  /* ---- WA PANEL ---- */
+  .wa-container { max-width: 800px; }
+  .wa-bubble {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 12px;
+  }
+  .wa-bubble .doc-name {
+    font-family: var(--font-display);
+    font-weight: 700;
+    color: var(--accent2);
+    margin-bottom: 6px;
+    font-size: 13px;
+  }
+  .wa-bubble .msg-text {
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    margin-bottom: 10px;
+  }
+  .wa-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .wa-parse-badge {
+    display: inline-flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin: 6px 0;
+  }
+  .badge {
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 500;
+  }
+  .badge-mat { background: rgba(5,150,105,0.12); color: var(--success); border: 1px solid var(--success); }
+  .badge-pom { background: rgba(37,99,235,0.12); color: var(--accent); border: 1px solid var(--accent); }
+  .badge-ecg { background: rgba(217,119,6,0.12); color: var(--warn); border: 1px solid var(--warn); }
+  .badge-ferie { background: rgba(220,38,38,0.12); color: var(--danger); border: 1px solid var(--danger); }
+
+  /* ---- MESSAGGI CONFERMA ---- */
+  .conf-list { display: flex; flex-direction: column; gap: 10px; }
+  .conf-item {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .conf-item .name { font-weight: 600; color: var(--accent2); min-width: 130px; font-size: 12px; }
+  .conf-item .msg { flex: 1; color: var(--text); font-size: 12px; line-height: 1.6; }
+  .conf-item .copy-btn {
+    flex-shrink: 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 4px 10px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 11px;
+    font-family: var(--font-mono);
+    transition: all 0.12s;
+  }
+  .conf-item .copy-btn:hover { border-color: var(--success); color: var(--success); }
+
+  /* ---- SETTINGS ---- */
+  .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; max-width: 900px; }
+  @media (max-width: 640px) { .settings-grid { grid-template-columns: 1fr; } }
+  .doc-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .doc-item:last-child { border-bottom: none; }
+  .doc-item input[type=text] {
+    flex: 1;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 5px 8px;
+    border-radius: 5px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+  }
+  .doc-item input[type=text]:focus { border-color: var(--accent); outline: none; }
+
+  /* ---- UTILITIES ---- */
+  .legend {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+  }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
+  .legend-dot { width: 10px; height: 10px; border-radius: 2px; }
+
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: var(--success);
+    color: #ffffff;
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: all 0.3s;
+    z-index: 999;
+    pointer-events: none;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+
+  .input-add {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .input-add input {
+    flex: 1;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 7px 10px;
+    border-radius: 6px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    max-width: 300px;
+  }
+  .input-add input:focus { border-color: var(--accent); outline: none; }
+
+  .stat-row {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+  }
+  .stat-pill {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 4px 12px;
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .stat-pill strong { color: var(--text); }
+
+  textarea.wa-input {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 10px 12px;
+    border-radius: 6px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.6;
+    resize: vertical;
+    min-height: 80px;
+    margin-top: 8px;
+  }
+  textarea.wa-input:focus { border-color: var(--accent); outline: none; }
+
+  .empty-state {
+    text-align: center;
+    color: var(--muted);
+    padding: 40px;
+    font-size: 13px;
+  }
+
+  .filter-bar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+  }
+  .filter-bar input {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    width: 200px;
+  }
+  .filter-bar input:focus { border-color: var(--accent); outline: none; }
+
+  select.styled {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 5px 8px;
+    border-radius: 5px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+  }
+  select.styled:focus { border-color: var(--accent); outline: none; }
+
+  .turni-riepilogo {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+  @media (max-width: 900px) { .turni-riepilogo { grid-template-columns: repeat(4, 1fr); } }
+  .turno-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px;
+  }
+  .turno-card .day-lbl {
+    font-family: var(--font-display);
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-bottom: 6px;
+  }
+  .turno-card .slot-lbl {
+    font-size: 10px;
+    color: var(--muted);
+    margin-bottom: 2px;
+  }
+  .turno-card .names {
+    font-size: 11px;
+    color: var(--text);
+    line-height: 1.5;
+    min-height: 16px;
+  }
+
+</style>
+<!-- Google Identity Services -->
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+
+<header>
+  <h1 style="display:flex;flex-direction:column;align-items:flex-start;"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAakAAAB3CAMAAACOsU+CAAAAn1BMVEX///8Acq+RqLMAbKwAcK7r7/EAb66MpLCSqbS1xMsAdbGKo68AZ6qluMHe5eg6jL7N19wtfrWEs9Pd6/MAaauArc/09/pUmMTT5fDa5vD3+/3j7/ajtr8AZKnu8fPP4u7CztStzOFwpsudw9xCiry61+i21eYAerRiocmNuNVMkcAxhLmevNbs9vri6OrX3+KUvtlVkb/I2eh4rtBPmsUK/60MAAAM4klEQVR4nO2dbXuiOhCGwaSxpXSpGsVCraJVUGq3pz3//7cdob4EmIQQNHhanmu/dIUhyU2GIZkEw2jVqlWrVq1atWrV6qdrMAaU/vJyU0Mv39Zzf7aqoc3Ezmtipb/c3dfQQ2ri5vBnZ9RkHX+GXGLmhXvpL3edGrpLTdzc7v/sPjRZx58hPaQ6949NVvJHSBOpzu1Nk7X8CdJFqtP6v5rSRqrb+r960kaq02n9Xy1pJPXcZD3//7oMqS5Eqo3/akmG1PNDZc1SE1lSnft2qKKGJEjdv6saz5Fq/V8dyZD6o2o8T+p+dq5i/0JpJdXpKnfPVppJPXtnK/lvk15Sne7sXAX/ddJMqtNRNvbbpZ1U6/8UpZ3U/qW4VVVpIjXrnlC1/k9Jekjdv9ydUHXOVvhfJV2kRidH2Po/JekiZfy9P6K6/3u24v8iaSNlMP7vto3/qksPqe6OlNf6v1rSR8r4cy7/5w2KGm/rWPw/SCOpjP+rk6o5oIVsUnvylT3Gny6DYLX0S435y8V6OB/234Kpok/2pqvg7a2/M7J+W6ym5ZfklWT1Fm3ikNAJMkPH7QfjzM86SRln8n8DCxcKjYbHn7err3Bi01Q2ddafXEPjhYsmFO1EEKJ0YrlBta65Xa4dklwrNZEaofYkjIJp1SotXJKUBGMzrRsmBO3uR+djcDxEK6mbU6eqM1UPkup//+YHzq7RmN93zWeuoft8lD/y+2BnKdu1BguHFCykDbjjZkUraeiDjxi0k5ZncyiPVlIGM1Rxqz5Vzyc1mFtQlZH5lWflLUJUrPqu8hj1FhKstoFjwq17uCayXCnon66F+HYwQb11ylwvKeP5SKpGqiaPlLe2EKe+KFxkTCxjfutgFAclJXiahxQLMH2LoHhR1rE+N0LeTOE1k7o5kVJP1eSQmr5yOKWVotHpBh/Nwf7EHixq4U8XC3oBK0JjYQd9csUFOZZnM9BNyng8heodVf8HkSLRgogrjZxDvDkNBUj3B4fcmGAQlfaCTCPH/Oiij0sLshcxg42esfQTlIcTKdVUJYjUztWUNR9yvk9fytzHhHA84Lrkhihaon3Y0jim8sRNqNCXJfVyIqUa/4GkZCrrJmcHttzRdAFc2neqtO7BUgzFngsFSzldlhTr/xRTNVVJmfZHAkryZAygWqq1LiHLgqloUhvUpUkx/q+r5v+USWE0+JR9MiRHr3IXXkh2x6Ly1D2XqppiS3jJiCIpJfP+O1Mxq0xqV7WwwqkYDzLX7av7K4w+MqZc+RtGZPXCfYqdqlJK1VQnZVY7EcfsZdeSoTlsCrERyvwsoC5Pih2qVUlVqkGqoijTE2qB2gmdxh8/zuH6TB2k2KmqWXWz+khhdBzzD2qCMrF1fJ+rH/XtTV6clPGXyX+p7v/0kTLR+tC69f0Vcfe2ehXfyLjSQIrxfwqp6mWkcCLp2mJC+GMOmOxLF56hdSffseRa6PuS+Y70n8RAiA5S3mmotvpUlZAUoRMSbzaxbUu4K0TteBMNhxs84fQZGsi0LiYoVckdFCbYfYHvS2YRnWg+dOfDyA0ntMygBlLGOxOqV7UvIEVsN9j3gvGiV/I8IPb8+Ebqr02w1+BN2rr8Fymc3BpOtH7bae6ENhWMVaUBCj/uQ3YUZEYzputQWAUtpIwZM1Rb0SyXFKZupqYL0cMlHaBmNIJfRmliMeLOptjxcMVe01uuHZtyYOGeZ2x5jpnQL2AAfxULevMlVo8CaRPq/o9HCh+f/wetBE+g3LvorpFBHon7G8OthWnYHwBPWX/xymFFF9wIHXHG3L2+YCYtR6p791hZf3OkZsVDmLX5FXstjxQqDtR98V1N8eBRCB0353UpFH7wZrG84BV0WztfuoHLLpgRC7jv64W1893KOuwadysw0WFULVWJQ4p+FQ/1LU4lEwAFLYD7nbx6W8gIRnNRFpK3hrozxku47GBxDvrkobrUziECVfN/MCkcQ+F+BLshHEO3sAd5pnAUAP+NgT6Z1RRqXxyD5UGR0NSS4wAbIFUtVRMmRfMj36mgbmIeg++8gBlwE/nQvDh8tfJigk1OwJusvBZNkKrk/2BSFnwsWEccw5eDgkW67BUvR/PhCKSp7Cz+ZFxmCpiab4pUFf8HkirEfd8CnzHH7MC8oNkrtC620nFgSCzJkVgEPGDz1YBvuCZIVfF/ICkKB7mjGLqvbU4WyhYghYsW8hNXPHnwUylvDUn4kz4UfjZDqkKqJkQKI05jQVHxcTSvIOjRDSVCSZYUikUK4nXwjHzohbkhUvKpmmAWmcM5GAoS4DAxEfRGBbRtMS2C0768lwS2MHIdFApiL0GK/+p1Okc6VRPO96tSQ+5jBvSVBVlyzs/gRQLZwmykLC0hx1x481XeL/1A6hYYo9iL7XaS/q9krUdWQ6CG/ICAM4KQbyDpiRqJaXhUllr9rW2vnFT3sfInCN73azuOpPjPzEemV0mmKlUjValPQb6yeHq8HcnJ65faw7IdVE+2s+ht6a7yUp0LkuIMaeTPtyeSknB+Ma8sOQFvv5pJMfsfSKZq1ifFfTTwpjcuJ+k4cto4qUxSmZT/uyCpr3OlOEirMPnCr3WxHppJZfzfTKrMF/N+UPxxWVH+4tastsVBLe2kPCb8k0nVvGCf0k8KyS4J9l6bJ8XufyAT//0oUqR0dPagfwo10U+K9X8SqZq/lJR7BX2KTaqVSNX8UaSkvZ/xzzWQMv4wT6rSVM3fSuoavF/W/5VNVf0oUtKxn/F6HaRY/1cW//0sUnLDfrsoHZgna4IUm1TbuRUf+qNISUz4cmvdDCk2qbbE/zVOCiNFVSpLTp/Njybt5T3LpqqL9k0qCCJF6pHC8bqvJmAAGPckc32A+fmGSLH7X4l31azdp2qS4p9eJmAVFsaSwV8xoGiMlLT/a5qUaanu4TeGSg4nVeUFJo80Rcpg/Z8gVak+KV7ShSQp6XgtLx/I09g3d5kCidl5faRumPE/wSlnIMVzrpIRhezsX14elKeBpN6ooDObI8Xu/yfwf42TghaKyAlMp5ZJ84QSXpokxe7/x/d/mklBNzNSfFJ9QA1uSwzSgjueXGJNoiwpZv8rfqpm/Si9CikMNRKRT0/KCJhil3qlgpcQNNmnMqlKvFRNvX2KzKEZe+JUWvJ1EDAkZEpEKD68LKfJPmUYD8yjipOqpJcUCuC1aY6MAyxsLA0mamAs9n+ew1kF1iipl/JUTb3ej06Bd87ESFgas/kuze+9Cbq/nTMVYp9z0tubJZXZ/xSeqtfbp2yfs7gGk7X4YbUKkYmtbHfxONhjfn6mxwPVNCnW/8GpmppJPW05K9YwfRWsTBy46aJsYmYZcJZ/EIvXQ33+VoB69qPgi43/utCJer2f/WSAMUVqiIacvZvHc3t/Um4th8fZYRCjObh6fmHxUxCbJsWmaoLxn+4+JdpAB1N7XhhiHSxiZnefHCruPriIzvOBxfbDEq3AapxUWaq69j4lHrpAFG3Wy6m/s+ltx59BZOV25CHWE3sNh7+XEA13hsZ7Ld8cKh4yaZ6Ux66quin8XH8msSopnss62MPJJKGVKNnrqvh7yHaW8URgKfkIy15lG2ZdA6mM/yvGf/pJGdPyHaHTAzibIpEei6pfsrHZXmUXvApS4lTNBkjV3ZCU9FgHyHmRraxrICVM1WyCVN1NfkmPCSv8KjtMC3QNpDL7n+b9XyOkjE1dVMwwxFQQelfQVZAS+b/6pLhr5wWkvJp7nKOQuQ64qVJlXQcpQapm7ShdiZRhRLIfmoBEwsyL7RSfoVddB6nMUp1sqmYzfcpIZomUm5ducpccnGEP4sLa+dmfynqvT4o/Vd8YKWPcUwsBMf0qXHG7qWRLZs5XYSvGwk6MKqQ8dqqe7dfNkTK8L4VuhVEP3BRmbcvb2r1YA4YvsMeL0ueL3ln/x7RtU8+pVEveHrP8RuaMvaZfa5QzgVE8Li4evQQpcEi8XJxUzQb7lJHuMYuqbJyPXH6SbPINTpmxCDIfyeTQnoGU6icR4VSlZkklO21viGRnQHgj3g1rMDfLWGHkJKyvmxScqtk0qZ2m8IeDc2VC1ld5gthTJGKFCXK+pyuvmxQc/zX6nDrIC1wi+JoDQdSMVnJT3dtFDH+5ACNKjrNfV04KTFUfmKQgyu1TtHgw4pL6Kh49gUklmn5saPJ5CMI8t9Ivxk9M963Sp+f9ILImiaWDlQS1TaLgVNDXYj3InlTl2JzRntQ+wFeNKIx0qc5pJ8C9Fd8pKuZtavMRA0f/yyMFHC3IRUk0DdaRE5r2xN5pgqzYHb4FShm2fjDcWUKT1E7ozBdZzxkB9fjOk549PyjreZaaeDn+rZTGmOrxOW/1GuV5I38w9j1PLbWWMWSMBgN/VNtOq1atWrVq1apVq1b69B9XkWMz4yESRgAAAABJRU5ErkJggg==" style="height:28px;width:auto;display:inline-block;margin-bottom:4px;" alt="Medea Logo"><span style="font-size:0.72rem;font-weight:400;color:#2563eb;font-family:'Syne',sans-serif;">Disponibilità medici</span></h1>
+  <div style="display:flex;align-items:center;gap:16px;">
+    <div class="week-display">
+      Settimana: <strong id="hdr-week">—</strong>
+    </div>
+    <div id="save-indicator" style="font-size:11px;color:var(--muted);">💾 —</div>
+  </div>
+</header>
+
+<div class="tabs">
+  <button class="tab-btn active" onclick="switchTab('disponibilita')">Disponibilità</button>
+  <button class="tab-btn" onclick="switchTab('whatsapp')">💬 WhatsApp</button>
+  <button class="tab-btn" onclick="switchTab('conferma')">✅ Messaggi Conferma</button>
+  <button class="tab-btn" onclick="switchTab('riepilogo')">📊 Riepilogo Disponibilità</button>
+  <button class="tab-btn" onclick="switchTab('calendar')">📅 Calendar</button>
+  <button class="tab-btn" onclick="switchTab('impostazioni')">⚙️ Impostazioni</button>
+  <button class="tab-btn" onclick="switchTab('test')">🧪 Test Parser</button>
+</div>
+
+<main>
+
+<!-- ===== TAB 1: DISPONIBILITA ===== -->
+<div class="tab-content active" id="tab-disponibilita">
+  <div class="week-bar">
+    <label>Lunedì settimana:</label>
+    <input type="date" id="week-picker" onchange="onWeekChange()">
+    <button class="btn btn-ghost btn-sm" onclick="prevWeek()">← Sett. prec.</button>
+    <button class="btn btn-ghost btn-sm" onclick="nextWeek()">Sett. succ. →</button>
+    <button class="btn btn-primary btn-sm" onclick="saveData()">💾 Salva</button>
+    <button class="btn btn-ghost btn-sm" onclick="clearWeek()">🗑️ Azzera settimana</button>
+  </div>
+
+  <div class="stat-row" id="stat-row"></div>
+
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:var(--success)"></div> Disponibile (X)</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--warn)"></div> Solo ECG (Y)</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div> Confermato (C)</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--accent2)"></div> Conf. Solo ECG (CY)</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--danger)"></div> Ferie</div>
+  </div>
+
+  <div class="filter-bar">
+    <input type="text" placeholder="🔍 Filtra medico..." id="filter-input" oninput="filterTable()">
+  </div>
+
+  <div id="turni-section">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+    <div style="display:flex;align-items:center;gap:8px;">
+      <span style="font-weight:700;font-size:15px;color:var(--accent);">Disponibilità Turni</span>
+    </div>
+    <button onclick="toggleDispTable()" id="toggle-disp-btn" title="Riduci/Espandi tabella" style="background:none;border:1px solid var(--border);border-radius:4px;cursor:pointer;color:var(--muted);font-size:15px;font-weight:700;line-height:1;padding:1px 8px;user-select:none;">−</button>
+  </div>
+
+  <div class="disp-table-wrap" id="disp-table-wrap">
+    <table class="disp-table" id="disp-table">
+      <thead id="disp-head"></thead>
+      <tbody id="disp-body"></tbody>
+    </table>
+  </div>
+  </div><!-- /turni-section -->
+
+  <!-- ===== TABELLA HOLTER ===== -->
+  <div id="holter-section" style="margin-top:28px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-weight:700;font-size:15px;color:#6366f1;">Disponibilità Turno Holter</span>
+      </div>
+      <button onclick="toggleHolterTableVis()" id="toggle-holter-btn" title="Riduci/Espandi" style="background:none;border:1px solid var(--border);border-radius:4px;cursor:pointer;color:var(--muted);font-size:15px;font-weight:700;line-height:1;padding:1px 8px;user-select:none;">−</button>
+    </div>
+    <div id="holter-table-wrap" class="disp-table-wrap">
+      <table class="disp-table" id="holter-table" style="--header-bg:#6366f1;">
+        <thead id="holter-head"></thead>
+        <tbody id="holter-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ===== TABELLA CONSUNTIVO HC ===== -->
+  <div id="hc-section" style="margin-top:28px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-weight:700;font-size:15px;color:#0891b2;">Disponibilità Consuntivo HC</span>
+      </div>
+      <button onclick="toggleHcTableVis()" id="toggle-hc-btn" title="Riduci/Espandi" style="background:none;border:1px solid var(--border);border-radius:4px;cursor:pointer;color:var(--muted);font-size:15px;font-weight:700;line-height:1;padding:1px 8px;user-select:none;">−</button>
+    </div>
+    <div id="hc-table-wrap" class="disp-table-wrap">
+      <table class="disp-table" id="hc-table" style="--header-bg:#0891b2;">
+        <thead id="hc-head"></thead>
+        <tbody id="hc-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ===== TABELLA CONSUNTIVO HP ===== -->
+  <div id="hp-section" style="margin-top:28px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-weight:700;font-size:15px;color:#ea580c;">Disponibilità Consuntivo HP</span>
+      </div>
+      <button onclick="toggleHpTableVis()" id="toggle-hp-btn" title="Riduci/Espandi" style="background:none;border:1px solid var(--border);border-radius:4px;cursor:pointer;color:var(--muted);font-size:15px;font-weight:700;line-height:1;padding:1px 8px;user-select:none;">−</button>
+    </div>
+    <div id="hp-table-wrap" class="disp-table-wrap">
+      <table class="disp-table" id="hp-table" style="--header-bg:#ea580c;">
+        <thead id="hp-head"></thead>
+        <tbody id="hp-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ===== TABELLA CONSUNTIVO SPIROMETRIE ===== -->
+  <div id="spiro-section" style="margin-top:28px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-weight:700;font-size:15px;color:#16a34a;">Disponibilità Consuntivo Spirometrie</span>
+      </div>
+      <button onclick="toggleSpiroTableVis()" id="toggle-spiro-btn" title="Riduci/Espandi" style="background:none;border:1px solid var(--border);border-radius:4px;cursor:pointer;color:var(--muted);font-size:15px;font-weight:700;line-height:1;padding:1px 8px;user-select:none;">−</button>
+    </div>
+    <div id="spiro-table-wrap" class="disp-table-wrap">
+      <table class="disp-table" id="spiro-table" style="--header-bg:#16a34a;">
+        <thead id="spiro-head"></thead>
+        <tbody id="spiro-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ===== TABELLA CONSUNTIVO POLISONNOGRAFIE ===== -->
+  <div id="pls-section" style="margin-top:28px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-weight:700;font-size:15px;color:#7c3aed;">Disponibilità Consuntivo Polisonnografie</span>
+      </div>
+      <button onclick="togglePlsTableVis()" id="toggle-pls-btn" title="Riduci/Espandi" style="background:none;border:1px solid var(--border);border-radius:4px;cursor:pointer;color:var(--muted);font-size:15px;font-weight:700;line-height:1;padding:1px 8px;user-select:none;">−</button>
+    </div>
+    <div id="pls-table-wrap" class="disp-table-wrap">
+      <table class="disp-table" id="pls-table" style="--header-bg:#7c3aed;">
+        <thead id="pls-head"></thead>
+        <tbody id="pls-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ===== TAB 2: WHATSAPP ===== -->
+<div class="tab-content" id="tab-whatsapp">
+  <div class="wa-container">
+    <div class="card">
+      <div class="card-title">📨 Inserisci Messaggio WhatsApp</div>
+      <p style="color:var(--muted);font-size:12px;margin-bottom:12px;">Incolla il messaggio ricevuto su WhatsApp, scegli il medico e applica automaticamente la disponibilità.</p>
+      
+      <div style="display:flex;gap:10px;margin-bottom:8px;flex-wrap:wrap;align-items:center;">
+        <label style="color:var(--muted);font-size:11px;">Medico:</label>
+        <select class="styled" id="wa-doctor-select"></select>
+      </div>
+      <textarea class="wa-input" id="wa-msg-input" placeholder="Incolla il messaggio WhatsApp qui...&#10;Es: 'Disponibile lunedì mattina, martedì e venerdì'"></textarea>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+        <button class="btn btn-primary btn-sm" onclick="parseWaMessage()">🔍 Interpreta</button>
+        <button class="btn btn-ghost btn-sm" onclick="clearWaInput()">✕ Cancella</button>
+      </div>
+      <div id="wa-parse-result" style="margin-top:10px;"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">📱 Genera Messaggio di Richiesta Disponibilità</div>
+      <p style="color:var(--muted);font-size:12px;margin-bottom:12px;">Genera il messaggio standard da inviare ai cardiologi per chiedere le disponibilità della settimana.</p>
+      <button class="btn btn-primary btn-sm" onclick="generateRequestMsg()">Genera Messaggio Richiesta</button>
+      <div id="request-msg-area" style="margin-top:12px;"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">💬 Messaggi Ricevuti Questa Settimana</div>
+      <div id="wa-history-list">
+        <div class="empty-state">Nessun messaggio salvato per questa settimana.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== TAB 3: MESSAGGI CONFERMA ===== -->
+<div class="tab-content" id="tab-conferma">
+  <div class="week-bar">
+    <p style="color:var(--muted);font-size:12px;">Messaggi da inviare ai cardiologi con turni confermati (C) per la settimana selezionata.</p>
+  </div>
+  <div class="conf-list" id="conf-list">
+    <div class="empty-state">Nessun turno confermato questa settimana.</div>
+  </div>
+</div>
+
+<!-- ===== TAB 4: RIEPILOGO ===== -->
+<div class="tab-content" id="tab-riepilogo">
+  <div style="margin-bottom:16px;">
+    <p style="color:var(--muted);font-size:12px;">Riepilogo disponibilità e turni confermati per la settimana selezionata.</p>
+  </div>
+  <div id="riepilogo-content"></div>
+</div>
+
+<!-- ===== TAB 5: IMPOSTAZIONI ===== -->
+
+<!-- ===== TAB 5: CALENDAR ===== -->
+<div class="tab-content" id="tab-calendar">
+  <div style="padding:16px 0 8px 0;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+    <h3 style="margin:0;font-size:14px;font-weight:700;">📅 Turni da inserire sul Calendar</h3>
+    <span style="font-size:11px;color:#888;">Solo cardiologi confermati — settimana corrente</span>
+    <button id="gcal-btn" onclick="syncGoogleCalendar()" style="margin-left:auto;background:#2563eb;color:#fff;border:none;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;">
+      🗓 Aggiungi a Google Calendar
+    </button>
+  </div>
+  <div id="gcal-status" style="margin-bottom:8px;"></div>
+  <div id="calendar-content"></div>
+</div>
+
+<div class="tab-content" id="tab-impostazioni">
+  <div style="display:flex;flex-direction:column;gap:16px;max-width:900px;margin:0 auto;">
+
+    <!-- GESTIONE CARDIOLOGI -->
+    <div class="card" style="overflow:visible;">
+      <div class="card-title">👨‍⚕️ Gestione Medici</div>
+      <!-- Barra aggiungi + ricerca -->
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center;">
+        <input type="text" id="new-doc-input" placeholder="Cognome N. (es: Rossi M.)" style="flex:2;min-width:200px;" onkeydown="if(event.key==='Enter') addDoctor()">
+        <button class="btn btn-success btn-sm" onclick="addDoctor()">+ Aggiungi</button>
+        <input type="text" id="settings-search" placeholder="🔍 Cerca medico..." style="flex:1;min-width:160px;" oninput="renderSettings()">
+      </div>
+      <div id="doctors-list" style="display:flex;flex-direction:column;gap:0;max-height:480px;overflow-y:auto;padding-right:4px;"></div>
+    </div>
+
+    <!-- PREFERENZE -->
+    <div class="card">
+      <div class="card-title">⚙️ Preferenze</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div>
+          <label style="color:var(--muted);font-size:11px;display:block;margin-bottom:4px;">Messaggio Richiesta Disponibilità</label>
+          <textarea class="wa-input" id="request-template" style="min-height:120px;" placeholder="Es: Buongiorno Dott. [NOME], potrebbe indicarci le sue disponibilità per la settimana del [DATA]? Grazie"></textarea>
+          <button class="btn btn-primary btn-sm" style="margin-top:6px;" onclick="saveTemplate()">Salva Template</button>
+        </div>
+        <div>
+          <label style="color:var(--muted);font-size:11px;display:block;margin-bottom:4px;">Template Messaggio Conferma</label>
+          <textarea class="wa-input" id="confirm-template" style="min-height:100px;" placeholder="Es: Salve, per la prossima settimana Le confermiamo i seguenti turni: [TURNI] Grazie"></textarea>
+          <button class="btn btn-primary btn-sm" style="margin-top:6px;" onclick="saveConfirmTemplate()">Salva Template</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ===== TAB 6: TEST PARSER ===== -->
+<div class="tab-content" id="tab-test">
+  <div style="max-width:900px;">
+    <div class="card">
+      <div class="card-title">🧪 Test Parser Messaggi WhatsApp</div>
+      <p style="color:var(--muted);font-size:12px;margin-bottom:14px;">
+        Inserisci un messaggio per vedere come viene interpretato, senza modificare nessun dato.
+        La settimana di riferimento è quella selezionata nel tab Disponibilità.
+      </p>
+      <textarea class="wa-input" id="test-input" style="min-height:90px;" 
+        placeholder="Incolla qui il messaggio da testare..."></textarea>
+      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;align-items:center;">
+        <button class="btn btn-primary btn-sm" onclick="runParserTest()">▶ Testa</button>
+        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('test-input').value='';document.getElementById('test-output').innerHTML=''">✕ Cancella</button>
+      </div>
+      <div id="test-output" style="margin-top:14px;"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Casi di Test Predefiniti</div>
+      <p style="color:var(--muted);font-size:12px;margin-bottom:14px;">
+        Clicca su un caso per testarlo. La settimana usata è quella corrente 
+        (<span id="test-week-lbl" style="color:var(--accent)"></span>).
+      </p>
+      <div id="test-cases-list"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">📊 Risultati Suite Completa</div>
+      <button class="btn btn-primary btn-sm" onclick="runAllTests()">▶ Esegui tutti i test</button>
+      <div id="test-suite-output" style="margin-top:14px;"></div>
+    </div>
+  </div>
+</div>
+
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// =============================================
+// STATE
+// =============================================
+const DAYS = ['Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato'];
+const SLOTS = ['Mattina','Pomeriggio'];
+// Cycle: vuoto → disponibile(X) → solo-ecg(Y) → confermato(C) → confermato-ecg(CY) → vuoto
+const SLOT_STATES = ['','disponibile','solo-ecg','confermato','confermato-ecg'];
+const SLOT_LABELS = {'': '—', 'disponibile': 'X', 'solo-ecg': 'Y', 'confermato': 'C', 'confermato-ecg': 'CY'};
+
+function getSlotStatesForDoctor(doc) {
+  const tipo = state.doctorTypes[doc] || 'completo';
+  if (tipo === 'ecg75' || tipo === 'ecg100')       return ['','solo-ecg','confermato-ecg'];
+  if (tipo === 'completo+ecg75' || tipo === 'completo+ecg100') return ['','disponibile','solo-ecg','confermato','confermato-ecg'];
+  return ['','disponibile','confermato']; // completo
+}
+
+function getDefaultSlotTypeForDoctor(doc) {
+  const tipo = state.doctorTypes[doc] || 'completo';
+  return (tipo === 'ecg75' || tipo === 'ecg100') ? 'solo-ecg' : 'disponibile';
+}
+
+function getTipoLabel(tipo) {
+  return tipo === 'ecg75'          ? 'Solo ECG 75'
+       : tipo === 'ecg100'         ? 'Solo ECG 100'
+       : tipo === 'completo+ecg75' ? 'Completo + ECG 75'
+       : tipo === 'completo+ecg100'? 'Completo + ECG 100'
+       : 'Turno completo';
+}
+
+let state = {
+  doctors: [],
+  weeks: {},
+  doctorTypes: {}, // 'nessuno' | 'completo' | 'ecg75' | 'ecg100' | 'completo+ecg75' | 'completo+ecg100'
+  holterEnabled: {}, // { [doctorName]: true/false }
+  holterWeeks: {},
+  hcWeeks: {},   // { [weekKey]: { [doc]: { slots: { [di]: {num, conf} | null }, ferie: bool } } }
+  hpWeeks: {},   // stessa struttura
+  spiroWeeks: {}, // { [weekKey]: { [doc]: { slots: { [di]: {num,conf}|{val:'x',conf}|null }, ferie: bool } } }
+  plsWeeks: {},   // stessa struttura Polisonnografie
+  doctorExtra: {}, // { [doctorName]: { hcCons, hpCons, spiro, pls } }
+  requestTemplate: "Buongiorno Dott. [NOME],\npotrebbe indicarci le sue disponibilità per la settimana del [DATA]?\nGrazie mille!",
+  confirmTemplate: "Salve, per la prossima settimana Le confermiamo i seguenti turni:\n[TURNI]\nGrazie!"
+};
+
+// ── Date helpers (defined BEFORE use) ──────────────────────────────────
+
+// Returns "YYYY-MM-DD" of the Monday of the week containing date d.
+// NEVER mutates d.
+function getMondayStr(d) {
+  const copy = new Date(d.getFullYear(), d.getMonth(), d.getDate()); // local midnight, no mutation
+  const dow = copy.getDay(); // 0=Sun,1=Mon,...,6=Sat
+  const diffToMon = (dow === 0) ? -6 : 1 - dow; // Sun → go back 6 days; others → go to Mon
+  copy.setDate(copy.getDate() + diffToMon);
+  // Format as YYYY-MM-DD using local date parts (avoids UTC offset issues)
+  const y = copy.getFullYear();
+  const m = String(copy.getMonth() + 1).padStart(2, '0');
+  const day = String(copy.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+// Parse "YYYY-MM-DD" safely as a LOCAL date (no UTC shift)
+function parseLocalDate(str) {
+  const [y, m, d] = str.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
+// Format a local-date string "YYYY-MM-DD" as "DD/MM/YYYY"
+function formatDate(str) {
+  const d = parseLocalDate(str);
+  const day = String(d.getDate()).padStart(2, '0');
+  const mon = String(d.getMonth() + 1).padStart(2, '0');
+  return `${day}/${mon}/${d.getFullYear()}`;
+}
+
+// Add N days to a "YYYY-MM-DD" string, return new "YYYY-MM-DD"
+function addDays(str, n) {
+  const d = parseLocalDate(str);
+  d.setDate(d.getDate() + n);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+let currentWeek = getMondayStr(new Date());
+
+function getWeekData() {
+  if (!state.weeks[currentWeek]) state.weeks[currentWeek] = {};
+  return state.weeks[currentWeek];
+}
+
+function getDoctorData(name) {
+  const w = getWeekData();
+  if (!w[name]) w[name] = { slots: {}, ferie: false, waMsg: '' };
+  return w[name];
+}
+
+// =============================================
+// PERSISTENCE
+// =============================================
+function saveData(silent) {
+  try {
+    localStorage.setItem('cardio_state', JSON.stringify(state));
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2,'0');
+    const mm = String(now.getMinutes()).padStart(2,'0');
+    const el = document.getElementById('save-indicator');
+    if (el) el.textContent = `💾 Salvato ${hh}:${mm}`;
+    if (!silent) showToast('✓ Salvato!');
+  } catch(e) {
+    showToast('⚠️ Errore salvataggio', 'danger');
+  }
+}
+
+// Auto-save silently after every slot change
+function autoSave() { saveData(true); }
+
+// =============================================
+// CONSUNTIVO DYNAMIC HELPERS
+// =============================================
+
+// Array di riferimento per la migrazione (solo usati al primo avvio o migrazione)
+const _MIGRATION_HC = [
+  'BERLONI M.','BERTELLI M.','CANOVI L.','CAPASSO R.','CARDONE U. (HC)',
+  'CORAZZIANI A.','CORLIANÒ A. (HC)','CRISPINO E.','DELLI VENERI A.',
+  'FARINA J.','FORMISANO R. (HC)','FUSI C.','GALASSO M.','IANNOTTA M.',
+  'LABATE V.','LAVIOLA D.','LENCI L.','LO CASTO M.','MAZZOCCHI L.',
+  'MEOSSI S.','PANGALLO G.','PECERE A. (HC)','PICA A.','PIDONE C.',
+  'ROCCA B.','RUSSO G.','SGREVA S.','SILVESTRO C.','TINTI L.',
+  'TRICHILO M.','TUSA F.','VITALE G. (HC)'
+];
+const _MIGRATION_HP = [
+  'BELLI L.','CARDILLO M. (HP)','CARDONE A.','CARDONE U. (HP)',
+  'FORMISANO R. (HP)','MARCHESE A.','PECERE A. (HP)','VITALE G. (HP)'
+];
+const _MIGRATION_SPIRO = [
+  'GIUNTA V. (Spiro)','MORETTA A. (Spiro)','SALA S. (Spiro)'
+];
+const _MIGRATION_PLS = [
+  'CERRONI R.','FABIANI V.','GIUNTA V. (Pls)','MORANDO V.',
+  'MORETTA A. (Pls)','PIPITONE L.','SALA S. (Pls)'
+];
+
+// Rimuove il suffisso consuntivo parentetico da un nome
+function stripConsSuffix(name) {
+  return name.replace(/\s*\(\s*(HC|HP|Spiro|Pls|SPIRO|PLS)\s*\)\s*$/i, '').trim();
+}
+
+// Restituisce il nome visualizzato per un medico in una specifica tabella consuntivo.
+// Aggiunge il suffisso solo se il medico compare in più tabelle consuntivo.
+function getConsuntivoDisplayName(doc, tableType) {
+  const extra = state.doctorExtra?.[doc] || {};
+  const tableCount = [extra.hcCons, extra.hpCons, extra.spiro, extra.pls].filter(Boolean).length;
+  if (tableCount > 1) {
+    const suffixes = { hcCons: 'HC', hpCons: 'HP', spiro: 'SPIRO', pls: 'PLS' };
+    return `${doc} (${suffixes[tableType]})`;
+  }
+  return doc;
+}
+
+// Liste dinamiche medici per ogni tabella consuntivo (derivate da doctorExtra)
+function getHcDoctorsList() {
+  return state.doctors
+    .filter(d => state.doctorExtra?.[d]?.hcCons)
+    .sort((a, b) => a.localeCompare(b));
+}
+function getHpDoctorsList() {
+  return state.doctors
+    .filter(d => state.doctorExtra?.[d]?.hpCons)
+    .sort((a, b) => a.localeCompare(b));
+}
+function getSpiroDoctorsList() {
+  return state.doctors
+    .filter(d => state.doctorExtra?.[d]?.spiro)
+    .sort((a, b) => a.localeCompare(b));
+}
+function getPlsDoctorsList() {
+  return state.doctors
+    .filter(d => state.doctorExtra?.[d]?.pls)
+    .sort((a, b) => a.localeCompare(b));
+}
+
+// Migra chiavi nelle tabelle settimanali da nome-con-suffisso a nome-base
+function migrateWeeksKeys(weeksObj) {
+  for (const weekKey in weeksObj) {
+    const weekData = weeksObj[weekKey];
+    for (const fullName of Object.keys(weekData)) {
+      const baseName = stripConsSuffix(fullName);
+      if (baseName !== fullName) {
+        if (!weekData[baseName]) {
+          weekData[baseName] = weekData[fullName];
+        } else {
+          // Unisci: slots e ferie
+          const existing = weekData[baseName];
+          const toMerge = weekData[fullName];
+          if (toMerge.slots) {
+            for (const slotKey in toMerge.slots) {
+              if (!existing.slots) existing.slots = {};
+              if (!existing.slots[slotKey]) existing.slots[slotKey] = toMerge.slots[slotKey];
+            }
+          }
+          if (toMerge.ferie) existing.ferie = true;
+        }
+        delete weekData[fullName];
+      }
+    }
+  }
+}
+
+// Migrazione dati storici DEFAULT_* → doctorExtra
+function migrateDefaultConsuntivo(doctorsList) {
+  if (!state.doctorExtra) state.doctorExtra = {};
+  const addDoc = (baseName, flag) => {
+    if (!doctorsList.includes(baseName)) doctorsList.push(baseName);
+    if (!state.doctorExtra[baseName]) state.doctorExtra[baseName] = {};
+    state.doctorExtra[baseName][flag] = true;
+  };
+  _MIGRATION_HC.forEach(n => addDoc(stripConsSuffix(n), 'hcCons'));
+  _MIGRATION_HP.forEach(n => addDoc(stripConsSuffix(n), 'hpCons'));
+  _MIGRATION_SPIRO.forEach(n => addDoc(stripConsSuffix(n), 'spiro'));
+  _MIGRATION_PLS.forEach(n => addDoc(stripConsSuffix(n), 'pls'));
+  migrateWeeksKeys(state.hcWeeks);
+  migrateWeeksKeys(state.hpWeeks);
+  migrateWeeksKeys(state.spiroWeeks);
+  migrateWeeksKeys(state.plsWeeks);
+  doctorsList.sort((a, b) => a.localeCompare(b));
+}
+
+function loadData() {
+  const FULL_DOCTORS = [
+    "AMATO F.","ANGELI F.","ANGELLOTTI D.","ANNUNZIATA M.","AZZARÀ G.",
+    "BALLERINI A.","BARKI M.","BARTOLI L.","BATTAGLIA D.","BERLONI M.",
+    "BINI R.","BUCCI M.","BUZZELLI L.","CAGNETTA V.","CALABRÒ G.",
+    "CANOVI L.","CAPASSO R.","CARDILLO M.","CARDONE U.","CATALDI C.",
+    "CIANFANELLI L.","COCCHIARELLA L.","CORLIANÒ A.","D'ANGELI I.",
+    "DE BLASIS E.","DELLI VENERI A.","FANTI D.","FARINA J.","FERRERA A.",
+    "FORMISANO R.","FUSI C.","GALASSO M.","GAREZZO R.","GIAQUINTO A.",
+    "GISMONDI A.","GOLINO P.","GREGORI M.","IANNOTTA M.","IELAPI J.",
+    "IMPELLIZZERI A.","INGALLINA G.","IONICO T.","JACOMELLI I.",
+    "LA ROSA G.","LABRIOLA A.","LAVIOLA D.","LENCI L.","LENTINI E.",
+    "LO CASTO M.","MAIANDI C.","MANCUSO F.","MANGO F.","MARCHESE A.",
+    "MARRA A.","MARRONE A.","MAZZOCCHI L.","MEOSSI S.","MEZZANI A.","MONTAINA M.",
+    "MUSUMECI C.","NICOLÌ L.","PALDINO A.","PANGALLO G.","PARISI V.",
+    "PATANÈ A.","PERGOLA V.","PEROTTO M.","PICA A.","PIDONE C.",
+    "RIVARA D.","ROCCA B.","RUOCCO G.","SANGUETTOLI F.","SANTACROCE F.",
+    "SAVONITTO G.","SCARDIA A.","SERRATORE S.","SETZU T.","SGREVA S.",
+    "SILVESTRO C.","TARANTINI R.","TEMPO E.","TINTI L.","TORLONE F.",
+    "TUCCI S.","TUSA F.","VISELLI A.","VITALE G."
+  ];
+
+  // Default holter doctors (for first-run or migration)
+  const DEFAULT_HOLTER = [
+    "MEZZANI A.","BUCCI M.","FERRERA A.","GOLINO P.","JACOMELLI I.",
+    "MUSUMECI C.","NICOLÌ L.","RUOCCO G.","SCARDIA A.","TORLONE F.","TUCCI S."
+  ];
+
+
+  const raw = localStorage.getItem('cardio_state');
+  if (raw) {
+    try {
+      const loaded = JSON.parse(raw);
+      if (loaded.weeks) state.weeks = loaded.weeks;
+      if (loaded.requestTemplate) state.requestTemplate = loaded.requestTemplate;
+      if (loaded.confirmTemplate) state.confirmTemplate = loaded.confirmTemplate;
+      if (loaded.doctorTypes) state.doctorTypes = loaded.doctorTypes;
+      if (loaded.holterWeeks) state.holterWeeks = loaded.holterWeeks;
+      if (loaded.hcWeeks) state.hcWeeks = loaded.hcWeeks;
+      if (loaded.hpWeeks) state.hpWeeks = loaded.hpWeeks;
+      if (loaded.spiroWeeks) state.spiroWeeks = loaded.spiroWeeks;
+      if (loaded.plsWeeks) state.plsWeeks = loaded.plsWeeks;
+      if (loaded.doctorExtra) state.doctorExtra = loaded.doctorExtra;
+      // Doctors: start from full list, then add any extra saved manually
+      const extra = (loaded.doctors || []).filter(d => !FULL_DOCTORS.includes(d));
+      state.doctors = [...FULL_DOCTORS, ...extra].sort((a, b) => a.localeCompare(b));
+      // Migrate holterEnabled
+      if (loaded.holterEnabled) {
+        state.holterEnabled = loaded.holterEnabled;
+        // Ensure new default holter doctors also have holterEnabled if not set
+        DEFAULT_HOLTER.forEach(d => {
+          if (state.holterEnabled[d] === undefined) state.holterEnabled[d] = true;
+        });
+      } else if (loaded.holterDoctors && loaded.holterDoctors.length > 0) {
+        // Migrate from old holterDoctors array
+        loaded.holterDoctors.forEach(d => { state.holterEnabled[d] = true; });
+        // Add any holter-only docs to main doctors list
+        loaded.holterDoctors.forEach(d => {
+          if (!state.doctors.includes(d)) state.doctors.push(d);
+        });
+        state.doctors.sort((a, b) => a.localeCompare(b));
+      } else {
+        // First run defaults
+        DEFAULT_HOLTER.forEach(d => { state.holterEnabled[d] = true; });
+      }
+      // ── Migrazione consuntivo: se non già eseguita, migra DEFAULT_* → doctorExtra ──
+      if (!loaded._consuntivoMigrated) {
+        migrateDefaultConsuntivo(state.doctors);
+        state._consuntivoMigrated = true;
+        saveData(true);
+      }
+    } catch(e) {
+      state.doctors = FULL_DOCTORS;
+      DEFAULT_HOLTER.forEach(d => { state.holterEnabled[d] = true; });
+      migrateDefaultConsuntivo(state.doctors);
+      state._consuntivoMigrated = true;
+    }
+  } else {
+    state.doctors = FULL_DOCTORS;
+    DEFAULT_HOLTER.forEach(d => { state.holterEnabled[d] = true; });
+    // Primo avvio: popola doctorExtra dai DEFAULT
+    migrateDefaultConsuntivo(state.doctors);
+    state._consuntivoMigrated = true;
+  }
+}
+
+// =============================================
+// UI HELPERS
+// =============================================
+function showToast(msg, type='success') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.background = type === 'success' ? 'var(--success)' : type === 'warn' ? 'var(--warn)' : 'var(--danger)';
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+function switchTab(id) {
+  document.querySelectorAll('.tab-btn').forEach((b, i) => {
+    b.classList.toggle('active', ['disponibilita','whatsapp','conferma','riepilogo','calendar','impostazioni','test'][i] === id);
+  });
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  document.getElementById('tab-' + id).classList.add('active');
+  if (id === 'conferma') renderConferma();
+  if (id === 'riepilogo') renderRiepilogo();
+  if (id === 'calendar') renderCalendar();
+  if (id === 'whatsapp') renderWaHistory();
+  if (id === 'impostazioni') renderSettings();
+  if (id === 'test') initTestTab();
+}
+
+// =============================================
+// WEEK MANAGEMENT
+// =============================================
+function onWeekChange() {
+  const val = document.getElementById('week-picker').value;
+  if (!val) return;
+  currentWeek = getMondayStr(parseLocalDate(val));
+  document.getElementById('week-picker').value = currentWeek;
+  updateHeaderWeek();
+  renderTable();
+  renderHolterTable();
+  renderHcTable();
+  renderHpTable();
+  renderSpiroTable();
+  renderPlsTable();
+  renderStats();
+}
+
+function prevWeek() {
+  currentWeek = addDays(currentWeek, -7);
+  document.getElementById('week-picker').value = currentWeek;
+  updateHeaderWeek();
+  renderTable();
+  renderHolterTable();
+  renderHcTable();
+  renderHpTable();
+  renderSpiroTable();
+  renderPlsTable();
+  renderStats();
+}
+
+function nextWeek() {
+  currentWeek = addDays(currentWeek, 7);
+  document.getElementById('week-picker').value = currentWeek;
+  updateHeaderWeek();
+  renderTable();
+  renderHolterTable();
+  renderHcTable();
+  renderHpTable();
+  renderSpiroTable();
+  renderPlsTable();
+  renderStats();
+}
+
+function updateHeaderWeek() {
+  const endStr = addDays(currentWeek, 5); // Saturday
+  document.getElementById('hdr-week').textContent =
+    formatDate(currentWeek) + ' – ' + formatDate(endStr);
+}
+
+function clearWeek() {
+  if (!confirm('Azzerare tutti i dati di questa settimana?\n(' + formatDate(currentWeek) + ')')) return;
+  state.weeks[currentWeek] = {};
+  if (state.holterWeeks[currentWeek]) state.holterWeeks[currentWeek] = {};
+  if (state.hcWeeks[currentWeek]) state.hcWeeks[currentWeek] = {};
+  if (state.hpWeeks[currentWeek]) state.hpWeeks[currentWeek] = {};
+  if (state.spiroWeeks[currentWeek]) state.spiroWeeks[currentWeek] = {};
+  if (state.plsWeeks[currentWeek]) state.plsWeeks[currentWeek] = {};
+  saveData(true);
+  renderTable();
+  renderHolterTable();
+  renderHcTable();
+  renderHpTable();
+  renderSpiroTable();
+  renderPlsTable();
+  renderStats();
+  showToast('✓ Settimana azzerata');
+}
+
+// =============================================
+// TABLE RENDER
+// =============================================
+function renderTable() {
+  const head = document.getElementById('disp-head');
+  const body = document.getElementById('disp-body');
+  const filter = (document.getElementById('filter-input')?.value || '').toLowerCase();
+
+  // Header
+  let headHtml = '<tr><th rowspan="2" style="width:150px;min-width:150px;position:sticky;left:0;z-index:3;background:var(--surface2);">MEDICO</th>';
+  DAYS.forEach(d => {
+    headHtml += `<th colspan="2" class="day-header" style="width:74px;">${d}</th>`;
+  });
+  headHtml += '<th rowspan="2" style="width:54px;min-width:54px;white-space:nowrap;font-size:11px;" title="Disponibilità / Conferme">DISP.<br>CONF.</th>';
+  headHtml += '<th rowspan="2" style="width:44px;min-width:44px;">FERIE</th></tr><tr>';
+  DAYS.forEach(() => {
+    headHtml += '<th style="width:37px;">MAT</th><th style="width:37px;">POM</th>';
+  });
+  headHtml += '</tr>';
+  head.innerHTML = headHtml;
+
+  // Body
+  let bodyHtml = '';
+  const _allTurniDocs = (state.doctors || []).filter(d => (state.doctorTypes[d] || 'completo') !== 'nessuno');
+  const docs = _allTurniDocs.filter(d => d.toLowerCase().includes(filter)).sort((a, b) => a.localeCompare(b));
+  // Sbiadisci sezione se filtro attivo e nessun medico trovato
+  const _turniSection = document.getElementById('turni-section');
+  if (_turniSection) {
+    const _fv = filter.trim();
+    _turniSection.style.opacity = (_fv && docs.length === 0) ? '0.25' : '';
+    _turniSection.style.pointerEvents = (_fv && docs.length === 0) ? 'none' : '';
+  }
+
+  docs.forEach(doc => {
+    const dd = getDoctorData(doc);
+    const slots = Object.values(dd.slots || {});
+    // Contatori
+    const nDisp = slots.filter(v => v === 'disponibile' || v === 'solo-ecg').length;
+    const nConf = slots.filter(v => v === 'confermato' || v === 'confermato-ecg').length;
+    // Colore cella nome: ferie > verde (≥1 conf) > blu (solo dispo) > grigio
+    let nameBg, nameColor, nameBorder;
+    if (dd.ferie) {
+      nameBg = 'rgba(220,38,38,0.18)'; nameColor = 'var(--danger)';  nameBorder = '3px solid var(--danger)';
+    } else if (nConf >= 1) {
+      nameBg = 'rgba(5,150,105,0.18)'; nameColor = 'var(--success)'; nameBorder = '3px solid var(--success)';
+    } else if (nDisp >= 1) {
+      nameBg = 'rgba(37,99,235,0.14)'; nameColor = 'var(--accent)';  nameBorder = '3px solid var(--accent)';
+    } else {
+      nameBg = 'var(--surface2)'; nameColor = 'var(--text)'; nameBorder = '3px solid transparent';
+    }
+    const tipo = state.doctorTypes[doc] || 'completo';
+    const ecgBadge = tipo === 'ecg75'           ? ' <span style="color:#e040fb;font-size:10px;font-weight:700;">(75)</span>'
+                   : tipo === 'ecg100'          ? ' <span style="color:#43a047;font-size:10px;font-weight:700;">(100)</span>'
+                   : tipo === 'completo+ecg75'  ? ' <span style="color:#e040fb;font-size:10px;font-weight:700;">(+75)</span>'
+                   : tipo === 'completo+ecg100' ? ' <span style="color:#43a047;font-size:10px;font-weight:700;">(+100)</span>'
+                   : '';
+    bodyHtml += `<tr data-doc="${doc}">`;
+    bodyHtml += `<td class="name-cell" style="background:${nameBg};color:${nameColor};border-left:${nameBorder};font-weight:600;">${doc}${ecgBadge}</td>`;
+    DAYS.forEach((day, di) => {
+      SLOTS.forEach((slot, si) => {
+        const key = `${di}_${si}`;
+        const val = dd.slots[key] || '';
+        const cls = val;
+        const lbl = SLOT_LABELS[val] || '—';
+        bodyHtml += `<td>
+          <button class="slot-btn ${cls}" 
+            onclick="cycleSlot('${doc}','${key}')" 
+            title="${day} ${slot}: ${val||'vuoto'}">
+            ${lbl}
+          </button>
+        </td>`;
+      });
+    });
+    // Cella contatori
+    const dispColor = nDisp > 0 ? 'var(--accent)' : 'var(--muted)';
+    const confColor = nConf > 0 ? 'var(--success)' : 'var(--muted)';
+    bodyHtml += `<td style="text-align:center;padding:4px 6px;min-width:52px;">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:2px;font-size:12px;font-weight:700;line-height:1.3;">
+        <span style="color:${dispColor}" title="Disponibilità totali (dispo + conferme)">📅 ${nDisp + nConf}</span>
+        <span style="color:${confColor}" title="Conferme">✅ ${nConf}</span>
+      </div>
+    </td>`;
+    const ferieChecked = dd.ferie ? 'checked' : '';
+    bodyHtml += `<td class="ferie-td">
+      <input type="checkbox" class="ferie-check" 
+        ${ferieChecked}
+        onchange="toggleFerie('${doc}', this.checked)" 
+        title="Ferie">
+    </td>`;
+    bodyHtml += '</tr>';
+  });
+
+  if (docs.length === 0) {
+    bodyHtml = '<tr><td colspan="15" class="empty-state">Nessun cardiologo trovato.</td></tr>';
+  }
+
+  body.innerHTML = bodyHtml;
+}
+
+function filterTable() {
+  renderTable();
+  renderHolterTable();
+  renderHcTable();
+  renderHpTable();
+  renderSpiroTable();
+  renderPlsTable();
+}
+
+function cycleSlot(doc, key) {
+  const dd = getDoctorData(doc);
+  if (!dd.slots) dd.slots = {};
+  const current = dd.slots[key] || '';
+  const states = getSlotStatesForDoctor(doc);
+  const idx = states.indexOf(current);
+  dd.slots[key] = states[(idx + 1) % states.length];
+  renderTable();
+  renderStats();
+  autoSave();
+}
+
+function toggleFerie(doc, val) {
+  const dd = getDoctorData(doc);
+  dd.ferie = val;
+  renderTable();
+  renderStats();
+  autoSave();
+}
+
+function renderStats() {
+  const w = getWeekData();
+  let disp = 0, ecg = 0, conf = 0, ferie = 0;
+  Object.values(w).forEach(dd => {
+    if (dd.ferie) ferie++;
+    if (!dd.slots) return;
+    Object.values(dd.slots).forEach(v => {
+      if (v === 'disponibile') disp++;
+      else if (v === 'solo-ecg') ecg++;
+      else if (v === 'confermato' || v === 'confermato-ecg') conf++;
+    });
+  });
+  document.getElementById('stat-row').innerHTML = `
+    <div class="stat-pill">📅 Disponibili: <strong>${disp}</strong></div>
+    <div class="stat-pill">📋 Solo ECG: <strong>${ecg}</strong></div>
+    <div class="stat-pill">✅ Confermati: <strong>${conf}</strong></div>
+    <div class="stat-pill">🏖️ In ferie: <strong>${ferie}</strong></div>
+  `;
+}
+
+// =============================================
+// HOLTER TABLE
+// =============================================
+const HOLTER_DAYS = ['LUN','MAR','MER','GIO','VEN','SAB','DOM'];
+const CONS_DAYS  = ['LUN','MAR','MER','GIO','VEN','SAB','DOM'];
+
+function getHolterWeekData() {
+  if (!state.holterWeeks[currentWeek]) state.holterWeeks[currentWeek] = {};
+  return state.holterWeeks[currentWeek];
+}
+
+function getHolterDoctorData(name) {
+  const w = getHolterWeekData();
+  if (!w[name]) w[name] = { slots: {}, ferie: false };
+  return w[name];
+}
+
+function cycleHolterSlot(doc, dayIdx) {
+  const dd = getHolterDoctorData(doc);
+  const cur = dd.slots[dayIdx] || '';
+  const next = cur === '' ? 'disponibile' : cur === 'disponibile' ? 'confermato' : '';
+  if (next === '') delete dd.slots[dayIdx];
+  else dd.slots[dayIdx] = next;
+  renderHolterTable();
+  autoSave();
+}
+
+function toggleHolterFerie(doc, val) {
+  const dd = getHolterDoctorData(doc);
+  dd.ferie = val;
+  renderHolterTable();
+  autoSave();
+}
+
+function renderHolterTable() {
+  const head = document.getElementById('holter-head');
+  const body = document.getElementById('holter-body');
+  if (!head || !body) return;
+
+  // Header
+  let headHtml = '<tr><th rowspan="2" style="width:150px;min-width:150px;position:sticky;left:0;z-index:3;background:#f0f4ff;">MEDICO</th>';
+  HOLTER_DAYS.forEach(d => {
+    headHtml += `<th class="day-header" style="width:70px;min-width:70px;background:#6366f1;color:#fff;">${d}</th>`;
+  });
+  headHtml += '<th rowspan="2" style="width:54px;min-width:54px;white-space:nowrap;font-size:11px;background:#f0f4ff;" title="Disponibilità / Conferme">DISP.<br>CONF.</th>';
+  headHtml += '<th rowspan="2" style="width:44px;min-width:44px;background:#f0f4ff;">FERIE</th></tr>';
+  head.innerHTML = headHtml;
+
+  // Body
+  let bodyHtml = '';
+  const _hFv = (document.getElementById('filter-input')?.value || '').toLowerCase().trim();
+  const _allHolterDocs = (state.doctors || []).filter(d => state.holterEnabled[d]).sort((a, b) => a.localeCompare(b));
+  const docs = _hFv ? _allHolterDocs.filter(d => d.toLowerCase().includes(_hFv)) : _allHolterDocs;
+  const SLOT_LABELS_H = { '': '—', 'disponibile': 'X', 'confermato': 'C' };
+  const SLOT_CSS_H = { '': '', 'disponibile': 'disponibile', 'confermato': 'confermato' };
+
+  docs.forEach(doc => {
+    const dd = getHolterDoctorData(doc);
+    const slots = Object.values(dd.slots || {});
+    const nDisp = slots.filter(v => v === 'disponibile').length;
+    const nConf = slots.filter(v => v === 'confermato').length;
+    let nameBg, nameColor, nameBorder;
+    if (dd.ferie) {
+      nameBg = 'rgba(220,38,38,0.18)'; nameColor = 'var(--danger)'; nameBorder = '3px solid var(--danger)';
+    } else if (nConf >= 1) {
+      nameBg = 'rgba(5,150,105,0.18)'; nameColor = 'var(--success)'; nameBorder = '3px solid var(--success)';
+    } else if (nDisp >= 1) {
+      nameBg = 'rgba(99,102,241,0.14)'; nameColor = '#6366f1'; nameBorder = '3px solid #6366f1';
+    } else {
+      nameBg = 'var(--surface2)'; nameColor = 'var(--text)'; nameBorder = '3px solid transparent';
+    }
+    bodyHtml += `<tr>`;
+    bodyHtml += `<td class="name-cell" style="background:${nameBg};color:${nameColor};border-left:${nameBorder};font-weight:600;">${doc}</td>`;
+    HOLTER_DAYS.forEach((day, di) => {
+      const val = dd.slots[di] || '';
+      const lbl = SLOT_LABELS_H[val] || '—';
+      const cls = SLOT_CSS_H[val] || '';
+      bodyHtml += `<td><button class="slot-btn ${cls}" onclick="cycleHolterSlot('${doc}',${di})" title="${day}: ${val||'vuoto'}">${lbl}</button></td>`;
+    });
+    const dispColor = nDisp > 0 ? '#6366f1' : 'var(--muted)';
+    const confColor = nConf > 0 ? 'var(--success)' : 'var(--muted)';
+    bodyHtml += `<td style="text-align:center;padding:4px 6px;min-width:52px;">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:2px;font-size:12px;font-weight:700;line-height:1.3;">
+        <span style="color:${dispColor}" title="Disponibilità totali">📅 ${nDisp + nConf}</span>
+        <span style="color:${confColor}" title="Conferme">✅ ${nConf}</span>
+      </div>
+    </td>`;
+    const ferieChecked = dd.ferie ? 'checked' : '';
+    bodyHtml += `<td class="ferie-td"><input type="checkbox" class="ferie-check" ${ferieChecked} onchange="toggleHolterFerie('${doc}', this.checked)" title="Ferie"></td>`;
+    bodyHtml += '</tr>';
+  });
+
+  if (_allHolterDocs.length === 0) {
+    bodyHtml = '<tr><td colspan="11" class="empty-state">Nessun medico Holter configurato.</td></tr>';
+  } else if (docs.length === 0) {
+    bodyHtml = '<tr><td colspan="11" class="empty-state">Nessun medico trovato.</td></tr>';
+  }
+  const _hSec = document.getElementById('holter-section');
+  if (_hSec) { _hSec.style.opacity = (_hFv && docs.length === 0) ? '0.25' : ''; _hSec.style.pointerEvents = (_hFv && docs.length === 0) ? 'none' : ''; }
+  body.innerHTML = bodyHtml;
+}
+
+function toggleHolterTableVis() {
+  const wrap = document.getElementById('holter-table-wrap');
+  const btn  = document.getElementById('toggle-holter-btn');
+  const hidden = wrap.style.display === 'none';
+  wrap.style.display = hidden ? '' : 'none';
+  btn.textContent = hidden ? '−' : '+';
+}
+
+// ── CONSUNTIVO HC ──────────────────────────────────────────────────────────
+
+function getHcDoctorData(doc) {
+  if (!state.hcWeeks[currentWeek]) state.hcWeeks[currentWeek] = {};
+  if (!state.hcWeeks[currentWeek][doc]) state.hcWeeks[currentWeek][doc] = { slots: {}, ferie: false };
+  return state.hcWeeks[currentWeek][doc];
+}
+
+function editHcSlot(btn, doc, di) {
+  const dd = getHcDoctorData(doc);
+  const cur = dd.slots[di];
+  if (!cur) {
+    // Vuoto → mostra input inline
+    const input = document.createElement('input');
+    input.type = 'number'; input.min = '1';
+    input.style.cssText = 'width:44px;font-size:12px;font-weight:700;border:1px solid #aaa;border-radius:3px;text-align:center;padding:2px;';
+    btn.replaceWith(input);
+    input.focus();
+    const commit = () => {
+      const num = parseInt(input.value, 10);
+      if (!isNaN(num) && num > 0) {
+        getHcDoctorData(doc).slots[di] = { num, conf: true };
+        saveData();
+      }
+      renderHcTable(); renderRiepilogo();
+    };
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') renderHcTable(); });
+    input.addEventListener('blur', commit);
+    return;
+  } else {
+    // Numero → cancella
+    delete dd.slots[di];
+  }
+  saveData();
+  renderHcTable();
+  renderRiepilogo();
+}
+
+function toggleHcFerie(doc, val) {
+  getHcDoctorData(doc).ferie = val;
+  saveData();
+  renderHcTable();
+}
+
+function renderHcTable() {
+  const head = document.getElementById('hc-head');
+  const body = document.getElementById('hc-body');
+  if (!head || !body) return;
+
+  const COLOR = '#0891b2';
+  let headHtml = `<tr><th rowspan="2" style="width:150px;min-width:150px;position:sticky;left:0;z-index:3;background:#f0f4ff;">MEDICO</th>`;
+  CONS_DAYS.forEach(d => {
+    headHtml += `<th class="day-header" style="width:70px;min-width:70px;background:${COLOR};color:#fff;">${d}</th>`;
+  });
+  headHtml += `<th rowspan="2" style="width:54px;min-width:54px;white-space:nowrap;font-size:11px;background:#f0f4ff;" title="Disponibilità / Conferme">DISP.<br>CONF.</th>`;
+  headHtml += `<th rowspan="2" style="width:44px;min-width:44px;background:#f0f4ff;">FERIE</th></tr>`;
+  head.innerHTML = headHtml;
+
+  let bodyHtml = '';
+  const docs = getHcDoctorsList();
+  const _filt = (document.getElementById('filter-input')?.value || '').toLowerCase();
+  const filteredDocs = docs.filter(d => d.toLowerCase().includes(_filt));
+
+  filteredDocs.forEach(doc => {
+    const displayName = getConsuntivoDisplayName(doc, 'hcCons');
+    const dd = getHcDoctorData(doc);
+    const slots = Object.values(dd.slots || {}).filter(Boolean);
+    const nDisp = slots.filter(s => s && !s.conf).length;
+    const nConf = slots.filter(s => s && s.conf).length;
+    let nameBg, nameColor, nameBorder;
+    if (dd.ferie) {
+      nameBg = 'rgba(220,38,38,0.18)'; nameColor = 'var(--danger)'; nameBorder = '3px solid var(--danger)';
+    } else if (nConf >= 1) {
+      nameBg = 'rgba(5,150,105,0.18)'; nameColor = 'var(--success)'; nameBorder = '3px solid var(--success)';
+    } else if (nDisp >= 1) {
+      nameBg = `rgba(8,145,178,0.14)`; nameColor = COLOR; nameBorder = `3px solid ${COLOR}`;
+    } else {
+      nameBg = 'var(--surface2)'; nameColor = 'var(--text)'; nameBorder = '3px solid transparent';
+    }
+    bodyHtml += `<tr>`;
+    bodyHtml += `<td class="name-cell" style="background:${nameBg};color:${nameColor};border-left:${nameBorder};font-weight:600;">${displayName}</td>`;
+    CONS_DAYS.forEach((day, di) => {
+      const s = dd.slots[di];
+      let cellStyle, lbl;
+      if (!s) {
+        cellStyle = ''; lbl = '—';
+      } else if (!s.conf) {
+        cellStyle = `background:rgba(8,145,178,0.15);color:${COLOR};font-weight:700;`; lbl = (s.val === 'x' ? 'x' : s.num);
+      } else {
+        cellStyle = 'background:rgba(5,150,105,0.18);color:var(--success);font-weight:700;'; lbl = (s.val === 'x' ? 'x' : s.num);
+      }
+      bodyHtml += `<td><button class="slot-btn" style="min-width:36px;${cellStyle}" onclick="editHcSlot(this,'${doc.replace(/'/g,"\\'")}',${di})" title="${day}: ${s ? s.num + (s.conf?' (conf)':'') : 'vuoto'}">${lbl}</button></td>`;
+    });
+    const dispColor = nDisp > 0 ? COLOR : 'var(--muted)';
+    const confColor = nConf > 0 ? 'var(--success)' : 'var(--muted)';
+    bodyHtml += `<td style="text-align:center;padding:4px 6px;min-width:52px;">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:2px;font-size:12px;font-weight:700;line-height:1.3;">
+        <span style="color:${dispColor}" title="Disponibilità totali">📅 ${nDisp + nConf}</span>
+        <span style="color:${confColor}" title="Conferme">✅ ${nConf}</span>
+      </div>
+    </td>`;
+    const ferieChecked = dd.ferie ? 'checked' : '';
+    bodyHtml += `<td class="ferie-td"><input type="checkbox" class="ferie-check" ${ferieChecked} onchange="toggleHcFerie('${doc.replace(/'/g,"\\'")}', this.checked)" title="Ferie"></td>`;
+    bodyHtml += '</tr>';
+  });
+
+  const _hcAllDocs = getHcDoctorsList();
+  if (_hcAllDocs.length === 0) {
+    bodyHtml = '<tr><td colspan="11" class="empty-state">Nessun consuntivista HC configurato. Aggiungili dalle Impostazioni → Gestione Cardiologi → Extra — Consuntivo.</td></tr>';
+  } else if (filteredDocs.length === 0) {
+    bodyHtml = '<tr><td colspan="11" class="empty-state">Nessun medico trovato.</td></tr>';
+  }
+  const _hcSec = document.getElementById('hc-section');
+  if (_hcSec) { const _fvhc = (document.getElementById('filter-input')?.value || '').trim(); _hcSec.style.opacity = (_fvhc && filteredDocs.length === 0) ? '0.25' : ''; _hcSec.style.pointerEvents = (_fvhc && filteredDocs.length === 0) ? 'none' : ''; }
+  body.innerHTML = bodyHtml;
+}
+
+function toggleHcTableVis() {
+  const wrap = document.getElementById('hc-table-wrap');
+  const btn  = document.getElementById('toggle-hc-btn');
+  const hidden = wrap.style.display === 'none';
+  wrap.style.display = hidden ? '' : 'none';
+  btn.textContent = hidden ? '−' : '+';
+}
+
+// ── CONSUNTIVO HP ──────────────────────────────────────────────────────────
+
+function getHpDoctorData(doc) {
+  if (!state.hpWeeks[currentWeek]) state.hpWeeks[currentWeek] = {};
+  if (!state.hpWeeks[currentWeek][doc]) state.hpWeeks[currentWeek][doc] = { slots: {}, ferie: false };
+  return state.hpWeeks[currentWeek][doc];
+}
+
+function editHpSlot(btn, doc, di) {
+  const dd = getHpDoctorData(doc);
+  const cur = dd.slots[di];
+  if (!cur) {
+    // Vuoto → mostra input inline
+    const input = document.createElement('input');
+    input.type = 'number'; input.min = '1';
+    input.style.cssText = 'width:44px;font-size:12px;font-weight:700;border:1px solid #aaa;border-radius:3px;text-align:center;padding:2px;';
+    btn.replaceWith(input);
+    input.focus();
+    const commit = () => {
+      const num = parseInt(input.value, 10);
+      if (!isNaN(num) && num > 0) {
+        getHpDoctorData(doc).slots[di] = { num, conf: true };
+        saveData();
+      }
+      renderHpTable(); renderRiepilogo();
+    };
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') renderHpTable(); });
+    input.addEventListener('blur', commit);
+    return;
+  } else {
+    // Numero → cancella
+    delete dd.slots[di];
+  }
+  saveData();
+  renderHpTable();
+  renderRiepilogo();
+}
+
+function toggleHpFerie(doc, val) {
+  getHpDoctorData(doc).ferie = val;
+  saveData();
+  renderHpTable();
+}
+
+function renderHpTable() {
+  const section = document.getElementById('hp-section');
+  const head = document.getElementById('hp-head');
+  const body = document.getElementById('hp-body');
+  if (!head || !body) return;
+
+  const COLOR = '#ea580c';
+  let headHtml = `<tr><th rowspan="2" style="width:150px;min-width:150px;position:sticky;left:0;z-index:3;background:#f0f4ff;">MEDICO</th>`;
+  CONS_DAYS.forEach(d => {
+    headHtml += `<th class="day-header" style="width:70px;min-width:70px;background:${COLOR};color:#fff;">${d}</th>`;
+  });
+  headHtml += `<th rowspan="2" style="width:54px;min-width:54px;white-space:nowrap;font-size:11px;background:#f0f4ff;" title="Disponibilità / Conferme">DISP.<br>CONF.</th>`;
+  headHtml += `<th rowspan="2" style="width:44px;min-width:44px;background:#f0f4ff;">FERIE</th></tr>`;
+  head.innerHTML = headHtml;
+
+  let bodyHtml = '';
+    const docs = getHpDoctorsList();
+  const _filt = (document.getElementById('filter-input')?.value || '').toLowerCase();
+  const filteredDocs = docs.filter(d => d.toLowerCase().includes(_filt));
+  if (section) section.style.display = docs.length === 0 ? 'none' : '';
+
+  filteredDocs.forEach(doc => {
+    const displayName = getConsuntivoDisplayName(doc, 'hpCons');
+    const dd = getHpDoctorData(doc);
+    const slots = Object.values(dd.slots || {}).filter(Boolean);
+    const nDisp = slots.filter(s => s && !s.conf).length;
+    const nConf = slots.filter(s => s && s.conf).length;
+    let nameBg, nameColor, nameBorder;
+    if (dd.ferie) {
+      nameBg = 'rgba(220,38,38,0.18)'; nameColor = 'var(--danger)'; nameBorder = '3px solid var(--danger)';
+    } else if (nConf >= 1) {
+      nameBg = 'rgba(5,150,105,0.18)'; nameColor = 'var(--success)'; nameBorder = '3px solid var(--success)';
+    } else if (nDisp >= 1) {
+      nameBg = `rgba(234,88,12,0.14)`; nameColor = COLOR; nameBorder = `3px solid ${COLOR}`;
+    } else {
+      nameBg = 'var(--surface2)'; nameColor = 'var(--text)'; nameBorder = '3px solid transparent';
+    }
+    bodyHtml += `<tr>`;
+    bodyHtml += `<td class="name-cell" style="background:${nameBg};color:${nameColor};border-left:${nameBorder};font-weight:600;">${displayName}</td>`;
+    CONS_DAYS.forEach((day, di) => {
+      const s = dd.slots[di];
+      let cellStyle, lbl;
+      if (!s) {
+        cellStyle = ''; lbl = '—';
+      } else if (!s.conf) {
+        cellStyle = `background:rgba(234,88,12,0.15);color:${COLOR};font-weight:700;`; lbl = (s.val === 'x' ? 'x' : s.num);
+      } else {
+        cellStyle = 'background:rgba(5,150,105,0.18);color:var(--success);font-weight:700;'; lbl = (s.val === 'x' ? 'x' : s.num);
+      }
+      bodyHtml += `<td><button class="slot-btn" style="min-width:36px;${cellStyle}" onclick="editHpSlot(this,'${doc.replace(/'/g,"\\'")}',${di})" title="${day}: ${s ? s.num + (s.conf?' (conf)':'') : 'vuoto'}">${lbl}</button></td>`;
+    });
+    const dispColor = nDisp > 0 ? COLOR : 'var(--muted)';
+    const confColor = nConf > 0 ? 'var(--success)' : 'var(--muted)';
+    bodyHtml += `<td style="text-align:center;padding:4px 6px;min-width:52px;">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:2px;font-size:12px;font-weight:700;line-height:1.3;">
+        <span style="color:${dispColor}" title="Disponibilità totali">📅 ${nDisp + nConf}</span>
+        <span style="color:${confColor}" title="Conferme">✅ ${nConf}</span>
+      </div>
+    </td>`;
+    const ferieChecked = dd.ferie ? 'checked' : '';
+    bodyHtml += `<td class="ferie-td"><input type="checkbox" class="ferie-check" ${ferieChecked} onchange="toggleHpFerie('${doc.replace(/'/g,"\\'")}', this.checked)" title="Ferie"></td>`;
+    bodyHtml += '</tr>';
+  });
+
+  const _hpAllDocs = getHpDoctorsList();
+  if (_hpAllDocs.length === 0) {
+    bodyHtml = '<tr><td colspan="11" class="empty-state">Nessun consuntivista HP configurato. Aggiungili dalle Impostazioni → Gestione Cardiologi → Extra — Consuntivo.</td></tr>';
+  } else if (filteredDocs.length === 0) {
+    bodyHtml = '<tr><td colspan="11" class="empty-state">Nessun medico trovato.</td></tr>';
+  }
+  const _hpSec = document.getElementById('hp-section');
+  if (_hpSec) { const _fvhp = (document.getElementById('filter-input')?.value || '').trim(); _hpSec.style.opacity = (_fvhp && filteredDocs.length === 0) ? '0.25' : ''; _hpSec.style.pointerEvents = (_fvhp && filteredDocs.length === 0) ? 'none' : ''; }
+  body.innerHTML = bodyHtml;
+}
+
+function toggleHpTableVis() {
+  const wrap = document.getElementById('hp-table-wrap');
+  const btn  = document.getElementById('toggle-hp-btn');
+  const hidden = wrap.style.display === 'none';
+  wrap.style.display = hidden ? '' : 'none';
+  btn.textContent = hidden ? '−' : '+';
+}
+// ── CONSUNTIVO SPIROMETRIE ──────────────────────────────────────────────────
+
+function getSpiroDoctorData(doc) {
+  if (!state.spiroWeeks[currentWeek]) state.spiroWeeks[currentWeek] = {};
+  if (!state.spiroWeeks[currentWeek][doc]) state.spiroWeeks[currentWeek][doc] = { slots: {}, ferie: false };
+  return state.spiroWeeks[currentWeek][doc];
+}
+
+function editSpiroSlot(btn, doc, di) {
+  const dd = getSpiroDoctorData(doc);
+  const cur = dd.slots[di];
+  if (!cur) {
+    // Vuoto → mostra input inline (numero oppure 'x')
+    const input = document.createElement('input');
+    input.type = 'text'; input.placeholder = 'N o x';
+    input.style.cssText = 'width:44px;font-size:12px;font-weight:700;border:1px solid #aaa;border-radius:3px;text-align:center;padding:2px;';
+    btn.replaceWith(input);
+    input.focus();
+    const commit = () => {
+      const raw = input.value.trim().toLowerCase();
+      if (raw === 'x') {
+        getSpiroDoctorData(doc).slots[di] = { val: 'x', conf: true };
+        saveData();
+      } else {
+        const num = parseInt(raw, 10);
+        if (!isNaN(num) && num > 0) {
+          getSpiroDoctorData(doc).slots[di] = { num, conf: true };
+          saveData();
+        }
+      }
+      renderSpiroTable(); renderRiepilogo();
+    };
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') renderSpiroTable(); });
+    input.addEventListener('blur', commit);
+    return;
+  } else {
+    delete dd.slots[di];
+  }
+  saveData();
+  renderSpiroTable();
+  renderRiepilogo();
+}
+
+function toggleSpiroFerie(doc, val) {
+  getSpiroDoctorData(doc).ferie = val;
+  saveData();
+  renderSpiroTable();
+}
+
+function renderSpiroTable() {
+  const section = document.getElementById('spiro-section');
+  const head = document.getElementById('spiro-head');
+  const body = document.getElementById('spiro-body');
+  if (!head || !body) return;
+
+  const COLOR = '#16a34a';
+  let headHtml = `<tr><th rowspan="2" style="width:150px;min-width:150px;position:sticky;left:0;z-index:3;background:#f0f4ff;">SPECIALISTA</th>`;
+  CONS_DAYS.forEach(d => {
+    headHtml += `<th class="day-header" style="width:70px;min-width:70px;background:${COLOR};color:#fff;">${d}</th>`;
+  });
+  headHtml += `<th rowspan="2" style="width:54px;min-width:54px;white-space:nowrap;font-size:11px;background:#f0f4ff;" title="Disponibilità / Conferme">DISP.<br>CONF.</th>`;
+  headHtml += `<th rowspan="2" style="width:44px;min-width:44px;background:#f0f4ff;">FERIE</th></tr>`;
+  head.innerHTML = headHtml;
+
+  let bodyHtml = '';
+    const docs = getSpiroDoctorsList();
+  const _filt = (document.getElementById('filter-input')?.value || '').toLowerCase();
+  const filteredDocs = docs.filter(d => d.toLowerCase().includes(_filt));
+  if (section) section.style.display = docs.length === 0 ? 'none' : '';
+
+  filteredDocs.forEach(doc => {
+    const displayName = getConsuntivoDisplayName(doc, 'spiro');
+    const dd = getSpiroDoctorData(doc);
+    const slots = Object.values(dd.slots || {}).filter(Boolean);
+    const nConf = slots.filter(s => s && s.conf).length;
+    let nameBg, nameColor, nameBorder;
+    if (dd.ferie) {
+      nameBg = 'rgba(220,38,38,0.18)'; nameColor = 'var(--danger)'; nameBorder = '3px solid var(--danger)';
+    } else if (nConf >= 1) {
+      nameBg = 'rgba(5,150,105,0.18)'; nameColor = 'var(--success)'; nameBorder = '3px solid var(--success)';
+    } else {
+      nameBg = 'var(--surface2)'; nameColor = 'var(--text)'; nameBorder = '3px solid transparent';
+    }
+    bodyHtml += `<tr>`;
+    bodyHtml += `<td class="name-cell" style="background:${nameBg};color:${nameColor};border-left:${nameBorder};font-weight:600;">${displayName}</td>`;
+    CONS_DAYS.forEach((day, di) => {
+      const s = dd.slots[di];
+      let cellStyle, lbl;
+      if (!s) {
+        cellStyle = ''; lbl = '—';
+      } else {
+        cellStyle = 'background:rgba(5,150,105,0.18);color:var(--success);font-weight:700;';
+        lbl = s.val === 'x' ? 'x' : s.num;
+      }
+      bodyHtml += `<td><button class="slot-btn" style="min-width:36px;${cellStyle}" onclick="editSpiroSlot(this,'${doc.replace(/'/g,"\'")}',${di})" title="${day}: ${s ? (s.val==='x'?'x':s.num)+' (conf)' : 'vuoto'}">${lbl}</button></td>`;
+    });
+    const confColor = nConf > 0 ? 'var(--success)' : 'var(--muted)';
+    bodyHtml += `<td style="text-align:center;padding:4px 6px;min-width:52px;">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:2px;font-size:12px;font-weight:700;line-height:1.3;">
+        <span style="color:${confColor}" title="Conferme">✅ ${nConf}</span>
+      </div>
+    </td>`;
+    const ferieChecked = dd.ferie ? 'checked' : '';
+    bodyHtml += `<td class="ferie-td"><input type="checkbox" class="ferie-check" ${ferieChecked} onchange="toggleSpiroFerie('${doc.replace(/'/g,"\'")}', this.checked)" title="Ferie"></td>`;
+    bodyHtml += '</tr>';
+  });
+
+  const _spAllDocs = getSpiroDoctorsList();
+  if (_spAllDocs.length === 0) {
+    bodyHtml = '<tr><td colspan="11" class="empty-state">Nessuno specialista Spirometrie configurato. Aggiungili dalle Impostazioni → Gestione Cardiologi → Extra — Consuntivo.</td></tr>';
+  } else if (filteredDocs.length === 0) {
+    bodyHtml = '<tr><td colspan="11" class="empty-state">Nessun medico trovato.</td></tr>';
+  }
+  const _spSec = document.getElementById('spiro-section');
+  if (_spSec) { const _fvsp = (document.getElementById('filter-input')?.value || '').trim(); _spSec.style.opacity = (_fvsp && filteredDocs.length === 0) ? '0.25' : ''; _spSec.style.pointerEvents = (_fvsp && filteredDocs.length === 0) ? 'none' : ''; }
+  body.innerHTML = bodyHtml;
+}
+
+function toggleSpiroTableVis() {
+  const wrap = document.getElementById('spiro-table-wrap');
+  const btn  = document.getElementById('toggle-spiro-btn');
+  const hidden = wrap.style.display === 'none';
+  wrap.style.display = hidden ? '' : 'none';
+  btn.textContent = hidden ? '−' : '+';
+}
+
+// ── CONSUNTIVO POLISONNOGRAFIE ──────────────────────────────────────────────
+
+function getPlsDoctorData(doc) {
+  if (!state.plsWeeks[currentWeek]) state.plsWeeks[currentWeek] = {};
+  if (!state.plsWeeks[currentWeek][doc]) state.plsWeeks[currentWeek][doc] = { slots: {}, ferie: false };
+  return state.plsWeeks[currentWeek][doc];
+}
+
+function editPlsSlot(btn, doc, di) {
+  const dd = getPlsDoctorData(doc);
+  const cur = dd.slots[di];
+  if (!cur) {
+    const input = document.createElement('input');
+    input.type = 'text'; input.placeholder = 'N o x';
+    input.style.cssText = 'width:44px;font-size:12px;font-weight:700;border:1px solid #aaa;border-radius:3px;text-align:center;padding:2px;';
+    btn.replaceWith(input);
+    input.focus();
+    const commit = () => {
+      const raw = input.value.trim().toLowerCase();
+      if (raw === 'x') {
+        getPlsDoctorData(doc).slots[di] = { val: 'x', conf: true };
+        saveData();
+      } else {
+        const num = parseInt(raw, 10);
+        if (!isNaN(num) && num > 0) {
+          getPlsDoctorData(doc).slots[di] = { num, conf: true };
+          saveData();
+        }
+      }
+      renderPlsTable(); renderRiepilogo();
+    };
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') renderPlsTable(); });
+    input.addEventListener('blur', commit);
+    return;
+  } else {
+    delete dd.slots[di];
+  }
+  saveData();
+  renderPlsTable();
+  renderRiepilogo();
+}
+
+function togglePlsFerie(doc, val) {
+  getPlsDoctorData(doc).ferie = val;
+  saveData();
+  renderPlsTable();
+}
+
+function renderPlsTable() {
+  const section = document.getElementById('pls-section');
+  const head = document.getElementById('pls-head');
+  const body = document.getElementById('pls-body');
+  if (!head || !body) return;
+
+  const COLOR = '#7c3aed';
+  let headHtml = `<tr><th rowspan="2" style="width:150px;min-width:150px;position:sticky;left:0;z-index:3;background:#f0f4ff;">SPECIALISTA</th>`;
+  CONS_DAYS.forEach(d => {
+    headHtml += `<th class="day-header" style="width:70px;min-width:70px;background:${COLOR};color:#fff;">${d}</th>`;
+  });
+  headHtml += `<th rowspan="2" style="width:54px;min-width:54px;white-space:nowrap;font-size:11px;background:#f0f4ff;" title="Disponibilità / Conferme">DISP.<br>CONF.</th>`;
+  headHtml += `<th rowspan="2" style="width:44px;min-width:44px;background:#f0f4ff;">FERIE</th></tr>`;
+  head.innerHTML = headHtml;
+
+  let bodyHtml = '';
+    const docs = getPlsDoctorsList();
+  const _filt = (document.getElementById('filter-input')?.value || '').toLowerCase();
+  const filteredDocs = docs.filter(d => d.toLowerCase().includes(_filt));
+  if (section) section.style.display = docs.length === 0 ? 'none' : '';
+
+  filteredDocs.forEach(doc => {
+    const displayName = getConsuntivoDisplayName(doc, 'pls');
+    const dd = getPlsDoctorData(doc);
+    const slots = Object.values(dd.slots || {}).filter(Boolean);
+    const nConf = slots.filter(s => s && s.conf).length;
+    let nameBg, nameColor, nameBorder;
+    if (dd.ferie) {
+      nameBg = 'rgba(220,38,38,0.18)'; nameColor = 'var(--danger)'; nameBorder = '3px solid var(--danger)';
+    } else if (nConf >= 1) {
+      nameBg = 'rgba(5,150,105,0.18)'; nameColor = 'var(--success)'; nameBorder = '3px solid var(--success)';
+    } else {
+      nameBg = 'var(--surface2)'; nameColor = 'var(--text)'; nameBorder = '3px solid transparent';
+    }
+    bodyHtml += `<tr>`;
+    bodyHtml += `<td class="name-cell" style="background:${nameBg};color:${nameColor};border-left:${nameBorder};font-weight:600;">${displayName}</td>`;
+    CONS_DAYS.forEach((day, di) => {
+      const s = dd.slots[di];
+      let cellStyle, lbl;
+      if (!s) {
+        cellStyle = ''; lbl = '—';
+      } else {
+        cellStyle = 'background:rgba(124,58,237,0.15);color:${COLOR};font-weight:700;';
+        lbl = s.val === 'x' ? 'x' : s.num;
+      }
+      bodyHtml += `<td><button class="slot-btn" style="min-width:36px;${cellStyle}" onclick="editPlsSlot(this,'${doc.replace(/'/g,"\'")}',${di})" title="${day}: ${s ? (s.val==='x'?'x':s.num)+' (conf)' : 'vuoto'}">${lbl}</button></td>`;
+    });
+    const confColor = nConf > 0 ? 'var(--success)' : 'var(--muted)';
+    bodyHtml += `<td style="text-align:center;padding:4px 6px;min-width:52px;">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:2px;font-size:12px;font-weight:700;line-height:1.3;">
+        <span style="color:${confColor}" title="Conferme">✅ ${nConf}</span>
+      </div>
+    </td>`;
+    const ferieChecked = dd.ferie ? 'checked' : '';
+    bodyHtml += `<td class="ferie-td"><input type="checkbox" class="ferie-check" ${ferieChecked} onchange="togglePlsFerie('${doc.replace(/'/g,"\'")}', this.checked)" title="Ferie"></td>`;
+    bodyHtml += '</tr>';
+  });
+
+  const _plsAllDocs = getPlsDoctorsList();
+  if (_plsAllDocs.length === 0) {
+    bodyHtml = '<tr><td colspan="11" class="empty-state">Nessuno specialista Polisonnografie configurato. Aggiungili dalle Impostazioni → Gestione Cardiologi → Extra — Consuntivo.</td></tr>';
+  } else if (filteredDocs.length === 0) {
+    bodyHtml = '<tr><td colspan="11" class="empty-state">Nessun medico trovato.</td></tr>';
+  }
+  const _plsSec = document.getElementById('pls-section');
+  if (_plsSec) { const _fvpls = (document.getElementById('filter-input')?.value || '').trim(); _plsSec.style.opacity = (_fvpls && filteredDocs.length === 0) ? '0.25' : ''; _plsSec.style.pointerEvents = (_fvpls && filteredDocs.length === 0) ? 'none' : ''; }
+  body.innerHTML = bodyHtml;
+}
+
+function togglePlsTableVis() {
+  const wrap = document.getElementById('pls-table-wrap');
+  const btn  = document.getElementById('toggle-pls-btn');
+  const hidden = wrap.style.display === 'none';
+  wrap.style.display = hidden ? '' : 'none';
+  btn.textContent = hidden ? '−' : '+';
+}
+
+
+// =============================================
+// WHATSAPP PARSER — v3
+// =============================================
+
+// Day name → index (0=Lun … 5=Sab). Ordered longest-first to avoid
+// "martedì" matching inside "sabato" etc.
+const DAY_MAP = [
+  ['mercoledì', 2], ['mercoledi', 2],
+  ['martedì',   1], ['martedi',   1],
+  ['giovedì',   3], ['giovedi',   3],
+  ['venerdì',   4], ['venerdi',   4],
+  ['lunedì',    0], ['lunedi',    0],
+  ['sabato',    5],
+  ['domenica',  6], ['dom',       6],
+];
+
+// Build {dayOfMonth -> dayIndex} for the 7 days of currentWeek (0=Lun … 6=Dom)
+function buildDateMap(mondayStr) {
+  const map = {};
+  for (let i = 0; i < 7; i++) {
+    const d = parseLocalDate(addDays(mondayStr, i));
+    map[d.getDate()] = i;
+  }
+  return map;
+}
+
+// ── low-level helpers ──────────────────────────────────────────────────
+
+// ── Normalizza abbreviazioni e typo comuni prima del parsing ───────────
+function normalizeMsg(s) {
+  return s
+    // slot abbreviations
+    .replace(/\bmattin[ae]?\b/g, 'mattina')   // mattina/mattine/mattin
+    .replace(/\bmatt\b/g,        'mattina')   // matt → mattina
+    .replace(/\bmat\b/g,         'mattina')   // mat  → mattina
+    .replace(/\bpomerig+io\b/g,  'pomeriggio')// typo pomerigio
+    .replace(/\bpomerigg\b/g,    'pomeriggio')
+    .replace(/\bpom\b/g,         'pomeriggio')
+    .replace(/\bsera\b/g,        'pomeriggio')
+    .replace(/\btarde?\b/g,      'pomeriggio')
+    // giorno abbreviations (word-boundary safe)
+    .replace(/\blun\b/g,  'lunedì')
+    .replace(/\bmar\b/g,  'martedì')
+    .replace(/\bmer\b/g,  'mercoledì')
+    .replace(/\bgio\b/g,  'giovedì')
+    .replace(/\bven\b/g,  'venerdì')
+    .replace(/\bsab\b/g,  'sabato')
+    // rimuovi testo di cortesia comuni che non portano info
+    .replace(/buon(?:giorno|asera|dì|sera)\b[,]?/g, '')
+    .replace(/\bposso\b/g, '')
+    .replace(/\bsono disponibile\b/g, '')
+    .replace(/\bdisponibile\b/g, '')
+    .replace(/\bgrazie\b.*$/gm, '')
+    .replace(/\bcordiali saluti\b.*$/gm, '')
+    // alias consuntivo
+    .replace(/\babpm\b/gi, 'holter pressori')
+    .replace(/\bpolisonnografi[ae]\b/gi, 'polisonnografie')
+    .replace(/\bpolisonno\b/gi, 'polisonnografie')
+    .replace(/\bturno\s+completo\b/gi, 'turno completo')
+    .replace(/\bcompleta\b/gi,           'turno completo')   // "completa" = turno completo
+    .replace(/\bpsg\b/gi,                'polisonnografie')  // psg = pls
+    .replace(/\bpol\b/gi,               'polisonnografie')  // pol = pls (standalone)
+    // "o pomeriggio" dopo mattina → sia mattina che pomeriggio
+    .replace(/mattina\s+o\s+pomeriggio/gi, 'mattina pomeriggio')
+    .replace(/pomeriggio\s+o\s+mattina/gi, 'mattina pomeriggio');
+}
+
+function hasMat(s)    { return /\bmattina\b/.test(s); }
+function hasPom(s)    { return /\bpomeriggio\b/.test(s); }
+function hasEcg(s)    { return /solo\s*ecg|\becg\b/.test(s); }
+function hasFerie(s)  { return /\bferie\b|vacanz|nessuna\s+disponi|non\s+ho\s+disponi|non\s+sono\s+disponib|non\s+disponib|indisponibile/.test(s); }
+function getFerieCategories(s) {
+  // Restituisce [] se no ferie, ['all'] se ferie generica, o array specifico ['hc','hp'...]
+  if (!hasFerie(s)) return [];
+  const cats = [];
+  if (/\bholter\b/.test(s) && !/holter\s+press/.test(s) && !/holter\s*cardiaco/.test(s)) cats.push('holter');
+  if (/\bhc\b|holter\s*cardiaco|refertazione\s*hc/.test(s)) cats.push('hc');
+  if (/\bhp\b|holter\s*pressor|abpm/.test(s)) cats.push('hp');
+  if (/\bspiro\b|spirometr/.test(s)) cats.push('spiro');
+  if (/\bpls\b|polisonn|\bpsg\b/.test(s)) cats.push('pls');
+  if (cats.length === 0) return ['all'];
+  return cats;
+}
+// holter CARDIACO = "holter" senza "pressori"
+function hasHolter(s) {
+  return /\bholter\b/.test(s) && !/holter\s+press/.test(s);
+}
+// holter PRESSORI / ABPM / HP
+function hasHolterPressori(s) {
+  return /holter\s+press|\babpm\b|\bpressori\b/.test(s);
+}
+// "turno completo" = disponibile su entrambi gli slot
+function hasTurnoCompleto(s) {
+  return /turno\s+completo|completo/.test(s);
+}
+// "turno holter" = solo holter (non turno pieno)
+function hasTurnoHolter(s) {
+  return /turno\s+holter/.test(s);
+}
+
+function slotCtx(s) {
+  const m = hasMat(s), p = hasPom(s);
+  if (m && p) return 'both';
+  if (m)      return 'mat';
+  if (p)      return 'pom';
+  return 'both';   // unspecified → both
+}
+
+// Find all day-indices mentioned in string s (by name OR date number)
+function findDays(s, dateMap) {
+  const found = new Set();
+
+  // 1. Date numbers  e.g. "23", "24/03"
+  const nums = s.match(/\b(\d{1,2})(?:\/\d{1,2}(?:\/\d{2,4})?)?\b/g) || [];
+  nums.forEach(tok => {
+    const n = parseInt(tok, 10);
+    if (dateMap.hasOwnProperty(n)) found.add(dateMap[n]);
+  });
+
+  // 2. Day names (longest first to avoid partial matches)
+  DAY_MAP.forEach(([name, idx]) => {
+    if (s.includes(name)) found.add(idx);
+  });
+
+  return [...found].sort((a, b) => a - b);
+}
+
+// ── Helpers per sezioni consuntivo ─────────────────────────────────
+
+// Estrae un numero da testi tipo "max 40 HC", "40 hc", "(max 40)", "30 hp"
+function extractConsuntivoNum(s) {
+  // "50x", "50x lunedì", "x50"
+  const mX = s.match(/\b(\d+)\s*x\b|\bx\s*(\d+)\b/i);
+  if (mX) { const n = parseInt(mX[1] || mX[2], 10); if (!isNaN(n) && n > 0) return n; }
+  const m = s.match(/max\s+(\d+)|(\d+)\s*(?:hc|hp|spiro|pls|ecg|refert)/i)
+          || s.match(/\(?(\d+)\)?/);
+  if (m) {
+    const n = parseInt(m[1] || m[2] || m[3], 10);
+    if (!isNaN(n) && n > 0) return n;
+  }
+  return null;
+}
+
+// Parsa una sezione di testo per tabelle consuntivo (HC, HP, Spiro, PLS)
+// Ritorna array di { key: dayIndex, num: N } (per HC/HP/Spiro/PLS tutti usano slot indicizzati per giorno)
+function parseConsuntivoSection(text, dateMap) {
+  const low = normalizeMsg(text.toLowerCase().replace(/[''`´]/g, "'"));
+
+  // Tutti i giorni
+  if (/tutti\s+i\s+gg|tutti\s+i\s+giorni|tutta\s+la\s+settimana|ogni\s+giorno/.test(low)
+      || (hasTurnoCompleto(low) && findDays(low, dateMap).length === 0)) {
+    const num = extractConsuntivoNum(low) || 1;
+    return [0,1,2,3,4,5].map(di => ({ key: di, num }));
+  }
+
+  // Range: "da lunedì a sabato 30 al giorno"
+  const rangeM = low.match(/da\s+([\w\sìàòèù]+?)\s+a\s+([\w\sìàòèù]+?)(?:\s+(?:\d|max|al)|$|[,;\n])/);
+  if (rangeM) {
+    const fromDays = findDays(rangeM[1].trim(), dateMap);
+    const toDays   = findDays(rangeM[2].trim(), dateMap);
+    if (fromDays.length && toDays.length) {
+      const from = Math.min(...fromDays);
+      const to   = Math.max(...toDays);
+      const num  = extractConsuntivoNum(low) || 1;
+      return [0,1,2,3,4,5].filter(d => d >= from && d <= to).map(di => ({ key: di, num }));
+    }
+  }
+
+  // Parsing riga per riga: ogni riga può avere un num specifico ("50x lunedì", "lunedì 30")
+  const result = [];
+  const seen = new Set();
+
+  const lines = low.split(/[\n,;/]+/).map(s => s.trim()).filter(Boolean);
+  const globalNum = extractConsuntivoNum(low) || null;
+
+  lines.forEach(line => {
+    const days = findDays(line, dateMap);
+    if (days.length === 0) return;
+    // Estrai numero specifico della riga, fallback al numero globale, poi a 1
+    const lineNum = extractConsuntivoNum(line) || globalNum || 1;
+    days.forEach(di => {
+      if (!seen.has(di)) {
+        seen.add(di);
+        result.push({ key: di, num: lineNum });
+      }
+    });
+  });
+
+  // Fallback: se nessun giorno trovato, usa tutti i giorni lavorativi
+  if (result.length === 0) {
+    const num = globalNum || 1;
+    return [0,1,2,3,4,5].map(di => ({ key: di, num }));
+  }
+
+  return result;
+}
+
+// Rileva se un messaggio contiene sezioni etichettate (es: "refertazione HC:", "spirometrie:")
+// Ritorna un oggetto { hc: text, hp: text, ecg: text, spiro: text, pls: text } con le sezioni trovate
+// Se nessuna sezione trovata, ritorna null
+function detectConsuntivoSections(raw) {
+  const lower = raw.toLowerCase().replace(/[''`´]/g, "'").replace(/\r\n/g, '\n');
+
+  // Patterns di intestazione sezione (con o senza ":")
+  const SECTION_PATTERNS = [
+    // HP / Holter Pressori / ABPM — prima di HC/holter generico
+    { key: 'hp',    re: /refertazione\s+hp[\s:\-,]|\bhp\s*[:\-]|holter\s+press\w*\s*[:\-]?|\babpm\s*[:\-]?/i },
+    // HC / Holter Cardiaco
+    { key: 'hc',    re: /refertazione\s+hc[\s:\-,]|\bhc\s*[:\-]|holter\s+cardi\w*\s*[:\-]?/i },
+    // "Holter" generico (standalone) → HC
+    { key: 'hc',    re: /(?:^|\n)[ \t]*holter[ \t]*:?[ \t]*(?:\n|$)/i },
+    // ECG standalone o "refertazione ECG"
+    { key: 'ecg',   re: /refertazione\s+ecg[\s:\-,]|(?:^|\n)[ \t]*ecg[ \t]*:?[ \t]*(?:\n|$)|refertazione\s*:\s*(?=\n)/i },
+    // Spirometrie
+    { key: 'spiro', re: /spirometr(?:ie|ia)\s*[:\-]?|(?:^|\n)[ \t]*spiro[ \t]*:?[ \t]*(?:\n|$)|per\s+(?:le\s+|la\s+)?spiro\w*/i },
+    // Polisonnografie
+    { key: 'pls',   re: /polisonno(?:grafi[ae])?\s*[:\-]?|(?:^|\n)[ \t]*(?:pls|pol|psg)[ \t]*:?[ \t]*(?:\n|$)|per\s+(?:le\s+|i\s+|la\s+)?(?:psg|pls|pol)\w*|per\s+(?:le\s+|i\s+|la\s+)?(?:polisonno|polisonnografi)\w*/i },
+  ];
+
+  // Trova tutte le posizioni delle intestazioni
+  const hits = [];
+  SECTION_PATTERNS.forEach(({ key, re }) => {
+    let m;
+    const rg = new RegExp(re.source, 'gi');
+    while ((m = rg.exec(lower)) !== null) {
+      hits.push({ key, pos: m.index, len: m[0].length });
+    }
+  });
+
+  if (hits.length === 0) return null;
+
+  // Ordina per posizione
+  hits.sort((a, b) => a.pos - b.pos);
+
+  // Estrai testo di ogni sezione
+  const sections = {};
+  hits.forEach((h, i) => {
+    const start = h.pos + h.len;
+    const end = (i + 1 < hits.length) ? hits[i + 1].pos : raw.length;
+    const text = raw.slice(start, end).replace(/^[\s\-:]+/, '').trim();
+    if (text) sections[h.key] = (sections[h.key] || '') + '\n' + text;
+  });
+
+  return Object.keys(sections).length > 0 ? sections : null;
+}
+
+// ── main parser ────────────────────────────────────────────────────────
+
+function interpretMessage(msg) {
+  const result = { slots: [], holterSlots: [], hcSlots: [], hpSlots: [], spiroSlots: [], plsSlots: [], ferie: false };
+  const low = normalizeMsg(
+    msg.toLowerCase()
+       .replace(/[''`´]/g, "'")
+       .replace(/\r\n/g, '\n')
+  );
+
+  const _ferieCats = getFerieCategories(low);
+  if (_ferieCats.length > 0) {
+    result.ferie = _ferieCats.includes('all') ? true : _ferieCats;
+    return result;
+  }
+
+  const dateMap = buildDateMap(currentWeek);
+
+  // ── STEP 0: controlla se il messaggio ha sezioni etichettate (consuntivo) ──
+  const sections = detectConsuntivoSections(msg);
+  if (sections) {
+    if (sections.hc)    result.hcSlots    = parseConsuntivoSection(sections.hc, dateMap);
+    if (sections.hp)    result.hpSlots    = parseConsuntivoSection(sections.hp, dateMap);
+    if (sections.spiro) result.spiroSlots = parseConsuntivoSection(sections.spiro, dateMap);
+    if (sections.pls)   result.plsSlots   = parseConsuntivoSection(sections.pls, dateMap);
+
+    // Sezione ECG/turni normali: usa il parser standard
+    if (sections.ecg) {
+      const ecgLow = normalizeMsg(sections.ecg.toLowerCase().replace(/[''`´]/g, "'").replace(/\r\n/g, '\n'));
+      // parse ecg section as standard turni (solo-ecg type)
+      const ecgResult = interpretMessageText(ecgLow, dateMap, 'solo-ecg');
+      result.slots = ecgResult.slots;
+    }
+    // Sezione holter (da etichetta standalone "Holter") → popola holterSlots
+    if (sections.holter) {
+      const hLow = normalizeMsg(sections.holter.toLowerCase().replace(/[''`´]/g, "'").replace(/\r\n/g, '\n'));
+      const hResult = interpretMessageText(hLow, dateMap, 'disponibile');
+      result.holterSlots = (result.holterSlots || []).concat(hResult.holterSlots || []);
+    }
+    // Se sezione hcSlots ma NON è venuta da pattern HC esplicito, potrebbe essere holter generico
+    // → i giorni indicati sotto "Holter" standalone vengono già gestiti come hcSlots dal pattern aggiornato
+    return dedupSlotsAll(result);
+  }
+
+  // ── STEP 1: "tutti i giorni / tutti i gg / tutta la settimana" ──────
+  if (/tutti\s+i\s+gg|tutti\s+i\s+giorni|tutta\s+la\s+settimana|ogni\s+giorno/.test(low)) {
+    const ctx = slotCtx(low);
+    // Detect per-day ECG overrides in sub-clauses
+    const ecgDays = new Set();
+    low.split(/[,;\n]/).forEach(seg => {
+      if (hasEcg(seg)) findDays(seg, dateMap).forEach(d => ecgDays.add(d));
+    });
+    const globalEcg    = hasEcg(low) && ecgDays.size === 0; // ECG applies globally only if not per-day
+    const globalHolter = hasHolter(low);
+    const globalHolterP = hasHolterPressori(low);
+    const globalSpiro  = /spirometr|\bspiro\b/.test(low);
+    const globalPls    = /polisonno|\bpls\b|\bpsg\b/.test(low);
+    const _gConsNum    = extractConsuntivoNum(low) || 1;
+    for (let di = 0; di < 6; di++) {
+      const type = (globalEcg || ecgDays.has(di)) ? 'solo-ecg' : 'disponibile';
+      if (ctx !== 'pom') result.slots.push({ key: `${di}_0`, type });
+      if (ctx !== 'mat') result.slots.push({ key: `${di}_1`, type });
+      if (globalHolter) result.holterSlots.push({ key: String(di) });
+      if (globalHolterP) {
+        result.hpSlots = result.hpSlots || [];
+        result.hpSlots.push({ key: di, num: _gConsNum });
+      }
+      if (globalSpiro) {
+        result.spiroSlots = result.spiroSlots || [];
+        result.spiroSlots.push({ key: di, num: _gConsNum });
+      }
+      if (globalPls) {
+        result.plsSlots = result.plsSlots || [];
+        result.plsSlots.push({ key: di, num: _gConsNum });
+      }
+    }
+    return dedupSlots(result);
+  }
+
+  // ── STEP 1b: "da lunedì a venerdì" range ──────────────────────────────
+  const rangeMainM = low.match(/da\s+([\w\sìàòèù]+?)\s+a\s+([\w\sìàòèù]+?)(?:\s|$|[,;\n])/);
+  if (rangeMainM && result.slots.length === 0) {
+    const fromD = findDays(rangeMainM[1].trim(), dateMap);
+    const toD   = findDays(rangeMainM[2].trim(), dateMap);
+    if (fromD.length && toD.length) {
+      const from = Math.min(...fromD);
+      const to   = Math.max(...toD);
+      const ctx  = slotCtx(low);
+      const tp   = hasEcg(low) ? 'solo-ecg' : 'disponibile';
+      const _consNum = extractConsuntivoNum(low);
+      for (let di = from; di <= Math.min(to, 5); di++) {
+        if (ctx !== 'pom') result.slots.push({ key: `${di}_0`, type: tp });
+        if (ctx !== 'mat') result.slots.push({ key: `${di}_1`, type: tp });
+        if (hasHolter(low)) result.holterSlots.push({ key: String(di) });
+        if (_consNum) {
+          result.hcSlots.push({ key: di, num: _consNum });
+          result.hpSlots.push({ key: di, num: _consNum });
+          result.spiroSlots.push({ key: di, num: _consNum });
+          result.plsSlots.push({ key: di, num: _consNum });
+        }
+      }
+      return dedupSlots(result);
+    }
+  }
+
+  // ── STEP 2: segment-based parsing ───────────────────────────────────
+  //
+  // Split on hard separators (comma, semicolon, newline).
+  // Within each hard-segment we use splitByDayTokens to separate individual
+  // day references. Crucially: a sub-segment with NO slot words inherits
+  // the slot context of the whole hard-segment, NOT a default of 'both'.
+  //
+  // Example: "mercoledì e venerdì mattina"
+  //   hard-segment slot context = 'mat'
+  //   sub-segments: ["mercoledì", "venerdì mattina"]
+  //   "mercoledì" has no slot words → inherits 'mat' → mercoledì mattina only ✓
+  //   "venerdì mattina" has slot 'mat' ✓
+  //
+  // Example: "mercoledì mattina e pomeriggio"
+  //   hard-segment slot context = 'both'
+  //   only one sub-segment (one day) → mercoledì both ✓
+  //
+  // Example: "lunedì mattina martedì mattina mercoledì mattina e pomeriggio"
+  //   hard-segment slot context = 'both'
+  //   sub-segments: ["lunedì mattina", "martedì mattina", "mercoledì mattina e pomeriggio"]
+  //   each has its OWN slot words → each uses its own context, not the parent ✓
+
+  const hardSegs = low.split(/[,;\n.]+/).map(s => s.trim()).filter(Boolean);
+
+  hardSegs.forEach(seg => {
+    // Determine the slot context of this entire hard-segment
+    const parentCtx = slotCtx(seg);
+    const parentEcg    = hasEcg(seg);
+    const parentHolter = hasHolter(seg);
+
+    // Split the segment into per-day sub-segments
+    const subSegs = splitByDayTokens(seg, dateMap);
+
+    subSegs.forEach(sub => {
+      const days = findDays(sub, dateMap);
+      if (days.length === 0) return;
+
+      // If this sub-segment has its OWN slot words, use them.
+      // Otherwise inherit from the parent segment.
+      const subHasSlotWords = hasMat(sub) || hasPom(sub);
+      const ctx      = subHasSlotWords ? slotCtx(sub) : parentCtx;
+      const type     = (hasEcg(sub) || (!subHasSlotWords && parentEcg)) ? 'solo-ecg' : 'disponibile';
+      const isHolterPressori = hasHolterPressori(sub) || (hasHolterPressori(seg) && !subHasSlotWords);
+      const isHolter = (hasHolter(sub) || parentHolter) && !isHolterPressori;
+      const isTurnoHolter = hasTurnoHolter(sub) || hasTurnoHolter(seg); // solo holter, niente turni
+      const isTurnoCompleto = hasTurnoCompleto(sub) && !isTurnoHolter;
+      const isSpiro = /spirometr|\bspiro\b/.test(sub) || /spirometr|\bspiro\b/.test(seg);
+      const isPls   = /polisonno|\bpls\b|\bpsg\b|\bpol\b/.test(sub) || /polisonno|\bpls\b|\bpsg\b|\bpol\b/.test(seg);
+
+      days.forEach(di => {
+        // "turno holter" → solo holterSlots, niente turni
+        if (!isTurnoHolter && di < 6) {
+          if (ctx !== 'pom') result.slots.push({ key: `${di}_0`, type });
+          if (ctx !== 'mat') result.slots.push({ key: `${di}_1`, type });
+        }
+        if (isHolter || isTurnoHolter) {
+          result.holterSlots.push({ key: String(di) });
+        }
+        if (isHolterPressori) {
+          result.hpSlots = result.hpSlots || [];
+          result.hpSlots.push({ key: di, num: extractConsuntivoNum(sub) || extractConsuntivoNum(seg) || 1 });
+        }
+        if (isSpiro) {
+          result.spiroSlots = result.spiroSlots || [];
+          result.spiroSlots.push({ key: di, num: extractConsuntivoNum(sub) || extractConsuntivoNum(seg) || 1 });
+        }
+        if (isPls) {
+          result.plsSlots = result.plsSlots || [];
+          result.plsSlots.push({ key: di, num: extractConsuntivoNum(sub) || extractConsuntivoNum(seg) || 1 });
+        }
+      });
+    });
+  });
+
+  // ── STEP 3: fallback — nothing found, try whole message ─────────────
+  if (result.slots.length === 0) {
+    const days      = findDays(low, dateMap);
+    const ctx       = slotCtx(low);
+    const type      = hasEcg(low) ? 'solo-ecg' : 'disponibile';
+    const isHolter  = hasHolter(low);
+    days.forEach(di => {
+      if (di < 6) {
+        if (ctx !== 'pom') result.slots.push({ key: `${di}_0`, type });
+        if (ctx !== 'mat') result.slots.push({ key: `${di}_1`, type });
+      }
+      if (isHolter) {
+        result.holterSlots.push({ key: String(di) });
+      }
+    });
+  }
+
+  return dedupSlots(result);
+}
+
+// Split a (comma-free) segment by day-name/date tokens so each sub-segment
+// contains exactly one "day anchor" with its surrounding slot/ecg context.
+//
+// Example input:  "lunedì mattina martedì mattina mercoledì mattina e pomeriggio"
+// Output:         ["lunedì mattina", "martedì mattina", "mercoledì mattina e pomeriggio"]
+function splitByDayTokens(seg, dateMap) {
+  // Build a list of [position, length, dayIndex] for every day-token found
+  const hits = [];
+
+  // Day names
+  DAY_MAP.forEach(([name, idx]) => {
+    let pos = 0;
+    while ((pos = seg.indexOf(name, pos)) !== -1) {
+      hits.push({ pos, len: name.length, idx });
+      pos += name.length;
+    }
+  });
+
+  // Date numbers
+  const numRe = /\b(\d{1,2})(?:\/\d{1,2})?\b/g;
+  let m;
+  while ((m = numRe.exec(seg)) !== null) {
+    const n = parseInt(m[1], 10);
+    if (dateMap.hasOwnProperty(n)) {
+      hits.push({ pos: m.index, len: m[0].length, idx: dateMap[n] });
+    }
+  }
+
+  if (hits.length <= 1) return [seg]; // nothing to split
+
+  // Sort by position
+  hits.sort((a, b) => a.pos - b.pos);
+
+  // Remove duplicate positions (same day mentioned twice)
+  const unique = hits.filter((h, i) => i === 0 || h.pos !== hits[i-1].pos);
+
+  if (unique.length <= 1) return [seg];
+
+  // Slice the segment: each sub-segment runs from one day-token start
+  // to just before the next day-token start
+  const subs = [];
+  for (let i = 0; i < unique.length; i++) {
+    const start = unique[i].pos;
+    const end   = (i + 1 < unique.length) ? unique[i + 1].pos : seg.length;
+    // Include a small look-behind (up to 10 chars) for slot words before the day name
+    const lookBehind = i === 0 ? 0 : Math.max(unique[i-1].pos + unique[i-1].len, unique[i].pos - 12);
+    subs.push(seg.slice(lookBehind, end).trim());
+  }
+  return subs.filter(Boolean);
+}
+
+function dedupSlots(result) {
+  const seen = new Set();
+  result.slots = result.slots.filter(s => {
+    if (seen.has(s.key)) return false;
+    seen.add(s.key); return true;
+  });
+  const seenH = new Set();
+  result.holterSlots = (result.holterSlots || []).filter(s => {
+    if (seenH.has(s.key)) return false;
+    seenH.add(s.key); return true;
+  });
+  return result;
+}
+
+function dedupSlotsAll(result) {
+  result = dedupSlots(result);
+  ['hcSlots','hpSlots','spiroSlots','plsSlots'].forEach(key => {
+    const seen = new Set();
+    result[key] = (result[key] || []).filter(s => {
+      if (seen.has(s.key)) return false;
+      seen.add(s.key); return true;
+    });
+  });
+  return result;
+}
+
+// interpretMessageText: versione helper che opera su stringa già normalizzata
+// usata internamente per parsare sezioni specifiche di un messaggio multi-sezione
+function interpretMessageText(low, dateMap, defaultType) {
+  const result = { slots: [], holterSlots: [] };
+  const ALL_DAYS_RE = /tutti\s+i\s+gg|tutti\s+i\s+giorni|tutta\s+la\s+settimana|ogni\s+giorno/;
+  if (ALL_DAYS_RE.test(low)) {
+    const ctx = slotCtx(low);
+    for (let di = 0; di < 6; di++) {
+      const type = hasEcg(low) ? 'solo-ecg' : (defaultType || 'disponibile');
+      if (ctx !== 'pom') result.slots.push({ key: `${di}_0`, type });
+      if (ctx !== 'mat') result.slots.push({ key: `${di}_1`, type });
+    }
+    return result;
+  }
+  const hardSegs = low.split(/[,;\n.]+/).map(s => s.trim()).filter(Boolean);
+  hardSegs.forEach(seg => {
+    const parentCtx = slotCtx(seg);
+    const parentEcg = hasEcg(seg);
+    const subSegs = splitByDayTokens(seg, dateMap);
+    subSegs.forEach(sub => {
+      const days = findDays(sub, dateMap);
+      if (days.length === 0) return;
+      const subHasSlotWords = hasMat(sub) || hasPom(sub);
+      const ctx  = subHasSlotWords ? slotCtx(sub) : parentCtx;
+      const type = (hasEcg(sub) || (!subHasSlotWords && parentEcg)) ? 'solo-ecg' : (defaultType || 'disponibile');
+      days.forEach(di => {
+        if (di < 6) {
+          if (ctx !== 'pom') result.slots.push({ key: `${di}_0`, type });
+          if (ctx !== 'mat') result.slots.push({ key: `${di}_1`, type });
+        }
+      });
+    });
+  });
+  return result;
+}
+
+// ── Pending parse state ──────────────────────────────────────────────
+let pendingWaResult = null;
+let pendingWaDoctor = null;
+let pendingWaMsg    = null;
+
+function parseWaMessage() {
+  const docSel = document.getElementById('wa-doctor-select').value;
+  const msg = document.getElementById('wa-msg-input').value.trim();
+  if (!docSel || !msg) { showToast('Seleziona medico e inserisci messaggio', 'danger'); return; }
+
+  pendingWaResult = interpretMessage(msg);
+  pendingWaDoctor = docSel;
+  pendingWaMsg    = msg;
+
+  // Se il cardiologo non è in tabella turni (tipo 'nessuno'), non proporre turni
+  const _docTipo = state.doctorTypes[docSel] || 'completo';
+  if (_docTipo === 'nessuno') {
+    pendingWaResult.slots = [];
+  }
+
+  // Filtra i slot consuntivo: mantieni solo le tabelle in cui il medico è specialista
+  // (se non è in nessuna lista, lascia tutto — potrebbe essere una nuova configurazione)
+  const _hcList    = getHcDoctorsList();
+  const _hpList    = getHpDoctorsList();
+  const _spiroList = getSpiroDoctorsList();
+  const _plsList   = getPlsDoctorsList();
+  const _inAnyList = _hcList.includes(docSel) || _hpList.includes(docSel) ||
+                     _spiroList.includes(docSel) || _plsList.includes(docSel);
+  if (_inAnyList) {
+    if (!_hcList.includes(docSel))    pendingWaResult.hcSlots    = [];
+    if (!_hpList.includes(docSel))    pendingWaResult.hpSlots    = [];
+    if (!_spiroList.includes(docSel)) pendingWaResult.spiroSlots = [];
+    if (!_plsList.includes(docSel))   pendingWaResult.plsSlots   = [];
+  }
+
+  // ── Auto-populate consuntivo per medici single-type senza keyword esplicita
+  // Se il medico fa solo UN tipo di consuntivo (es. solo PLS) e non ha usato
+  // keyword "per le pls/spiro/psg", popola automaticamente dai giorni rilevati.
+  {
+    const _numConsTypes = [_hcList,_hpList,_spiroList,_plsList].filter(l => l.includes(docSel)).length;
+    const _noConsParsed = ['hcSlots','hpSlots','spiroSlots','plsSlots'].every(k => (pendingWaResult[k]||[]).length === 0);
+    if (_inAnyList && _numConsTypes >= 1 && _noConsParsed) {
+      // Raccogli i giorni dai turni rilevati
+      const _autoDays = new Set();
+      pendingWaResult.slots.forEach(s => _autoDays.add(parseInt(s.key.split('_')[0], 10)));
+      // Aggiunge i giorni riconosciuti anche dal testo raw (per medici solo consuntivo)
+      const _origLow = msg.toLowerCase().replace(/[''`´]/g,"'");
+      const _normLow = normalizeMsg(_origLow);
+      DAY_MAP.forEach(([name, idx]) => {
+        if (idx < 6 && _normLow.includes(name)) _autoDays.add(idx);
+      });
+      // Se "completa" / "tutti i giorni" / "tutta la settimana" → usa tutti e 6
+      if (/complet|tutti\s+i\s+gg|tutti\s+i\s+giorni|tutta\s+la\s+settimana|ogni\s+giorno/.test(_origLow)) {
+        for (let _i = 0; _i < 7; _i++) _autoDays.add(_i);
+      }
+      // Numero dal messaggio (0 se non specificato)
+      const _autoNum = extractConsuntivoNum(_origLow);  // null se nessun numero
+      if (_autoDays.size > 0) {
+        const _sortedDays = [..._autoDays].sort((a,b)=>a-b);
+        const _mkSlot = di => _autoNum != null ? {key:di,num:_autoNum} : {key:di,val:'x'};
+        if (_hcList.includes(docSel))    pendingWaResult.hcSlots    = _sortedDays.map(_mkSlot);
+        if (_hpList.includes(docSel))    pendingWaResult.hpSlots    = _sortedDays.map(_mkSlot);
+        if (_spiroList.includes(docSel)) pendingWaResult.spiroSlots = _sortedDays.map(_mkSlot);
+        if (_plsList.includes(docSel))   pendingWaResult.plsSlots   = _sortedDays.map(_mkSlot);
+      }
+    }
+  }
+
+  renderPendingResult();
+}
+
+function renderPendingResult() {
+  const result = pendingWaResult;
+  const el = document.getElementById('wa-parse-result');
+  if (!result) { el.innerHTML = ''; return; }
+
+  const DNAMES_FULL = ['Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato'];
+
+  if (result.ferie) {
+    const _fCatsR = result.ferie === true ? ['all'] : result.ferie;
+    const _ferieDescR = _fCatsR.includes('all') ? 'tutte le tabelle' : _fCatsR.map(x=>x.toUpperCase()).join(', ');
+    el.innerHTML = `
+      <div style="margin-bottom:8px;">
+        <div class="badge badge-ferie" style="font-size:12px;padding:6px 14px;">🏖️ FERIE rilevato per <strong>${pendingWaDoctor}</strong> — ${_ferieDescR}</div>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:10px;">Conferma per impostare il medico in ferie questa settimana.</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-warn btn-sm" onclick="applyParsedResult()">✅ Conferma Ferie</button>
+        <button class="btn btn-ghost btn-sm" onclick="cancelPendingResult()">✕ Annulla</button>
+      </div>`;
+    return;
+  }
+
+  let html = `<div style="margin-bottom:6px;font-size:11px;color:var(--muted);">
+    Slot rilevati per <strong style="color:var(--accent2);">${pendingWaDoctor}</strong> — clicca <strong>✕</strong> su quelli errati per rimuoverli:
+  </div><div class="wa-parse-badge" id="pending-badges">`;
+
+  const _totalConsAll = ['hcSlots','hpSlots','spiroSlots','plsSlots'].reduce((n,k)=>n+(result[k]||[]).length,0);
+  if (result.slots.length === 0 && (result.holterSlots||[]).length === 0 && _totalConsAll === 0) {
+    html += `<span class="badge badge-ferie">⚠️ Nessuno slot riconosciuto — modifica il testo e riprova</span>`;
+  } else {
+    result.slots.forEach(s => {
+      const di = parseInt(s.key.split('_')[0], 10);
+      const si = parseInt(s.key.split('_')[1], 10);
+      const dayName  = DNAMES_FULL[di];
+      const slotName = si === 0 ? 'Mat' : 'Pom';
+      const cls = s.type === 'disponibile' ? 'badge-mat' : s.type === 'solo-ecg' ? 'badge-ecg' : 'badge-pom';
+      const typeLabel = s.type === 'disponibile' ? 'X' : 'Y';
+      html += `<span class="badge ${cls}" style="display:inline-flex;align-items:center;gap:5px;padding:3px 8px 3px 10px;">
+        ${dayName} ${slotName} <em style="opacity:0.75;">(${typeLabel})</em>
+        <button onclick="removeSlotFromPending('${s.key}')"
+          style="background:none;border:none;cursor:pointer;color:inherit;font-size:14px;line-height:1;padding:0 0 0 2px;opacity:0.65;"
+          title="Rimuovi questo slot">✕</button>
+      </span>`;
+    });
+  }
+  html += '</div>';
+
+  // Holter slots section
+  const hSlots = result.holterSlots || [];
+  if (hSlots.length > 0) {
+    html += `<div style="margin-top:8px;font-size:11px;color:#6366f1;font-weight:600;margin-bottom:4px;">💓 Slot Holter rilevati:</div>`;
+    html += `<div class="wa-parse-badge" id="pending-holter-badges">`;
+    const HNAMES_FULL = ['Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato','Domenica'];
+    hSlots.forEach(s => {
+      const di = parseInt(s.key, 10);
+      const dayName = HNAMES_FULL[di] || s.key;
+      html += `<span class="badge" style="display:inline-flex;align-items:center;gap:5px;padding:3px 8px 3px 10px;background:#6366f1;color:#fff;">
+        💓 ${dayName} <em style="opacity:0.75;">(X)</em>
+        <button onclick="removeHolterSlotFromPending('${s.key}')"
+          style="background:none;border:none;cursor:pointer;color:inherit;font-size:14px;line-height:1;padding:0 0 0 2px;opacity:0.65;"
+          title="Rimuovi slot holter">✕</button>
+      </span>`;
+    });
+    html += '</div>';
+  }
+
+  // Consuntivo slots section (HC, HP, Spiro, PLS)
+  const CONS_CONFIG = [
+    { key: 'hcSlots',    label: 'HC',    icon: '🫀', color: '#0891b2' },
+    { key: 'hpSlots',    label: 'HP',    icon: '🫀', color: '#ea580c' },
+    { key: 'spiroSlots', label: 'Spiro', icon: '🫁', color: '#16a34a' },
+    { key: 'plsSlots',   label: 'PLS',   icon: '😴', color: '#7c3aed' },
+  ];
+  const DNAMES7 = ['Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato','Domenica'];
+  let hasConsuntivo = false;
+  CONS_CONFIG.forEach(cfg => {
+    const cSlots = result[cfg.key] || [];
+    if (cSlots.length === 0) return;
+    hasConsuntivo = true;
+    html += `<div style="margin-top:8px;font-size:11px;color:${cfg.color};font-weight:600;margin-bottom:4px;">${cfg.icon} Slot ${cfg.label} rilevati:</div>`;
+    html += `<div class="wa-parse-badge">`;
+    cSlots.forEach(s => {
+      const dayName = DNAMES7[s.key] || ('Giorno '+s.key);
+      html += `<span class="badge" style="display:inline-flex;align-items:center;gap:5px;padding:3px 8px 3px 10px;background:${cfg.color};color:#fff;">
+        ${cfg.icon} ${dayName} <em style="opacity:0.8;">(${s.val === 'x' ? 'x' : s.num})</em>
+        <button onclick="removeConsuntivoSlotFromPending('${cfg.key}',${s.key})"
+          style="background:none;border:none;cursor:pointer;color:inherit;font-size:14px;line-height:1;padding:0 0 0 2px;opacity:0.65;"
+          title="Rimuovi">✕</button>
+      </span>`;
+    });
+    html += '</div>';
+  });
+
+  const totalCons = CONS_CONFIG.reduce((n, c) => n + (result[c.key]||[]).length, 0);
+  const totalSlots = result.slots.length + hSlots.length + totalCons;
+  if (totalSlots > 0) {
+    let label = `✅ Applica`;
+    const parts = [];
+    if (result.slots.length > 0) parts.push(`${result.slots.length} turni`);
+    if (hSlots.length > 0) parts.push(`${hSlots.length} Holter`);
+    if (totalCons > 0) {
+      CONS_CONFIG.forEach(cfg => {
+        const n = (result[cfg.key]||[]).length;
+        if (n > 0) parts.push(`${n} ${cfg.label}`);
+      });
+    }
+    label += ' ' + parts.join(' + ');
+    html += `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:center;">
+      <button class="btn btn-success btn-sm" onclick="applyParsedResult()">${label}</button>
+      <button class="btn btn-ghost btn-sm" onclick="cancelPendingResult()">✕ Annulla</button>
+    </div>`;
+  } else {
+    html += `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+      <button class="btn btn-ghost btn-sm" onclick="cancelPendingResult()">✕ Chiudi</button>
+    </div>`;
+  }
+
+  el.innerHTML = html;
+}
+
+function removeSlotFromPending(key) {
+  if (!pendingWaResult) return;
+  pendingWaResult.slots = pendingWaResult.slots.filter(s => s.key !== key);
+  renderPendingResult();
+}
+
+function removeHolterSlotFromPending(key) {
+  if (!pendingWaResult) return;
+  pendingWaResult.holterSlots = (pendingWaResult.holterSlots || []).filter(s => s.key !== key);
+  renderPendingResult();
+}
+
+function removeConsuntivoSlotFromPending(slotKey, dayKey) {
+  if (!pendingWaResult) return;
+  const arr = pendingWaResult[slotKey];
+  if (!arr) return;
+  pendingWaResult[slotKey] = arr.filter(s => s.key !== dayKey);
+  renderPendingResult();
+}
+
+function cancelPendingResult() {
+  pendingWaResult = null;
+  pendingWaDoctor = null;
+  pendingWaMsg    = null;
+  document.getElementById('wa-parse-result').innerHTML = '';
+}
+
+function applyParsedResult() {
+  if (!pendingWaResult || !pendingWaDoctor) return;
+
+  const dd = getDoctorData(pendingWaDoctor);
+  if (!dd.slots) dd.slots = {};
+  dd.waMsg = pendingWaMsg;
+
+  if (pendingWaResult.ferie) {
+    const _fCats = pendingWaResult.ferie === true ? ['all'] : pendingWaResult.ferie;
+    const _ferieAll = _fCats.includes('all');
+    // Turni standard — solo se ferie generico, non se categoria specifica (holter/hc/hp/spiro/pls)
+    if (_ferieAll) { dd.ferie = true; }
+    // Holter
+    if ((_ferieAll || _fCats.includes('holter')) && state.holterEnabled[pendingWaDoctor]) getHolterDoctorData(pendingWaDoctor).ferie = true;
+    // Consuntivo HC
+    if ((_ferieAll || _fCats.includes('hc')) && getHcDoctorsList().includes(pendingWaDoctor))    getHcDoctorData(pendingWaDoctor).ferie    = true;
+    // Consuntivo HP
+    if ((_ferieAll || _fCats.includes('hp')) && getHpDoctorsList().includes(pendingWaDoctor))    getHpDoctorData(pendingWaDoctor).ferie    = true;
+    // Consuntivo Spiro
+    if ((_ferieAll || _fCats.includes('spiro')) && getSpiroDoctorsList().includes(pendingWaDoctor)) getSpiroDoctorData(pendingWaDoctor).ferie = true;
+    // Consuntivo PLS
+    if ((_ferieAll || _fCats.includes('pls')) && getPlsDoctorsList().includes(pendingWaDoctor))   getPlsDoctorData(pendingWaDoctor).ferie   = true;
+    const _ferieLabel = _ferieAll ? 'tutte le tabelle' : _fCats.map(x=>x.toUpperCase()).join(', ');
+    document.getElementById('wa-parse-result').innerHTML =
+      `<div class="badge badge-ferie" style="font-size:12px;padding:6px 14px;">🏖️ Ferie impostato per ${pendingWaDoctor} (${_ferieLabel})</div>`;
+    saveData();
+    renderTable();
+    renderHolterTable();
+    renderHcTable(); renderHpTable(); renderSpiroTable(); renderPlsTable();
+    pendingWaResult = null; pendingWaDoctor = null; pendingWaMsg = null;
+    return;
+  }
+
+  // Apply remaining slots — override 'disponibile' con tipo corretto per il cardiologo
+  pendingWaResult.slots.forEach(s => {
+    let tipo = s.type;
+    const docTipo = state.doctorTypes[pendingWaDoctor] || 'completo';
+    if (tipo === 'disponibile' && (docTipo === 'ecg75' || docTipo === 'ecg100')) tipo = 'solo-ecg';
+    if (tipo === 'solo-ecg' && docTipo === 'completo') tipo = 'disponibile';
+    if (tipo === 'disponibile' && (docTipo === 'completo+ecg75' || docTipo === 'completo+ecg100')) tipo = 'disponibile'; // mantieni
+    dd.slots[s.key] = tipo;
+  });
+
+  // Save WA history
+  if (!state.weeks[currentWeek]) state.weeks[currentWeek] = {};
+  if (!state.weeks[currentWeek][pendingWaDoctor]) state.weeks[currentWeek][pendingWaDoctor] = {};
+  state.weeks[currentWeek][pendingWaDoctor].waMsg = pendingWaMsg;
+
+  // Apply holter slots
+  const hSlots = pendingWaResult.holterSlots || [];
+  if (hSlots.length > 0) {
+    if (!state.holterWeeks[currentWeek]) state.holterWeeks[currentWeek] = {};
+    if (!state.holterWeeks[currentWeek][pendingWaDoctor]) state.holterWeeks[currentWeek][pendingWaDoctor] = { slots: {} };
+    const hdoc = state.holterWeeks[currentWeek][pendingWaDoctor];
+    if (!hdoc.slots) hdoc.slots = {};
+    hSlots.forEach(s => {
+      const di = parseInt(s.key, 10);
+      hdoc.slots[di] = 'disponibile';
+    });
+  }
+
+  // ── Applica slot consuntivo HC ──────────────────────────────────────
+  const hcSlots = pendingWaResult.hcSlots || [];
+  if (hcSlots.length > 0) {
+    const hcDoc = getHcDoctorData(pendingWaDoctor);
+    if (!hcDoc.slots) hcDoc.slots = {};
+    hcSlots.forEach(s => { hcDoc.slots[s.key] = s.val === 'x' ? { val: 'x', conf: false } : { num: s.num, conf: false }; });
+  }
+
+  // ── Applica slot consuntivo HP ──────────────────────────────────────
+  const hpSlots = pendingWaResult.hpSlots || [];
+  if (hpSlots.length > 0) {
+    const hpDoc = getHpDoctorData(pendingWaDoctor);
+    if (!hpDoc.slots) hpDoc.slots = {};
+    hpSlots.forEach(s => { hpDoc.slots[s.key] = s.val === 'x' ? { val: 'x', conf: false } : { num: s.num, conf: false }; });
+  }
+
+  // ── Applica slot consuntivo Spiro ───────────────────────────────────
+  const spiroSl = pendingWaResult.spiroSlots || [];
+  if (spiroSl.length > 0) {
+    const spDoc = getSpiroDoctorData(pendingWaDoctor);
+    if (!spDoc.slots) spDoc.slots = {};
+    spiroSl.forEach(s => { spDoc.slots[s.key] = s.val === 'x' ? { val: 'x', conf: false } : { num: s.num, conf: false }; });
+  }
+
+  // ── Applica slot consuntivo PLS ─────────────────────────────────────
+  const plsSl = pendingWaResult.plsSlots || [];
+  if (plsSl.length > 0) {
+    const plDoc = getPlsDoctorData(pendingWaDoctor);
+    if (!plDoc.slots) plDoc.slots = {};
+    plsSl.forEach(s => { plDoc.slots[s.key] = s.val === 'x' ? { val: 'x', conf: false } : { num: s.num, conf: false }; });
+  }
+
+  const n  = pendingWaResult.slots.length;
+  const nh = hSlots.length;
+  const nCons = hcSlots.length + hpSlots.length + spiroSl.length + plsSl.length;
+  saveData();
+  renderTable();
+  renderHolterTable();
+  renderHcTable(); renderHpTable(); renderSpiroTable(); renderPlsTable();
+  renderRiepilogo();
+  renderStats();
+
+  const parts = [];
+  if (n > 0) parts.push(`${n} turni`);
+  if (nh > 0) parts.push(`${nh} Holter`);
+  if (hcSlots.length > 0)  parts.push(`${hcSlots.length} HC`);
+  if (hpSlots.length > 0)  parts.push(`${hpSlots.length} HP`);
+  if (spiroSl.length > 0)  parts.push(`${spiroSl.length} Spiro`);
+  if (plsSl.length > 0)    parts.push(`${plsSl.length} PLS`);
+  const toastMsg = `✓ ${pendingWaDoctor}: ${parts.join(' + ')} applicati`;
+  showToast(toastMsg);
+
+  document.getElementById('wa-parse-result').innerHTML =
+    `<div style="color:var(--success);font-size:12px;">✓ ${parts.join(' + ')} applicati per <strong>${pendingWaDoctor}</strong></div>`;
+
+  pendingWaResult = null; pendingWaDoctor = null; pendingWaMsg = null;
+}
+
+function clearWaInput() {
+  document.getElementById('wa-msg-input').value = '';
+  document.getElementById('wa-parse-result').innerHTML = '';
+}
+
+function generateRequestMsg() {
+  const tpl = state.requestTemplate || '';
+  const endStr = addDays(currentWeek, 5);
+  const dateStr = formatDate(currentWeek) + ' – ' + formatDate(endStr);
+  const msg = tpl.replace('[NOME]', '[nome del dottore]').replace('[DATA]', dateStr);
+  window._requestMsg = msg;
+  document.getElementById('request-msg-area').innerHTML = `
+    <div class="wa-bubble">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">Messaggio da inviare:</div>
+      <div class="msg-text">${msg.replace(/\n/g,'<br>')}</div>
+      <button class="btn btn-ghost btn-sm" onclick="copyText(window._requestMsg)">Copia</button>
+    </div>
+  `;
+}
+
+function renderWaHistory() {
+  const w = getWeekData();
+  const list = document.getElementById('wa-history-list');
+  const items = Object.entries(w).filter(([k,v]) => v.waMsg);
+  if (items.length === 0) {
+    list.innerHTML = '<div class="empty-state">Nessun messaggio salvato per questa settimana.</div>';
+    return;
+  }
+  list.innerHTML = items.map(([doc, dd]) => `
+    <div class="wa-bubble">
+      <div class="doc-name">📱 ${doc}</div>
+      <div class="msg-text">${(dd.waMsg||'').replace(/</g,'&lt;')}</div>
+    </div>
+  `).join('');
+}
+
+// =============================================
+// MESSAGGI CONFERMA
+// =============================================
+function renderConferma() {
+  const w = getWeekData();
+  const list = document.getElementById('conf-list');
+  const items = [];
+  const HNAMES_FULL = ['Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato','Domenica'];
+
+  state.doctors.forEach(doc => {
+    const dd = w[doc];
+    if (dd && dd.ferie) return; // skip ferie
+
+    // ── Turni normali: tutti e solo confermati ──
+    const allMainSlots = dd && dd.slots
+      ? Object.entries(dd.slots).filter(([k,v]) => v && v !== '')
+      : [];
+    const confSlots    = allMainSlots.filter(([k,v]) => v === 'confermato' || v === 'confermato-ecg');
+    const dispSlots    = allMainSlots.filter(([k,v]) => v === 'disponibile' || v === 'solo-ecg');
+
+    // ── Holter: tutti e solo confermati ──
+    const hw = state.holterWeeks[currentWeek];
+    const hdoc = hw && hw[doc];
+    const allHolterSlots = hdoc && hdoc.slots
+      ? Object.entries(hdoc.slots).filter(([k,v]) => v && v !== '')
+      : [];
+    const holterConfSlots = allHolterSlots.filter(([k,v]) => v === 'confermato');
+    const holterDispSlots = allHolterSlots.filter(([k,v]) => v === 'disponibile');
+
+    const hasAnyAvail = dispSlots.length > 0 || holterDispSlots.length > 0;
+    const hasAnyConf  = confSlots.length > 0  || holterConfSlots.length > 0;
+
+    // Skip doctors with no activity at all
+    if (!hasAnyAvail && !hasAnyConf) return;
+
+    // Doctor gave availability but received NO confirmation → negative message
+    if (hasAnyAvail && !hasAnyConf) {
+      items.push({ doc, noConf: true, msg: 'Salve, purtroppo per la prossima settimana non Le riusciamo a confermare alcun turno.\nCi aggiorniamo la settimana prossima per le nuove disponibilità.\nGrazie!' });
+      return;
+    }
+
+    // ── Build confirmation message ──
+    const slotNames = confSlots.map(([key, val]) => {
+      const [di, si] = key.split('_').map(Number);
+      const ecgLabel = val === 'confermato-ecg' ? ' (SOLO ECG)' : '';
+      return `${DAYS[di]} ${si === 0 ? 'mattina' : 'pomeriggio'}${ecgLabel}`;
+    });
+
+    const holterNames = holterConfSlots.map(([di]) => HNAMES_FULL[parseInt(di, 10)]);
+    holterNames.sort((a,b) => HNAMES_FULL.indexOf(a) - HNAMES_FULL.indexOf(b));
+
+    // ── Costruisci messaggio ──
+    let msg = 'Salve, per la prossima settimana ';
+    if (slotNames.length > 0) {
+      msg += `Le confermiamo i seguenti turni:\n${slotNames.join(' -  ')}`;
+      if (holterNames.length > 0) {
+        msg += `\nLe confermiamo i seguenti turni HOLTER: ${holterNames.join(' -  ')}.`;
+      }
+    } else {
+      msg += `Le confermiamo i seguenti turni HOLTER: ${holterNames.join(' -  ')}.`;
+    }
+    msg += '\nGrazie';
+
+    items.push({ doc, msg });
+  });
+
+  const confItems   = items.filter(i => !i.noConf);
+  const noConfItems = items.filter(i =>  i.noConf);
+
+  if (confItems.length === 0 && noConfItems.length === 0) {
+    list.innerHTML = '<div class="empty-state">Nessun turno confermato questa settimana. Imposta i turni come "C" nel tab Disponibilità o nella tabella Holter.</div>';
+    return;
+  }
+
+  // Store all msgs indexed globally
+  window._confMsgs = items.map(i => i.msg);
+
+  let html = '';
+
+  if (confItems.length > 0) {
+    html += `<div style="font-size:12px;font-weight:700;color:#16a34a;margin-bottom:6px;padding:4px 0;border-bottom:2px solid #16a34a;">✅ Cardiologi con turni confermati (${confItems.length})</div>`;
+    html += confItems.map(({ doc, msg }) => {
+      const idx = items.indexOf(items.find(i => i.doc === doc && !i.noConf));
+      return `<div class="conf-item">
+        <div class="name">${doc}</div>
+        <div class="msg">${msg.replace(/\n/g,'<br>')}</div>
+        <button class="copy-btn" onclick="copyText(window._confMsgs[${idx}])">Copia</button>
+      </div>`;
+    }).join('');
+  }
+
+  if (noConfItems.length > 0) {
+    html += `<div style="font-size:12px;font-weight:700;color:#dc2626;margin:18px 0 6px;padding:4px 0;border-bottom:2px solid #dc2626;">⛔ Cardiologi senza conferme (${noConfItems.length})</div>`;
+    html += noConfItems.map(({ doc, msg }) => {
+      const idx = items.indexOf(items.find(i => i.doc === doc && i.noConf));
+      return `<div class="conf-item" style="border-left:3px solid #dc2626;">
+        <div class="name" style="color:#dc2626;">${doc}</div>
+        <div class="msg" style="color:#666;">${msg.replace(/\n/g,'<br>')}</div>
+        <button class="copy-btn" onclick="copyText(window._confMsgs[${idx}])">Copia</button>
+      </div>`;
+    }).join('');
+  }
+
+  list.innerHTML = html;
+}
+
+
+// =============================================
+// CALENDAR
+// =============================================
+function renderCalendar() {
+  const w = getWeekData();
+  const content = document.getElementById('calendar-content');
+  if (!content) return;
+
+  const ALL_DAY_LABELS = ["LUN","MAR","MER","GIO","VEN","SAB","DOM"];
+  const nDays = 7;
+
+  const brd = '1px solid #c0c0c0';
+  const thS = 'border:' + brd + ';padding:5px 10px;font-weight:700;font-size:11px;text-align:center;background:#e8eef5;white-space:nowrap;';
+  const tdNameS = 'border:' + brd + ';padding:5px 10px;font-weight:700;font-size:11px;text-align:left;background:#f2f2f2;white-space:nowrap;';
+  const tdEmptyS = 'border:' + brd + ';padding:5px 6px;font-size:10px;text-align:left;vertical-align:top;min-width:110px;';
+
+  // --- TABLE 1: Cardiologi in turno confermati ---
+  // Collect confirmed doctors (turni completi)
+  const turniDoctors = [];
+  state.doctors.forEach(doc => {
+    const dd = w[doc];
+    if (!dd || !dd.slots || dd.ferie) return;
+    let hasConfirm = false;
+    Object.values(dd.slots).forEach(v => {
+      if (v === 'confermato' || v === 'confermato-ecg') hasConfirm = true;
+    });
+    if (hasConfirm) turniDoctors.push(doc);
+  });
+
+  // Build table 1 HTML
+  let t1 = '<table style="border-collapse:collapse;font-size:11px;margin-bottom:32px;">';
+  t1 += '<thead><tr>';
+  t1 += '<th style="' + thS + 'min-width:140px;">CARDIOLOGO</th>';
+  const dateRow = {};
+  for (let di = 0; di < nDays; di++) {
+    const dayStr = addDays(currentWeek, di);
+    const d = new Date(dayStr + 'T00:00:00');
+    const dd2 = String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0');
+    t1 += '<th style="' + thS + 'min-width:130px;">' + ALL_DAY_LABELS[di] + '<br><span style="font-weight:400;font-size:10px;color:#666;">' + dd2 + '</span></th>';
+  }
+  t1 += '</tr></thead><tbody>';
+
+  if (turniDoctors.length === 0) {
+    t1 += '<tr><td colspan="8" style="padding:12px;text-align:center;color:#888;font-size:11px;font-style:italic;">Nessun cardiologo confermato</td></tr>';
+  } else {
+    turniDoctors.forEach(doc => {
+      const isGregori = doc.toUpperCase().indexOf('GREGORI') !== -1;
+      const rowBg = isGregori ? '#a9d08e' : '#bdd7ee';
+      t1 += '<tr>';
+      t1 += '<td style="' + tdNameS + 'background:' + rowBg + ';font-size:11px;">' + doc + '</td>';
+      const dd = w[doc];
+      for (let di = 0; di < nDays; di++) {
+        const mattVal = (dd.slots && dd.slots[di + '_0']) || null;
+        const pomVal  = (dd.slots && dd.slots[di + '_1']) || null;
+        let cellText = '';
+        if (mattVal === 'confermato') cellText += '01 ' + doc + ' MATTINA';
+        else if (mattVal === 'confermato-ecg') cellText += '01 ' + doc + ' (ECG) MATTINA';
+        if (pomVal === 'confermato') {
+          if (cellText) cellText += '<br>';
+          cellText += '02 ' + doc + ' POMERIGGIO';
+        } else if (pomVal === 'confermato-ecg') {
+          if (cellText) cellText += '<br>';
+          cellText += '02 ' + doc + ' (ECG) POMERIGGIO';
+        }
+        const cellBg = cellText ? rowBg : '#ffffff';
+        t1 += '<td style="' + tdEmptyS + 'background:' + cellBg + ';">' + cellText + '</td>';
+      }
+      t1 += '</tr>';
+    });
+  }
+  t1 += '</tbody></table>';
+
+  // --- TABLE 2: Cardiologi Holter confermati ---
+  const holterColor = '#d6bbeb';
+  const holterW = state.holterWeeks[currentWeek] || {};
+  const holterDoctors = [];
+  state.doctors.filter(d => state.holterEnabled[d]).forEach(doc => {
+    const hdoc = holterW[doc];
+    if (!hdoc || hdoc.ferie) return;
+    let hasConfirm = false;
+    for (let di = 0; di < 7; di++) {
+      if ((hdoc.slots && hdoc.slots[di]) === 'confermato') hasConfirm = true;
+    }
+    if (hasConfirm) holterDoctors.push(doc);
+  });
+
+  let t2 = '<table style="border-collapse:collapse;font-size:11px;">';
+  t2 += '<thead><tr>';
+  t2 += '<th style="' + thS + 'min-width:140px;background:#e8d5f5;">CARDIOLOGO</th>';
+  for (let di = 0; di < nDays; di++) {
+    const dayStr = addDays(currentWeek, di);
+    const d = new Date(dayStr + 'T00:00:00');
+    const dd2 = String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0');
+    t2 += '<th style="' + thS + 'min-width:130px;background:#e8d5f5;">' + ALL_DAY_LABELS[di] + '<br><span style="font-weight:400;font-size:10px;color:#666;">' + dd2 + '</span></th>';
+  }
+  t2 += '</tr></thead><tbody>';
+
+  if (holterDoctors.length === 0) {
+    t2 += '<tr><td colspan="8" style="padding:12px;text-align:center;color:#888;font-size:11px;font-style:italic;">Nessun cardiologo Holter confermato</td></tr>';
+  } else {
+    holterDoctors.forEach(doc => {
+      const hdoc = holterW[doc];
+      t2 += '<tr>';
+      t2 += '<td style="' + tdNameS + 'background:' + holterColor + ';font-size:11px;">' + doc + '</td>';
+      for (let di = 0; di < nDays; di++) {
+        const val = (hdoc.slots && hdoc.slots[di]) || null;
+        const cellText = (val === 'confermato') ? doc : '';
+        const cellBg = cellText ? holterColor : '#ffffff';
+        t2 += '<td style="' + tdEmptyS + 'background:' + cellBg + ';">' + cellText + '</td>';
+      }
+      t2 += '</tr>';
+    });
+  }
+  t2 += '</tbody></table>';
+
+  let html = '';
+  html += '<div style="margin-bottom:12px;">';
+  html += '<h4 style="margin:0 0 8px 0;font-size:13px;font-weight:700;color:#2563eb;">Tabella 1 — Cardiologi in turno</h4>';
+  html += '<div style="display:flex;gap:18px;align-items:center;margin-bottom:8px;">';
+  html += '<span style="display:inline-block;width:14px;height:14px;background:#bdd7ee;border:1px solid #aaa;vertical-align:middle;"></span><span style="font-size:11px;">In turno</span>';
+  html += '<span style="display:inline-block;width:14px;height:14px;background:#a9d08e;border:1px solid #aaa;vertical-align:middle;margin-left:10px;"></span><span style="font-size:11px;">Gregori M.</span>';
+  html += '</div>';
+  html += '<div style="overflow-x:auto;">' + t1 + '</div>';
+  html += '</div>';
+  html += '<div>';
+  html += '<h4 style="margin:0 0 8px 0;font-size:13px;font-weight:700;color:#7c3aed;">Tabella 2 — Holter</h4>';
+  html += '<div style="display:flex;gap:18px;align-items:center;margin-bottom:8px;">';
+  html += '<span style="display:inline-block;width:14px;height:14px;background:#d6bbeb;border:1px solid #aaa;vertical-align:middle;"></span><span style="font-size:11px;">In turno Holter</span>';
+  html += '</div>';
+  html += '<div style="overflow-x:auto;">' + t2 + '</div>';
+  html += '</div>';
+
+  content.innerHTML = html;
+}
+
+// =============================================
+// GOOGLE CALENDAR SYNC
+// =============================================
+const GCAL_CLIENT_ID    = '442937844790-u48rsq47pam83j861psobppvh1e8bb62.apps.googleusercontent.com';
+const GCAL_TURNO_ID     = '9180e8cbcb11d8cb4d85ce22d0741657b90fdf1031ff2db3fee4106dc5e5aada@group.calendar.google.com';
+const GCAL_CONSUNTIVO_ID= 'bed7ff7def2699ba37902c336fb0f1f221b7bc50cf624c8a03d956ac7a5503cf@group.calendar.google.com';
+
+let gcalToken = null;
+let gcalTokenClient = null;
+
+function setGCalStatus(msg, type) {
+  const el = document.getElementById('gcal-status');
+  if (!el) return;
+  const colors = { error: '#dc2626', success: '#16a34a', info: '#2563eb', warn: '#d97706' };
+  const c = colors[type] || '#2563eb';
+  el.innerHTML = `<div style="padding:8px 14px;border-radius:8px;background:${c}18;border:1px solid ${c}44;color:${c};font-size:12px;font-weight:600;">${msg}</div>`;
+}
+
+async function gcalCreateEvent(calendarId, summary, dateStr, colorId) {
+  const endDate = addDays(dateStr, 1);
+  const body = {
+    summary: summary,
+    start: { date: dateStr },
+    end:   { date: endDate }
+  };
+  if (colorId) body.colorId = String(colorId);
+  const resp = await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`,
+    {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + gcalToken, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    }
+  );
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}));
+    throw new Error(err.error?.message || resp.statusText);
+  }
+  return await resp.json();
+}
+
+async function doSyncCalendar() {
+  const btn = document.getElementById('gcal-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Sincronizzazione...'; }
+
+  let created = 0, errors = 0;
+  const errorList = [];
+
+  try {
+    const w = getWeekData();
+
+    // --- TABELLA 1: Turni normali confermati ---
+    for (const doc of state.doctors) {
+      const dd = w[doc];
+      if (!dd || !dd.slots || dd.ferie) continue;
+      const isGregori = doc.toUpperCase().indexOf('GREGORI') !== -1;
+      const calId   = isGregori ? GCAL_CONSUNTIVO_ID : GCAL_TURNO_ID;
+      const colorId = isGregori ? null : '9'; // Mirtillo (Blueberry)
+
+      for (let di = 0; di < 7; di++) {
+        const mattVal = (dd.slots && dd.slots[di + '_0']) || null;
+        const pomVal  = (dd.slots && dd.slots[di + '_1']) || null;
+        const dateStr = addDays(currentWeek, di);
+
+        if (mattVal === 'confermato') {
+          try { await gcalCreateEvent(calId, '01 ' + doc + ' MATTINA', dateStr, colorId); created++; }
+          catch(e) { errors++; errorList.push('01 ' + doc + ' MATTINA: ' + e.message); }
+        } else if (mattVal === 'confermato-ecg') {
+          try { await gcalCreateEvent(calId, '01 ' + doc + ' (ECG) MATTINA', dateStr, colorId); created++; }
+          catch(e) { errors++; errorList.push('01 ' + doc + ' (ECG) MATTINA: ' + e.message); }
+        }
+        if (pomVal === 'confermato') {
+          try { await gcalCreateEvent(calId, '02 ' + doc + ' POMERIGGIO', dateStr, colorId); created++; }
+          catch(e) { errors++; errorList.push('02 ' + doc + ' POMERIGGIO: ' + e.message); }
+        } else if (pomVal === 'confermato-ecg') {
+          try { await gcalCreateEvent(calId, '02 ' + doc + ' (ECG) POMERIGGIO', dateStr, colorId); created++; }
+          catch(e) { errors++; errorList.push('02 ' + doc + ' (ECG) POMERIGGIO: ' + e.message); }
+        }
+      }
+    }
+
+    // --- TABELLA 2: Holter confermati ---
+    const holterW = state.holterWeeks[currentWeek] || {};
+    for (const doc of state.doctors.filter(d => state.holterEnabled[d])) {
+      const hdoc = holterW[doc];
+      if (!hdoc || hdoc.ferie) continue;
+      for (let di = 0; di < 7; di++) {
+        const val = (hdoc.slots && hdoc.slots[di]) || null;
+        if (val === 'confermato') {
+          const dateStr = addDays(currentWeek, di);
+          try { await gcalCreateEvent(GCAL_TURNO_ID, doc, dateStr, '3'); created++; }
+          catch(e) { errors++; errorList.push('Holter ' + doc + ': ' + e.message); }
+        }
+      }
+    }
+
+    if (errors === 0) {
+      setGCalStatus('✅ ' + created + ' eventi creati su Google Calendar!', 'success');
+    } else {
+      const preview = errorList.slice(0, 3).join(' | ') + (errorList.length > 3 ? '...' : '');
+      setGCalStatus('⚠️ ' + created + ' eventi creati, ' + errors + ' errori. ' + preview, 'warn');
+    }
+  } catch(e) {
+    setGCalStatus('❌ Errore: ' + e.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '🗓 Aggiungi a Google Calendar'; }
+  }
+}
+
+function syncGoogleCalendar() {
+  const w = getWeekData();
+  let hasConfirmed = false;
+  state.doctors.forEach(doc => {
+    const dd = w[doc];
+    if (!dd || !dd.slots) return;
+    Object.values(dd.slots).forEach(v => { if (v === 'confermato' || v === 'confermato-ecg') hasConfirmed = true; });
+  });
+  const holterW = state.holterWeeks[currentWeek] || {};
+  state.doctors.filter(d => state.holterEnabled[d]).forEach(doc => {
+    const hdoc = holterW[doc];
+    if (!hdoc) return;
+    for (let di = 0; di < 7; di++) { if ((hdoc.slots && hdoc.slots[di]) === 'confermato') hasConfirmed = true; }
+  });
+
+  if (!hasConfirmed) {
+    setGCalStatus('⚠️ Nessun turno confermato per questa settimana.', 'warn');
+    return;
+  }
+
+  if (!window.google || !window.google.accounts) {
+    setGCalStatus('❌ Libreria Google non caricata. Verifica connessione internet.', 'error');
+    return;
+  }
+
+  setGCalStatus('🔐 Autenticazione Google in corso...', 'info');
+
+  if (!gcalTokenClient) {
+    gcalTokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: GCAL_CLIENT_ID,
+      scope: 'https://www.googleapis.com/auth/calendar',
+      callback: (resp) => {
+        if (resp.error) { setGCalStatus('❌ Autenticazione fallita: ' + resp.error, 'error'); return; }
+        gcalToken = resp.access_token;
+        doSyncCalendar();
+      }
+    });
+  }
+  gcalTokenClient.requestAccessToken({ prompt: gcalToken ? '' : 'consent' });
+}
+
+// =============================================
+// RIEPILOGO
+// =============================================
+function renderRiepilogo() {
+  const w = getWeekData();
+  const content = document.getElementById('riepilogo-content');
+
+  const ALL_DAY_LABELS = ["LUNEDI'","MARTEDI'","MERCOLEDI'","GIOVEDI'","VENERDI'","SABATO","DOMENICA"];
+  const nDays = 7; // Lun-Dom
+
+  // Build per-slot name lists: disponibilità (tutti) e solo conferme
+  const slotDisp = {};   // tutte le disponibilità (disponibile + solo-ecg + confermato + confermato-ecg)
+  const slotConf = {};   // solo conferme (confermato + confermato-ecg)
+  for (let di = 0; di < nDays; di++) {
+    SLOTS.forEach((_, si) => {
+      slotDisp[`${di}_${si}`] = [];
+      slotConf[`${di}_${si}`] = [];
+    });
+  }
+  state.doctors.forEach(doc => {
+    const dd = w[doc];
+    if (!dd || !dd.slots || dd.ferie) return;
+    Object.entries(dd.slots).forEach(([key, val]) => {
+      if (!val) return;
+      const isEcg = val === 'solo-ecg' || val === 'confermato-ecg';
+      const label = doc + (isEcg ? ' (SOLO ECG)' : '');
+      if (slotDisp[key]) slotDisp[key].push(label);
+      if ((val === 'confermato' || val === 'confermato-ecg') && slotConf[key]) slotConf[key].push(label);
+    });
+  });
+
+  // Dati consuntivo HC e HP per colonne Riepilogo
+  const hcDisp = {}; // { di: [ "DOCTORNAME (N) -", ... ] }
+  const hcConf = {};
+  const hpDisp = {};
+  const hpConf = {};
+  for (let di = 0; di < 7; di++) {
+    hcDisp[di] = []; hcConf[di] = [];
+    hpDisp[di] = []; hpConf[di] = [];
+  }
+  const hcW = state.hcWeeks[currentWeek] || {};
+  getHcDoctorsList().forEach(doc => {
+    const dd = hcW[doc];
+    if (!dd || dd.ferie) return;
+    const displayName = getConsuntivoDisplayName(doc, 'hcCons');
+    for (let di = 0; di < 7; di++) {
+      const s = dd.slots && dd.slots[di];
+      if (!s) continue;
+      const label = `${displayName} (${s.num})`;
+      hcDisp[di].push(label);
+      hcConf[di].push(label); // consuntivo è sempre confermato
+    }
+  });
+  const hpW = state.hpWeeks[currentWeek] || {};
+  getHpDoctorsList().forEach(doc => {
+    const dd = hpW[doc];
+    if (!dd || dd.ferie) return;
+    const displayName = getConsuntivoDisplayName(doc, 'hpCons');
+    for (let di = 0; di < 7; di++) {
+      const s = dd.slots && dd.slots[di];
+      if (!s) continue;
+      const label = `${displayName} (${s.num})`;
+      hpDisp[di].push(label);
+      hpConf[di].push(label); // consuntivo è sempre confermato
+    }
+  });
+
+  // Dati Spirometrie per colonna riepilogo
+  const spiroData = {};
+  for (let di = 0; di < 7; di++) spiroData[di] = [];
+  const spiroW = state.spiroWeeks[currentWeek] || {};
+  getSpiroDoctorsList().forEach(doc => {
+    const dd = spiroW[doc];
+    if (!dd || dd.ferie) return;
+    const displayName = getConsuntivoDisplayName(doc, 'spiro');
+    for (let di = 0; di < 7; di++) {
+      const s = dd.slots && dd.slots[di];
+      if (!s) continue;
+      const label = s.val === 'x' ? displayName : `${displayName} (${s.num})`;
+      spiroData[di].push(label);
+    }
+  });
+
+  // Dati Polisonnografie per colonna riepilogo
+  const plsData = {};
+  for (let di = 0; di < 7; di++) plsData[di] = [];
+  const plsW = state.plsWeeks[currentWeek] || {};
+  getPlsDoctorsList().forEach(doc => {
+    const dd = plsW[doc];
+    if (!dd || dd.ferie) return;
+    const displayName = getConsuntivoDisplayName(doc, 'pls');
+    for (let di = 0; di < 7; di++) {
+      const s = dd.slots && dd.slots[di];
+      if (!s) continue;
+      const label = s.val === 'x' ? displayName : `${displayName} (${s.num})`;
+      plsData[di].push(label);
+    }
+  });
+
+  // Dati Holter per colonna riepilogo
+  const holterDispR = {}; // { di: [docName, ...] }
+  const holterConfR = {};
+  for (let di = 0; di < 7; di++) { holterDispR[di] = []; holterConfR[di] = []; }
+  const holterWR = state.holterWeeks[currentWeek] || {};
+  state.doctors.filter(d => state.holterEnabled[d]).forEach(doc => {
+    const hdoc = holterWR[doc];
+    if (!hdoc || hdoc.ferie) return;
+    for (let di = 0; di < 7; di++) {
+      const val = hdoc.slots && hdoc.slots[di];
+      if (!val) continue;
+      holterDispR[di].push(doc);
+      if (val === 'confermato') holterConfR[di].push(doc);
+    }
+  });
+
+  // Combina Holter + Consuntivo HC in un unico array per la colonna HC
+  // Prima i turni Holter (solo nome), poi i Consuntivo HC (nome + numero)
+  const hcCombinedDisp = {};
+  const hcCombinedConf = {};
+  for (let di = 0; di < 7; di++) {
+    hcCombinedDisp[di] = [...holterDispR[di], ...hcDisp[di]];
+    hcCombinedConf[di] = [...holterConfR[di], ...hcConf[di]];
+  }
+
+  // Format names like Excel: "NOME -  NOME2 -  "
+  const fmt = (names) => {
+    if (!names.length) return '';
+    const rows = [];
+    for (let i = 0; i < names.length; i += 6) {
+      rows.push(names.slice(i, i + 6).map(n => n + ' - ').join(' '));
+    }
+    return rows.join('<br>');
+  };
+
+  // Styles
+  const brd = '1px solid #bbb';
+  const thS      = `border:${brd};padding:5px 10px;font-weight:700;font-size:11px;text-align:center;vertical-align:middle;`;
+  const thDisp   = thS + `background:#dce6f1;`;
+  const thConf   = thS + `background:#d6ecd2;`;
+  const tdDayS   = `border:${brd};padding:5px 8px;font-weight:700;font-size:11px;background:#f2f2f2;white-space:nowrap;vertical-align:middle;text-align:center;`;
+  const tdDateS  = `border:${brd};padding:3px 8px;font-size:10px;color:#555;text-align:center;vertical-align:middle;background:#fafafa;white-space:nowrap;`;
+  const tdContS  = `border:${brd};padding:6px 10px;font-size:11px;vertical-align:middle;min-width:280px;white-space:normal;word-wrap:break-word;word-break:break-word;`;
+  const tdSmS    = `border:${brd};padding:4px;width:30px;min-width:30px;vertical-align:middle;text-align:center;font-size:11px;white-space:normal;word-break:break-word;`;
+
+  // Funzione per costruire una tabella (disp o conf)
+  const buildTable = (id, slotMap, thStyle, holterMap, hpMap, spiroMap, plsMap) => {
+    let t = `
+    <table id="${id}" style="border-collapse:collapse;font-size:11px;">
+      <thead>
+        <tr>
+          <th colspan="2" style="${thStyle}width:140px;">GIORNO</th>
+          <th colspan="8" style="${thStyle}min-width:280px;">MATTINA</th>
+          <th colspan="8" style="${thStyle}min-width:280px;">POMERIGGIO</th>
+          <th style="${thStyle}width:36px;">HC</th>
+          <th style="${thStyle}width:36px;">HP</th>
+          <th style="${thStyle}width:46px;">SPIRO</th>
+          <th style="${thStyle}width:70px;">POLISONNO</th>
+        </tr>
+      </thead>
+      <tbody>`;
+    for (let di = 0; di < nDays; di++) {
+      const dayStr   = addDays(currentWeek, di);
+      const mattNames = fmt(slotMap[`${di}_0`]);
+      const pomNames  = fmt(slotMap[`${di}_1`]);
+      const holterNames  = fmt((holterMap && holterMap[di]) || []);
+      const hpNames      = fmt((hpMap && hpMap[di]) || []);
+      t += `<tr>
+        <td colspan="2" style="${tdDayS}width:140px;">${ALL_DAY_LABELS[di]}</td>
+        <td colspan="8" rowspan="2" style="${tdContS}">${mattNames}</td>
+        <td colspan="8" rowspan="2" style="${tdContS}">${pomNames}</td>
+        <td rowspan="2" style="${tdSmS};white-space:normal;word-break:break-word;min-width:80px;color:#7c3aed;">${holterNames}</td>
+        <td rowspan="2" style="${tdSmS};white-space:normal;word-break:break-word;min-width:80px;">${hpNames}</td>
+        <td rowspan="2" style="${tdSmS};white-space:normal;word-break:break-word;min-width:80px;color:#16a34a;">${fmt((spiroMap && spiroMap[di]) || [])}</td>
+        <td rowspan="2" style="${tdSmS};white-space:normal;word-break:break-word;min-width:80px;color:#7c3aed;">${fmt((plsMap && plsMap[di]) || [])}</td>
+      </tr>
+      <tr>
+        <td colspan="2" style="${tdDateS}width:140px;">${formatDate(dayStr)}</td>
+      </tr>`;
+    }
+    t += `</tbody></table>`;
+    return t;
+  };
+
+  let html = `
+    <!-- TABELLA 1: DISPONIBILITÀ -->
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
+      <h3 style="margin:0;font-size:14px;font-weight:700;">Turni Provvisori — Disponibilità</h3>
+      <button onclick="copyRiepilogoTable('riepilogo-table')" style="padding:5px 14px;font-size:11px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600;">Copia per Excel</button>
+    </div>
+    <div style="overflow-x:auto;margin-bottom:32px;">
+      ${buildTable('riepilogo-table', slotDisp, thDisp, hcCombinedDisp, hpDisp, spiroData, plsData)}
+    </div>
+
+    <!-- TABELLA 2: CONFERME -->
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
+      <h3 style="margin:0;font-size:14px;font-weight:700;">✅ Turni Definitivi — Conferme</h3>
+      <button onclick="copyRiepilogoTable('riepilogo-conf-table')" style="padding:5px 14px;font-size:11px;background:#16a34a;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600;">Copia per Excel</button>
+    </div>
+    <div style="overflow-x:auto;margin-bottom:24px;">
+      ${buildTable('riepilogo-conf-table', slotConf, thConf, hcCombinedConf, hpConf, spiroData, plsData)}
+    </div>`;
+
+  // Ferie map - raccoglie da TUTTE le tabelle con etichette
+  const ferieMap = {};
+  const addFerie = (doc, label) => {
+    if (!ferieMap[doc]) ferieMap[doc] = [];
+    if (!ferieMap[doc].includes(label)) ferieMap[doc].push(label);
+  };
+
+  // Tabella principale (Turno)
+  state.doctors.forEach(doc => {
+    const dd = w[doc];
+    if (dd && dd.ferie) addFerie(doc, 'Turno');
+  });
+
+  // Tabella Holter
+  const holterWF = state.holterWeeks[currentWeek] || {};
+  Object.entries(holterWF).forEach(([doc, dd]) => {
+    if (dd && dd.ferie) addFerie(doc, 'Holter');
+  });
+
+  // Tabella Consuntivo HC
+  const hcWF = state.hcWeeks[currentWeek] || {};
+  Object.entries(hcWF).forEach(([doc, dd]) => {
+    if (dd && dd.ferie) addFerie(doc, 'HC');
+  });
+
+  // Tabella Consuntivo HP
+  const hpWF = state.hpWeeks[currentWeek] || {};
+  Object.entries(hpWF).forEach(([doc, dd]) => {
+    if (dd && dd.ferie) addFerie(doc, 'HP');
+  });
+
+  // Tabella Spirometrie
+  const spiroWF = state.spiroWeeks[currentWeek] || {};
+  Object.entries(spiroWF).forEach(([doc, dd]) => {
+    if (dd && dd.ferie) addFerie(doc, 'Spiro');
+  });
+
+  // Tabella Polisonnografie
+  const plsWF = state.plsWeeks[currentWeek] || {};
+  Object.entries(plsWF).forEach(([doc, dd]) => {
+    if (dd && dd.ferie) addFerie(doc, 'Pls');
+  });
+
+  const ferieList = Object.keys(ferieMap).sort();
+
+  const renderFerieItem = (doc) => {
+    const labels = ferieMap[doc];
+
+    // Calcola tutte le tabelle dove il medico è configurato
+    const configuredTables = [];
+    if (state.doctors.includes(doc)) configuredTables.push('Turno');
+    if ((state.holterDoctors || []).includes(doc)) configuredTables.push('Holter');
+    if ((state.hcDoctors || []).includes(doc)) configuredTables.push('HC');
+    if ((state.hpDoctors || []).includes(doc)) configuredTables.push('HP');
+    if ((state.spiroDoctors || []).includes(doc)) configuredTables.push('Spiro');
+    if ((state.plsDoctors || []).includes(doc)) configuredTables.push('Pls');
+
+    // Se è in ferie in tutte le tabelle configurate → mostra solo FERIE senza badge
+    const isFullFerie = configuredTables.length > 0 && configuredTables.every(t => labels.includes(t));
+
+    if (isFullFerie) {
+      return `<div style="font-size:12px;font-weight:600;color:var(--danger);padding:4px 7px;background:rgba(220,38,38,0.07);border-radius:5px;display:flex;align-items:center;gap:4px;">
+        • ${doc}
+      </div>`;
+    }
+
+    // Altrimenti mostra badge per ogni tabella specifica (escluso Turno generico)
+    const badges = labels.filter(l => l !== 'Turno').map(l =>
+      `<span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;margin-left:4px;background:${l==='HC'?'#0e7490':l==='HP'?'#ea7c1e':l==='Holter'?'#7c3aed':l==='Spiro'?'#16a34a':l==='Pls'?'#7c3aed':'#dc2626'};color:#fff;">${l}</span>`
+    ).join('');
+    return `<div style="font-size:12px;font-weight:600;color:var(--danger);padding:4px 7px;background:rgba(220,38,38,0.07);border-radius:5px;display:flex;align-items:center;flex-wrap:wrap;gap:2px;">
+      • ${doc}${badges}
+    </div>`;
+  };
+
+  const ferieBoxHtml = ferieList.length > 0
+    ? `<div style="min-width:210px;max-width:260px;flex-shrink:0;background:#fff8f8;border:1.5px solid var(--danger);border-radius:10px;padding:14px 16px;align-self:flex-start;">
+        <div style="font-weight:700;font-size:13px;color:var(--danger);margin-bottom:10px;">🏖️ In Ferie Questa Settimana</div>
+        <div style="display:flex;flex-direction:column;gap:5px;">
+          ${ferieList.map(renderFerieItem).join('')}
+        </div>
+      </div>`
+    : `<div style="min-width:210px;max-width:260px;flex-shrink:0;background:#f9fafb;border:1.5px solid #e5e7eb;border-radius:10px;padding:14px 16px;align-self:flex-start;">
+        <div style="color:#9ca3af;font-size:12px;text-align:center;">🏖️<br>Nessun cardiologo<br>in ferie questa settimana</div>
+      </div>`;
+
+  // Layout: tabelle a sinistra, box ferie a destra in cima
+  html = `<div style="display:flex;gap:20px;align-items:flex-start;">
+    <div style="flex:1;min-width:0;">${html}</div>
+    ${ferieBoxHtml}
+  </div>`;
+
+  content.innerHTML = html;
+}
+
+function copyRiepilogoTable(tableId) {
+  const id = tableId || 'riepilogo-table';
+  const table = document.getElementById(id);
+  if (!table) return;
+  const range = document.createRange();
+  range.selectNode(table);
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(range);
+  document.execCommand('copy');
+  sel.removeAllRanges();
+  const label = id === 'riepilogo-conf-table' ? 'Turni Definitivi' : 'Turni Provvisori';
+  showToast(`✅ Tabella "${label}" copiata! Incollala in Excel con Ctrl+V.`);
+}
+
+// =============================================
+// SETTINGS
+// =============================================
+
+function getDoctorCaps(doc) {
+  const tipo = state.doctorTypes[doc] || 'completo';
+  const extra = state.doctorExtra?.[doc] || {};
+  return {
+    completo: ['completo','completo+ecg75','completo+ecg100'].includes(tipo),
+    ecg75:    ['ecg75','completo+ecg75'].includes(tipo),
+    ecg100:   ['ecg100','completo+ecg100'].includes(tipo),
+    holter:   !!state.holterEnabled[doc],
+    hcCons:   !!extra.hcCons,
+    hpCons:   !!extra.hpCons,
+    spiro:    !!extra.spiro,
+    pls:      !!extra.pls
+  };
+}
+
+function setDoctorCap(doc, cap, checked) {
+  const caps = getDoctorCaps(doc);
+  caps[cap] = checked;
+  // ECG 75 e 100 si escludono a vicenda
+  if (cap === 'ecg75'  && checked) caps.ecg100 = false;
+  if (cap === 'ecg100' && checked) caps.ecg75  = false;
+  // Ricava il tipo stringa
+  let tipo;
+  if      (caps.completo && caps.ecg75)  tipo = 'completo+ecg75';
+  else if (caps.completo && caps.ecg100) tipo = 'completo+ecg100';
+  else if (caps.completo)                tipo = 'completo';
+  else if (caps.ecg75)                   tipo = 'ecg75';
+  else if (caps.ecg100)                  tipo = 'ecg100';
+  else                                   tipo = 'nessuno';
+  state.doctorTypes[doc]   = tipo;
+  state.holterEnabled[doc] = caps.holter;
+  if (!state.doctorExtra) state.doctorExtra = {};
+  if (!state.doctorExtra[doc]) state.doctorExtra[doc] = {};
+  state.doctorExtra[doc].hcCons = caps.hcCons;
+  state.doctorExtra[doc].hpCons = caps.hpCons;
+  state.doctorExtra[doc].spiro  = caps.spiro;
+  state.doctorExtra[doc].pls    = caps.pls;
+  renderSettings();
+  renderTable();
+  renderHolterTable();
+  renderHcTable();
+  renderHpTable();
+  renderSpiroTable();
+  renderPlsTable();
+  saveData();
+}
+
+function renderSettings() {
+  const list = document.getElementById('doctors-list');
+  if (!list) return;
+  const search = (document.getElementById('settings-search')?.value || '').toLowerCase();
+
+  // Ordina alfabeticamente mantenendo l'indice originale
+  const sorted = state.doctors
+    .map((doc, i) => ({ doc, i }))
+    .sort((a, b) => a.doc.localeCompare(b.doc))
+    .filter(({ doc }) => doc.toLowerCase().includes(search));
+
+  // Helper: chip/pill interattivo
+  const chip = (doc, cap, label, colorOn, bgOn, borderOn) => {
+    const caps = getDoctorCaps(doc);
+    const on = caps[cap];
+    const style = on
+      ? `background:${bgOn};color:${colorOn};border:1.5px solid ${borderOn};font-weight:700;`
+      : `background:#f1f5f9;color:#94a3b8;border:1.5px solid #e2e8f0;font-weight:400;`;
+    return `<label style="display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:20px;cursor:pointer;font-size:12px;transition:all .15s;${style}user-select:none;">
+      <input type="checkbox" ${on?'checked':''} onchange="setDoctorCap('${doc}','${cap}',this.checked)" style="display:none;">
+      ${on ? '✓ ' : ''}${label}
+    </label>`;
+  };
+  const chipExtra = (doc, cap, label) => {
+    const caps = getDoctorCaps(doc);
+    const on = caps[cap];
+    const style = on
+      ? `background:#fef9c3;color:#92400e;border:1.5px solid #fde68a;font-weight:700;`
+      : `background:#f8fafc;color:#cbd5e1;border:1.5px dashed #e2e8f0;font-weight:400;`;
+    return `<label style="display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:20px;cursor:pointer;font-size:11px;transition:all .15s;${style}user-select:none;">
+      <input type="checkbox" ${on?'checked':''} onchange="setDoctorCap('${doc}','${cap}',this.checked)" style="display:none;">
+      ${on ? '✓ ' : ''}${label}
+    </label>`;
+  };
+
+  list.innerHTML = sorted.map(({ doc, i }) => {
+    const caps = getDoctorCaps(doc);
+    // Badge visivo
+    const tipo = state.doctorTypes[doc] || 'completo';
+    const badgeTxt = tipo === 'ecg75' ? '(75)' : tipo === 'ecg100' ? '(100)' : tipo === 'completo+ecg75' ? '(+75)' : tipo === 'completo+ecg100' ? '(+100)' : '';
+    const badgeColor = (tipo.includes('ecg75')) ? '#e040fb' : (tipo.includes('ecg100')) ? '#43a047' : '';
+    const badge = badgeTxt ? `<span style="color:${badgeColor};font-weight:700;font-size:10px;margin-left:4px;">${badgeTxt}</span>` : '';
+    const holterBadge = caps.holter ? `<span style="background:#ede9fe;color:#6366f1;font-weight:700;font-size:10px;border-radius:4px;padding:1px 5px;margin-left:4px;">H</span>` : '';
+    const extraBadges = [
+      caps.hcCons ? `<span style="background:#fef9c3;color:#92400e;font-size:9px;border-radius:3px;padding:1px 4px;margin-left:2px;">HC</span>` : '',
+      caps.hpCons ? `<span style="background:#fef9c3;color:#92400e;font-size:9px;border-radius:3px;padding:1px 4px;margin-left:2px;">HP</span>` : '',
+      caps.spiro  ? `<span style="background:#fef9c3;color:#92400e;font-size:9px;border-radius:3px;padding:1px 4px;margin-left:2px;">SPIRO</span>` : '',
+      caps.pls    ? `<span style="background:#fef9c3;color:#92400e;font-size:9px;border-radius:3px;padding:1px 4px;margin-left:2px;">PLS</span>` : '',
+    ].join('');
+
+    return `
+    <div style="padding:8px 4px;border-bottom:1px solid var(--border);">
+      <!-- Riga nome -->
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:9px;">
+        <span style="color:var(--muted);font-size:11px;font-weight:600;min-width:22px;">${i+1}.</span>
+        <input type="text" value="${doc}" placeholder="Cognome N." onfocus="this.style.borderBottom='1px solid #93c5fd'" onblur="this.style.borderBottom='none';updateDoctor(${i}, this.value)" style="flex:1;font-size:13px;font-weight:700;letter-spacing:.3px;border:none;border-bottom:none;outline:none;background:transparent;padding:0;">
+        <div style="display:flex;align-items:center;gap:2px;flex-shrink:0;">${badge}${holterBadge}${extraBadges}</div>
+        <button onclick="removeDoctor(${i})" style="background:none;border:none;color:#ef4444;font-size:15px;cursor:pointer;padding:2px 6px;border-radius:6px;line-height:1;" title="Rimuovi" onmouseenter="this.style.background='#fee2e2'" onmouseleave="this.style.background='none'">✕</button>
+      </div>
+      <!-- Gruppi chip -->
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start;">
+        <!-- Gruppo Turni -->
+        <div style="display:flex;flex-direction:column;gap:4px;">
+          <span style="font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;">Turni</span>
+          <div style="display:flex;gap:5px;flex-wrap:wrap;">
+            ${chip(doc,'completo','Completo','#1976d2','#dbeafe','#93c5fd')}
+            ${chip(doc,'holter','💓 Holter','#6366f1','#ede9fe','#a5b4fc')}
+          </div>
+        </div>
+        <!-- Separatore -->
+        <div style="width:1px;background:var(--border);align-self:stretch;margin:0 2px;"></div>
+        <!-- Gruppo ECG -->
+        <div style="display:flex;flex-direction:column;gap:4px;">
+          <span style="font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;">ECG</span>
+          <div style="display:flex;gap:5px;flex-wrap:wrap;">
+            ${chip(doc,'ecg75','📟 ECG 75','#e040fb','#fce7ff','#e879f9')}
+            ${chip(doc,'ecg100','📟 ECG 100','#43a047','#dcfce7','#86efac')}
+          </div>
+        </div>
+        <!-- Separatore -->
+        <div style="width:1px;background:var(--border);align-self:stretch;margin:0 2px;"></div>
+        <!-- Gruppo Extra -->
+        <div style="display:flex;flex-direction:column;gap:4px;">
+          <span style="font-size:9px;font-weight:700;color:#cbd5e1;text-transform:uppercase;letter-spacing:.5px;">Extra — Consuntivo</span>
+          <div style="display:flex;gap:5px;flex-wrap:wrap;">
+            ${chipExtra(doc,'hcCons','HC Cons.')}
+            ${chipExtra(doc,'hpCons','HP Cons.')}
+            ${chipExtra(doc,'spiro','SPIRO')}
+            ${chipExtra(doc,'pls','PLS')}
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  }).join('');
+
+  const rtEl = document.getElementById('request-template');
+  if (rtEl) rtEl.value = state.requestTemplate || '';
+  const ctEl = document.getElementById('confirm-template');
+  if (ctEl) ctEl.value = state.confirmTemplate || '';
+}
+
+function addDoctor() {
+  const inp = document.getElementById('new-doc-input');
+  const name = inp.value.trim().toUpperCase();
+  if (!name) return;
+  if (state.doctors.includes(name)) { showToast('Cardiologo già presente', 'warn'); return; }
+  state.doctors.push(name);
+  state.doctors.sort((a, b) => a.localeCompare(b));
+  inp.value = '';
+  renderSettings();
+  renderTable();
+  renderHolterTable();
+  saveData();
+  showToast(`✓ ${name} aggiunto`);
+}
+
+function removeDoctor(i) {
+  if (!confirm(`Rimuovere ${state.doctors[i]}?`)) return;
+  state.doctors.splice(i, 1);
+  renderSettings();
+  renderTable();
+  renderHolterTable();
+  renderHcTable();
+  renderHpTable();
+  renderSpiroTable();
+  renderPlsTable();
+  saveData();
+}
+
+function updateDoctor(i, val) {
+  state.doctors[i] = val.trim().toUpperCase();
+  saveData();
+}
+
+function setDoctorType(doc, tipo) {
+  // Mantenuto per compatibilità legacy
+  state.doctorTypes[doc] = tipo;
+  renderSettings();
+  renderTable();
+  saveData();
+}
+
+function setHolterEnabled(doc, enabled) {
+  // Mantenuto per compatibilità legacy
+  state.holterEnabled[doc] = enabled;
+  renderHolterTable();
+  autoSave();
+}
+
+function saveTemplate() {
+  state.requestTemplate = document.getElementById('request-template').value;
+  saveData();
+  showToast('Template salvato');
+}
+
+function saveConfirmTemplate() {
+  state.confirmTemplate = document.getElementById('confirm-template').value;
+  saveData();
+  showToast('Template conferma salvato');
+}
+
+function populateDoctorSelects() {
+  const sel = document.getElementById('wa-doctor-select');
+  sel.innerHTML = '<option value="">-- Seleziona --</option>' + 
+    state.doctors.map(d => `<option value="${d}">${d}</option>`).join('');
+
+  // Popola i select inline dei pannelli quick-parse consuntivo
+  const QP_CONFIGS = [
+
+
+
+  ];
+  QP_CONFIGS.forEach(({ id, getDocs }) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const docs = getDocs();
+    if (docs.length === 0) {
+      el.innerHTML = '<option value="">-- Nessuno specialista configurato --</option>';
+    } else {
+      el.innerHTML = '<option value="">-- Seleziona --</option>' +
+        docs.map(d => `<option value="${d}">${d}</option>`).join('');
+    }
+  });
+}
+
+
+function toggleDispTable() {
+  const wrap = document.getElementById('disp-table-wrap');
+  const btn  = document.getElementById('toggle-disp-btn');
+  const hidden = wrap.style.display === 'none';
+  wrap.style.display = hidden ? '' : 'none';
+  btn.textContent = hidden ? '−' : '+';
+}
+
+function copyText(text) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text)
+      .then(() => showToast('Copiato!'))
+      .catch(() => copyTextFallback(text));
+  } else {
+    copyTextFallback(text);
+  }
+}
+
+function copyTextFallback(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0;';
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+  try {
+    document.execCommand('copy');
+    showToast('Copiato!');
+  } catch(e) {
+    showToast('❌ Copia fallita', 'error');
+  }
+  document.body.removeChild(ta);
+}
+
+// =============================================
+// TEST PARSER
+// =============================================
+
+// Each test case: { msg, expected: [{di, si, type}], desc }
+// di=day index 0-5, si=slot 0=mat 1=pom, type='disponibile'|'solo-ecg'|ferie:true
+function getTestCases() {
+  const dm = buildDateMap(currentWeek);
+  // Get dates for this week
+  const dates = {};
+  Object.entries(dm).forEach(([day, idx]) => { dates[idx] = parseInt(day); });
+  const d0 = dates[0], d1 = dates[1], d2 = dates[2], d3 = dates[3], d4 = dates[4], d5 = dates[5];
+
+  return [
+    {
+      desc: 'Date numeriche — pomeriggio e mattina',
+      msg: `Buongiorno, sono disponibile il ${d0} pomeriggio e il ${d1} mattina`,
+      expected: [
+        { di:0, si:1, type:'disponibile' },
+        { di:1, si:0, type:'disponibile' },
+      ]
+    },
+    {
+      desc: 'Giorni per nome — mix mattina/pomeriggio senza virgole',
+      msg: 'Buongiorno, lunedì mattina martedì mattina mercoledì mattina e pomeriggio,\nGrazie.',
+      expected: [
+        { di:0, si:0, type:'disponibile' },
+        { di:1, si:0, type:'disponibile' },
+        { di:2, si:0, type:'disponibile' },
+        { di:2, si:1, type:'disponibile' },
+      ]
+    },
+    {
+      desc: 'Tutti i giorni mattina e pomeriggio',
+      msg: 'Tutti i gg mattina e sera',
+      expected: [0,1,2,3,4,5].flatMap(di => [
+        { di, si:0, type:'disponibile' },
+        { di, si:1, type:'disponibile' },
+      ])
+    },
+    {
+      desc: 'Tutti i giorni con ECG su giovedì e venerdì',
+      msg: 'Tutti i gg\nMattina e sera\nGiovedì e venerdì eventualmente solo ecg\nAlmeno tre turni per favore',
+      expected: [
+        { di:0, si:0, type:'disponibile' }, { di:0, si:1, type:'disponibile' },
+        { di:1, si:0, type:'disponibile' }, { di:1, si:1, type:'disponibile' },
+        { di:2, si:0, type:'disponibile' }, { di:2, si:1, type:'disponibile' },
+        { di:3, si:0, type:'solo-ecg'   }, { di:3, si:1, type:'solo-ecg'   },
+        { di:4, si:0, type:'solo-ecg'   }, { di:4, si:1, type:'solo-ecg'   },
+        { di:5, si:0, type:'disponibile' }, { di:5, si:1, type:'disponibile' },
+      ]
+    },
+    {
+      desc: 'Disponibile con virgole, giorni misti',
+      msg: 'Disponibile lunedì pomeriggio, martedì, mercoledì, giovedì e venerdì mattina',
+      expected: [
+        { di:0, si:1, type:'disponibile' },
+        { di:1, si:0, type:'disponibile' }, { di:1, si:1, type:'disponibile' },
+        { di:2, si:0, type:'disponibile' }, { di:2, si:1, type:'disponibile' },
+        { di:3, si:0, type:'disponibile' }, { di:3, si:1, type:'disponibile' },
+        { di:4, si:0, type:'disponibile' },
+      ]
+    },
+    {
+      desc: 'Solo ECG esplicito con giorno e slot',
+      msg: `Buongiorno, sono disponibile il ${d0} ECG pomeriggio`,
+      expected: [
+        { di:0, si:1, type:'solo-ecg' },
+      ]
+    },
+    {
+      desc: 'Ferie',
+      msg: 'Sono in ferie questa settimana, grazie',
+      ferie: true,
+      expected: []
+    },
+    {
+      desc: 'Sabato mattina e pomeriggio',
+      msg: 'Sabato mattina e pomeriggio',
+      expected: [
+        { di:5, si:0, type:'disponibile' },
+        { di:5, si:1, type:'disponibile' },
+      ]
+    },
+    {
+      desc: 'Messaggio reale: lunedì mattina martedì mattina mercoledì mattina e pomeriggio con newline',
+      msg: 'Buongiorno, lunedì mattina martedì mattina  mercoledì mattina e pomeriggio , \nGrazie.',
+      expected: [
+        { di:0, si:0, type:'disponibile' },
+        { di:1, si:0, type:'disponibile' },
+        { di:2, si:0, type:'disponibile' },
+        { di:2, si:1, type:'disponibile' },
+      ]
+    },
+    {
+      desc: 'Solo ECG su più giorni: martedì e sabato mattina e pomeriggio',
+      msg: 'mar e sab matt e pom',
+      expected: [
+        { di:1, si:0, type:'disponibile' },
+        { di:1, si:1, type:'disponibile' },
+        { di:5, si:0, type:'disponibile' },
+        { di:5, si:1, type:'disponibile' },
+      ]
+    },
+    {
+      desc: 'Messaggio con data numerica e giorno scritto',
+      msg: `Disponibile mercoledì ${d2} pomeriggio per turno classico`,
+      expected: [
+        { di:2, si:1, type:'disponibile' },
+      ]
+    },
+    {
+      desc: 'Solo ECG globale su giorni elencati',
+      msg: 'Salve! Allora: lunedì martedì mercoledì giovedì e sabato mattina. Solo ECG: lunedì martedì mercoledì giovedì e sabato pomeriggio.',
+      expected: [
+        { di:0, si:0, type:'disponibile' },
+        { di:1, si:0, type:'disponibile' },
+        { di:2, si:0, type:'disponibile' },
+        { di:3, si:0, type:'disponibile' },
+        { di:5, si:0, type:'disponibile' },
+        { di:0, si:1, type:'solo-ecg' },
+        { di:1, si:1, type:'solo-ecg' },
+        { di:2, si:1, type:'solo-ecg' },
+        { di:3, si:1, type:'solo-ecg' },
+        { di:5, si:1, type:'solo-ecg' },
+      ]
+    },
+    {
+      desc: 'Messaggio con Holter — turni normali + holter + Domenica Holter',
+      msg: 'Lunedì matt normale o Holter\nLunedì pome normale o solo ecg o Holter\nMartedì matt normale o Holter\nDomenica Holter',
+      holter: true,
+      expected: [
+        { di:0, si:0, type:'disponibile' },
+        { di:0, si:1, type:'disponibile' },
+        { di:1, si:0, type:'disponibile' },
+      ],
+      expectedHolter: [0, 1, 6]
+    },
+    {
+      desc: 'Messaggio con date numeriche: 25, 26, 27 mattina',
+      msg: `${dates[2]} ${dates[3] !== undefined ? dates[3] : d3} ${dates[4] !== undefined ? dates[4] : d4} mattina`,
+      expected: [
+        { di:2, si:0, type:'disponibile' },
+        { di:3, si:0, type:'disponibile' },
+        { di:4, si:0, type:'disponibile' },
+      ]
+    },
+  ];
+}
+
+function slotKey(di, si) { return `${di}_${si}`; }
+
+function renderTestResult(msg, expected, ferie) {
+  const result = interpretMessage(msg);
+  const DNAMES = ['Lun','Mar','Mer','Gio','Ven','Sab'];
+  const SNAMES = ['Mat','Pom'];
+  const TYPE_SHORT = { 'disponibile': 'X', 'solo-ecg': 'Y' };
+
+  // Build expected map
+  const expMap = {};
+  if (!ferie) {
+    expected.forEach(e => { expMap[slotKey(e.di, e.si)] = e.type; });
+  }
+
+  // Build got map
+  const gotMap = {};
+  result.slots.forEach(s => { gotMap[s.key] = s.type; });
+
+  // Compare
+  const allKeys = new Set([...Object.keys(expMap), ...Object.keys(gotMap)]);
+  const rows = [];
+  let pass = true;
+
+  // Check ferie
+  if (ferie) {
+    const ok = result.ferie === true;
+    if (!ok) pass = false;
+    rows.push({ label: 'FERIE', expected: '✓', got: result.ferie ? '✓' : '✗', ok });
+  }
+
+  [...allKeys].sort().forEach(k => {
+    const [di, si] = k.split('_').map(Number);
+    const exp = expMap[k] || '—';
+    const got = gotMap[k] || '—';
+    const ok = exp === got;
+    if (!ok) pass = false;
+    rows.push({
+      label: `${DNAMES[di]} ${SNAMES[si]}`,
+      expected: exp === '—' ? '—' : TYPE_SHORT[exp] || exp,
+      got: got === '—' ? '—' : TYPE_SHORT[got] || got,
+      ok
+    });
+  });
+
+  // Check holter slots if test case has expectedHolter
+  const tc = getTestCases().find(t => t.expected === expected);  // not reliable, use passed arg
+  // Holter rows
+  const holterRows = [];
+  if (arguments[3] && arguments[3].length >= 0) {  // expectedHolter array passed
+    const HNAMES_SHORT = ['Lun','Mar','Mer','Gio','Ven','Sab','Dom'];
+    const gotHolterKeys = new Set((result.holterSlots || []).map(s => parseInt(s.key, 10)));
+    const expHolterSet = new Set(arguments[3]);
+    const allHolterDays = new Set([...gotHolterKeys, ...expHolterSet]);
+    allHolterDays.forEach(di => {
+      const expH = expHolterSet.has(di) ? 'X' : '—';
+      const gotH = gotHolterKeys.has(di) ? 'X' : '—';
+      const okH = expH === gotH;
+      if (!okH) pass = false;
+      holterRows.push({ label: `💓 ${HNAMES_SHORT[di]}`, expected: expH, got: gotH, ok: okH });
+    });
+  }
+
+  const statusColor = pass ? 'var(--success)' : 'var(--danger)';
+  const statusIcon  = pass ? '✅ PASS' : '❌ FAIL';
+
+  let html = `<div style="margin-bottom:4px;font-size:12px;color:${statusColor};font-weight:700;">${statusIcon}</div>`;
+  if (rows.length === 0 && holterRows.length === 0 && !ferie) {
+    html += `<div style="color:var(--danger);font-size:11px;">Nessuno slot trovato (e nessuno atteso)</div>`;
+  }
+
+  html += '<table style="border-collapse:collapse;font-size:11px;width:auto;">';
+  html += '<tr><th style="padding:3px 10px 3px 0;color:var(--muted);text-align:left;">Slot</th><th style="padding:3px 10px;color:var(--muted);">Atteso</th><th style="padding:3px 10px;color:var(--muted);">Ottenuto</th><th style="padding:3px 0;color:var(--muted);">Esito</th></tr>';
+  [...rows, ...holterRows].forEach(r => {
+    const rowColor = r.ok ? 'var(--text)' : 'var(--danger)';
+    html += `<tr style="color:${rowColor};">
+      <td style="padding:2px 10px 2px 0;">${r.label}</td>
+      <td style="padding:2px 10px;text-align:center;">${r.expected}</td>
+      <td style="padding:2px 10px;text-align:center;">${r.got}</td>
+      <td style="padding:2px 0;text-align:center;">${r.ok ? '✓' : '✗'}</td>
+    </tr>`;
+  });
+  html += '</table>';
+
+  return { html, pass };
+}
+
+function runParserTest() {
+  const msg = document.getElementById('test-input').value.trim();
+  if (!msg) return;
+  const result = interpretMessage(msg);
+  const DNAMES = ['Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato'];
+  const SNAMES = ['Mattina','Pomeriggio'];
+
+  const HNAMES = ['Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato','Domenica'];
+  const hSlots = result.holterSlots || [];
+  let html = '';
+  if (result.ferie) {
+    html = `<div class="badge badge-ferie" style="font-size:12px;padding:6px 14px;">🏖️ FERIE rilevato</div>`;
+  } else if (result.slots.length === 0 && hSlots.length === 0) {
+    html = `<div style="color:var(--danger);font-size:12px;">⚠️ Nessuno slot riconosciuto.<br>
+      <span style="color:var(--muted);">Prova a includere nomi dei giorni (es: lunedì, martedì) o date numeriche con mattina/pomeriggio.</span></div>`;
+  } else {
+    if (result.slots.length > 0) {
+      html += '<div style="margin-bottom:4px;font-size:11px;color:var(--muted);">Slot turni riconosciuti:</div><div class="wa-parse-badge" style="margin-bottom:10px;">';
+      result.slots.forEach(s => {
+        const [di,si] = s.key.split('_').map(Number);
+        const cls = s.type === 'disponibile' ? 'badge-mat' : 'badge-ecg';
+        html += `<span class="badge ${cls}">${DNAMES[di]} ${SNAMES[si]} (${s.type === 'disponibile' ? 'X' : 'Y'})</span>`;
+      });
+      html += '</div>';
+    }
+    if (hSlots.length > 0) {
+      html += '<div style="margin-bottom:4px;font-size:11px;color:#6366f1;font-weight:600;">💓 Slot Holter riconosciuti:</div><div class="wa-parse-badge">';
+      hSlots.forEach(s => {
+        const di = parseInt(s.key, 10);
+        html += `<span class="badge" style="background:#6366f1;color:#fff;">${HNAMES[di]} (X)</span>`;
+      });
+      html += '</div>';
+    }
+  }
+  document.getElementById('test-output').innerHTML = html;
+}
+
+function initTestTab() {
+  const endStr = addDays(currentWeek, 5);
+  document.getElementById('test-week-lbl').textContent =
+    formatDate(currentWeek) + ' – ' + formatDate(endStr);
+
+  // Render predefined test cases
+  const cases = getTestCases();
+  const list = document.getElementById('test-cases-list');
+  list.innerHTML = cases.map((tc, i) => `
+    <div style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px;background:var(--surface2);">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:6px;">
+        <span style="font-size:12px;color:var(--accent2);font-weight:600;">#${i+1} — ${tc.desc}</span>
+        <button class="btn btn-ghost btn-sm" onclick="loadTestCase(${i})">▶ Testa</button>
+      </div>
+      <div style="font-size:11px;color:var(--muted);font-style:italic;white-space:pre-wrap;">"${tc.msg}"</div>
+      <div id="tc-result-${i}" style="margin-top:8px;"></div>
+    </div>
+  `).join('');
+}
+
+function loadTestCase(i) {
+  const tc = getTestCases()[i];
+  document.getElementById('test-input').value = tc.msg;
+  const { html, pass } = renderTestResult(tc.msg, tc.expected, tc.ferie, tc.expectedHolter || []);
+  document.getElementById(`tc-result-${i}`).innerHTML = html;
+  document.getElementById('test-output').innerHTML = `<div style="font-size:11px;color:var(--muted);margin-bottom:6px;">Test #${i+1}: ${tc.desc}</div>` + html;
+}
+
+function runAllTests() {
+  const cases = getTestCases();
+  let passed = 0, failed = 0;
+  let html = '';
+  cases.forEach((tc, i) => {
+    const { html: h, pass } = renderTestResult(tc.msg, tc.expected, tc.ferie, tc.expectedHolter || []);
+    if (pass) passed++; else failed++;
+    html += `<div style="margin-bottom:12px;padding:10px 12px;border:1px solid ${pass ? 'var(--success)' : 'var(--danger)'};border-radius:8px;background:var(--surface2);">
+      <div style="font-size:12px;font-weight:600;color:${pass ? 'var(--success)' : 'var(--danger)'};margin-bottom:6px;">#${i+1} — ${tc.desc}</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:6px;white-space:pre-wrap;font-style:italic;">"${tc.msg}"</div>
+      ${h}
+    </div>`;
+  });
+  const summaryColor = failed === 0 ? 'var(--success)' : 'var(--danger)';
+  document.getElementById('test-suite-output').innerHTML =
+    `<div style="font-size:14px;font-weight:700;color:${summaryColor};margin-bottom:14px;">
+      ${passed}/${cases.length} test superati ${failed > 0 ? `— ${failed} falliti` : '✅'}
+    </div>` + html;
+}
+function init() {
+  loadData();
+  currentWeek = getMondayStr(new Date());
+  document.getElementById('week-picker').value = currentWeek;
+  updateHeaderWeek();
+  renderTable();
+  renderHolterTable();
+  renderHcTable();
+  renderHpTable();
+  renderSpiroTable();
+  renderPlsTable();
+  renderStats();
+  populateDoctorSelects();
+}
+
+init();
+</script>
+</body>
+</html>
