@@ -899,6 +899,8 @@ function getWeekData() {
 function getDoctorData(name) {
   const w = getWeekData();
   if (!w[name]) w[name] = { slots: {}, ferie: false, waMsg: '' };
+  // Firebase elimina gli oggetti vuoti → ricreiamo slots se mancante
+  if (!w[name].slots) w[name].slots = {};
   return w[name];
 }
 
@@ -1467,6 +1469,7 @@ function getHolterWeekData() {
 function getHolterDoctorData(name) {
   const w = getHolterWeekData();
   if (!w[name]) w[name] = { slots: {}, ferie: false };
+  if (!w[name].slots) w[name].slots = {};
   return w[name];
 }
 
@@ -1568,6 +1571,7 @@ function toggleHolterTableVis() {
 function getHcDoctorData(doc) {
   if (!state.hcWeeks[currentWeek]) state.hcWeeks[currentWeek] = {};
   if (!state.hcWeeks[currentWeek][doc]) state.hcWeeks[currentWeek][doc] = { slots: {}, ferie: false };
+  if (!state.hcWeeks[currentWeek][doc].slots) state.hcWeeks[currentWeek][doc].slots = {};
   return state.hcWeeks[currentWeek][doc];
 }
 
@@ -1693,6 +1697,7 @@ function toggleHcTableVis() {
 function getHpDoctorData(doc) {
   if (!state.hpWeeks[currentWeek]) state.hpWeeks[currentWeek] = {};
   if (!state.hpWeeks[currentWeek][doc]) state.hpWeeks[currentWeek][doc] = { slots: {}, ferie: false };
+  if (!state.hpWeeks[currentWeek][doc].slots) state.hpWeeks[currentWeek][doc].slots = {};
   return state.hpWeeks[currentWeek][doc];
 }
 
@@ -1819,6 +1824,7 @@ function toggleHpTableVis() {
 function getSpiroDoctorData(doc) {
   if (!state.spiroWeeks[currentWeek]) state.spiroWeeks[currentWeek] = {};
   if (!state.spiroWeeks[currentWeek][doc]) state.spiroWeeks[currentWeek][doc] = { slots: {}, ferie: false };
+  if (!state.spiroWeeks[currentWeek][doc].slots) state.spiroWeeks[currentWeek][doc].slots = {};
   return state.spiroWeeks[currentWeek][doc];
 }
 
@@ -1945,6 +1951,7 @@ function toggleSpiroTableVis() {
 function getPlsDoctorData(doc) {
   if (!state.plsWeeks[currentWeek]) state.plsWeeks[currentWeek] = {};
   if (!state.plsWeeks[currentWeek][doc]) state.plsWeeks[currentWeek][doc] = { slots: {}, ferie: false };
+  if (!state.plsWeeks[currentWeek][doc].slots) state.plsWeeks[currentWeek][doc].slots = {};
   return state.plsWeeks[currentWeek][doc];
 }
 
