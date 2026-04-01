@@ -56,6 +56,28 @@
   [data-theme="dark"] header #save-indicator { color: #94a3b8 !important; }
   [data-theme="dark"] header #online-indicator { color: #64748b !important; }
   [data-theme="dark"] header #online-count { color: #64748b !important; }
+  [data-theme="dark"] .tabs {
+    background: #ffffff !important;
+    border-bottom-color: #e2e8f0 !important;
+  }
+  [data-theme="dark"] .tabs .tab-btn { color: #94a3b8 !important; }
+  [data-theme="dark"] .tabs .tab-btn:hover { color: #334155 !important; }
+  [data-theme="dark"] .tabs .tab-btn.active { color: #6366f1 !important; border-bottom-color: #6366f1 !important; }
+  [data-theme="dark"] header #user-info { color: #64748b !important; }
+  [data-theme="dark"] header #user-info span { color: #64748b !important; }
+  [data-theme="dark"] header #user-info button {
+    color: #dc2626 !important;
+    border: 1px solid #fecaca !important;
+    background: #fff5f5 !important;
+    font-weight: 600 !important;
+  }
+  [data-theme="dark"] header #user-info button:hover {
+    background: #fee2e2 !important;
+  }
+  [data-theme="dark"] header #theme-toggle {
+    border-color: #e2e8f0 !important;
+    background: #f8fafc !important;
+  }
   [data-theme="dark"] table th,
   [data-theme="dark"] table td { border-color: var(--border) !important; }
   [data-theme="dark"] .card { background: var(--surface); }
@@ -102,6 +124,11 @@
     background: var(--surface);
     border-bottom: 1px solid var(--border);
     padding: 0 24px;
+    position: sticky;
+    top: 49px; /* sits right below header */
+    z-index: 99;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
   .tab-btn {
     padding: 10px 16px;
@@ -540,7 +567,7 @@
     <button id="theme-toggle" onclick="toggleTheme()" title="Tema chiaro/scuro" style="background:none;border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:16px;padding:4px 8px;line-height:1;">🌙</button>
     <div id="user-info" style="display:none;font-size:11px;color:var(--muted);align-items:center;gap:6px;">
       <span id="user-display"></span>
-      <button onclick="doLogout()" class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 8px;">Esci</button>
+      <button onclick="doLogout()" class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 8px;color:#dc2626;border:1px solid #fecaca;background:#fff5f5;font-weight:600;">Esci</button>
     </div>
   </div>
 </header>
@@ -551,6 +578,7 @@
   <button class="tab-btn" onclick="switchTab('conferma')">✅ Messaggi Conferma</button>
   <button class="tab-btn" onclick="switchTab('riepilogo')">📊 Riepilogo Disponibilità</button>
   <button class="tab-btn" onclick="switchTab('calendar')">📅 Calendar</button>
+  <button class="tab-btn admin-only" onclick="switchTab('storico')">📝 Storico Modifiche</button>
   <button class="tab-btn admin-only" onclick="switchTab('impostazioni')">⚙️ Impostazioni</button>
   <button class="tab-btn admin-only" onclick="switchTab('test')">🧪 Test Parser</button>
 </div>
@@ -749,6 +777,21 @@
   <div id="calendar-content"></div>
 </div>
 
+<!-- ===== TAB: STORICO MODIFICHE (admin-only) ===== -->
+<div class="tab-content admin-only" id="tab-storico">
+  <div class="card">
+    <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
+      <span>📝 Storico Modifiche</span>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-ghost btn-sm" onclick="loadAuditLog()">🔄 Aggiorna</button>
+        <button class="btn btn-ghost btn-sm" style="color:var(--danger);" onclick="clearAuditLog()">🗑 Svuota Storico</button>
+      </div>
+    </div>
+    <p style="color:var(--muted);font-size:12px;margin-bottom:12px;">Log di tutte le modifiche apportate dagli utenti. Aggiornamento in tempo reale.</p>
+    <div id="audit-log" style="max-height:600px;overflow-y:auto;font-size:12px;"></div>
+  </div>
+</div>
+
 <div class="tab-content admin-only" id="tab-impostazioni">
   <div style="display:flex;flex-direction:column;gap:16px;max-width:900px;margin:0 auto;">
 
@@ -775,16 +818,6 @@
         <button class="btn btn-success btn-sm" onclick="addUser()">+ Aggiungi</button>
       </div>
       <div id="users-list" style="display:flex;flex-direction:column;gap:0;max-height:300px;overflow-y:auto;"></div>
-    </div>
-
-    <!-- AUDIT LOG (admin-only) -->
-    <div class="card admin-only">
-      <div class="card-title">📝 Storico Modifiche</div>
-      <div style="display:flex;gap:8px;margin-bottom:8px;">
-        <button class="btn btn-ghost btn-sm" onclick="loadAuditLog()">🔄 Aggiorna</button>
-        <button class="btn btn-ghost btn-sm" onclick="clearAuditLog()">🗑 Svuota Storico</button>
-      </div>
-      <div id="audit-log" style="max-height:300px;overflow-y:auto;font-size:11px;"></div>
     </div>
 
     <!-- PREFERENZE -->
@@ -978,8 +1011,8 @@ function doLogin() {
     errEl.style.display = 'block';
     return;
   }
-  // Check against Firebase users
-  const dbRef = firebase.database().ref('cardio_users/' + username);
+  // Check against Firebase users (dots encoded in keys)
+  const dbRef = firebase.database().ref('cardio_users/' + fbKey(username));
   dbRef.once('value').then(snap => {
     const user = snap.val();
     if (!user) {
@@ -1009,16 +1042,24 @@ function onLoginSuccess() {
     userInfo.style.display = 'flex';
     document.getElementById('user-display').textContent = '👤 ' + (currentUser.fullName || currentUser.username) + (currentUser.role === 'admin' ? ' ⭐' : '');
   }
+  logAudit('Login effettuato');
   // Show/hide admin-only elements
   document.querySelectorAll('.admin-only').forEach(el => {
     el.style.display = currentUser.role === 'admin' ? '' : 'none';
   });
+  // Sync sticky tabs position to actual header height
+  const hdr = document.querySelector('header');
+  const tabsEl = document.querySelector('.tabs');
+  if (hdr && tabsEl) {
+    tabsEl.style.top = hdr.offsetHeight + 'px';
+  }
   // Attiva presenza online
   initPresence();
   listenOnlineUsers();
 }
 
 function doLogout() {
+  logAudit('Logout effettuato');
   removePresence();
   currentUser = null;
   sessionStorage.removeItem('loggedUser');
@@ -1026,6 +1067,10 @@ function doLogout() {
   const userInfo = document.getElementById('user-info');
   if (userInfo) userInfo.style.display = 'none';
 }
+
+// Firebase key encoding — dots are forbidden in Firebase keys
+function fbKey(username) { return username.replace(/\./g, '%2E'); }
+function fbKeyDecode(key) { return key.replace(/%2E/g, '.'); }
 
 // Create default admin if no users exist
 function ensureDefaultAdmin() {
@@ -1184,7 +1229,10 @@ function saveData(silent) {
         const who = currentUser ? (' da ' + (currentUser.fullName || currentUser.username)) : '';
         const el = document.getElementById('save-indicator');
         if (el) el.textContent = `💾 ${hh}:${mm}${who}`;
-        if (!silent) showToast('✓ Salvato!');
+        if (!silent) {
+          showToast('✓ Salvato!');
+          logAudit('Salvati dati settimana ' + formatDate(currentWeek));
+        }
       })
       .catch(e => {
         console.error('⚠️ Errore Firebase:', e);
@@ -1448,7 +1496,7 @@ function showToast(msg, type='success') {
 
 function switchTab(id) {
   document.querySelectorAll('.tab-btn').forEach((b, i) => {
-    b.classList.toggle('active', ['disponibilita','whatsapp','conferma','riepilogo','calendar','impostazioni','test'][i] === id);
+    b.classList.toggle('active', ['disponibilita','whatsapp','conferma','riepilogo','calendar','storico','impostazioni','test'][i] === id);
   });
   document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
   document.getElementById('tab-' + id).classList.add('active');
@@ -1456,7 +1504,8 @@ function switchTab(id) {
   if (id === 'riepilogo') renderRiepilogo();
   if (id === 'calendar') renderCalendar();
   if (id === 'whatsapp') renderWaHistory();
-  if (id === 'impostazioni') { renderSettings(); loadUsersList(); loadAuditLog(); }
+  if (id === 'storico') loadAuditLog();
+  if (id === 'impostazioni') { renderSettings(); loadUsersList(); }
   if (id === 'test') initTestTab();
 }
 
@@ -1651,7 +1700,10 @@ function cycleSlot(doc, key) {
   const current = dd.slots[key] || '';
   const states = getSlotStatesForDoctor(doc);
   const idx = states.indexOf(current);
-  dd.slots[key] = states[(idx + 1) % states.length];
+  const newVal = states[(idx + 1) % states.length];
+  dd.slots[key] = newVal;
+  const LABELS = {'': 'vuoto', 'disponibile': 'X', 'solo-ecg': 'Y', 'confermato': 'C', 'confermato-ecg': 'CY'};
+  logSlotChange('Ambulatorio', doc, key, LABELS[newVal] || newVal);
   renderTable();
   renderStats();
   autoSave();
@@ -1660,6 +1712,7 @@ function cycleSlot(doc, key) {
 function toggleFerie(doc, val) {
   const dd = getDoctorData(doc);
   dd.ferie = val;
+  logAudit((val ? 'Attivate' : 'Disattivate') + ' ferie Ambulatorio per ' + doc);
   renderTable();
   renderStats();
   autoSave();
@@ -1709,6 +1762,8 @@ function cycleHolterSlot(doc, dayIdx) {
   const next = cur === '' ? 'disponibile' : cur === 'disponibile' ? 'confermato' : '';
   if (next === '') delete dd.slots[dayIdx];
   else dd.slots[dayIdx] = next;
+  const dayNames = ['LUN','MAR','MER','GIO','VEN','SAB','DOM'];
+  logSlotChange('Holter', doc, dayNames[dayIdx] || dayIdx, next || 'vuoto');
   renderHolterTable();
   autoSave();
 }
@@ -1716,6 +1771,7 @@ function cycleHolterSlot(doc, dayIdx) {
 function toggleHolterFerie(doc, val) {
   const dd = getHolterDoctorData(doc);
   dd.ferie = val;
+  logAudit((val ? 'Attivate' : 'Disattivate') + ' ferie Holter per ' + doc);
   renderHolterTable();
   autoSave();
 }
@@ -1819,6 +1875,8 @@ function editHcSlot(btn, doc, di) {
       const num = parseInt(input.value, 10);
       if (!isNaN(num) && num > 0) {
         getHcDoctorData(doc).slots[di] = { num, conf: true };
+        const dayN = ['LUN','MAR','MER','GIO','VEN','SAB','DOM'];
+        logSlotChange('HC', doc, dayN[di] || di, num);
         saveData();
       }
       renderHcTable(); renderRiepilogo();
@@ -1828,6 +1886,8 @@ function editHcSlot(btn, doc, di) {
     return;
   } else {
     // Numero → cancella
+    const dayN = ['LUN','MAR','MER','GIO','VEN','SAB','DOM'];
+    logSlotChange('HC', doc, dayN[di] || di, 'vuoto');
     delete dd.slots[di];
   }
   saveData();
@@ -1836,6 +1896,7 @@ function editHcSlot(btn, doc, di) {
 }
 
 function toggleHcFerie(doc, val) {
+  logAudit((val ? 'Attivate' : 'Disattivate') + ' ferie HC per ' + doc);
   getHcDoctorData(doc).ferie = val;
   saveData();
   renderHcTable();
@@ -1945,6 +2006,8 @@ function editHpSlot(btn, doc, di) {
       const num = parseInt(input.value, 10);
       if (!isNaN(num) && num > 0) {
         getHpDoctorData(doc).slots[di] = { num, conf: true };
+        const dayN = ['LUN','MAR','MER','GIO','VEN','SAB','DOM'];
+        logSlotChange('HP', doc, dayN[di] || di, num);
         saveData();
       }
       renderHpTable(); renderRiepilogo();
@@ -1954,6 +2017,8 @@ function editHpSlot(btn, doc, di) {
     return;
   } else {
     // Numero → cancella
+    const dayN = ['LUN','MAR','MER','GIO','VEN','SAB','DOM'];
+    logSlotChange('HP', doc, dayN[di] || di, 'vuoto');
     delete dd.slots[di];
   }
   saveData();
@@ -1962,6 +2027,7 @@ function editHpSlot(btn, doc, di) {
 }
 
 function toggleHpFerie(doc, val) {
+  logAudit((val ? 'Attivate' : 'Disattivate') + ' ferie HP per ' + doc);
   getHpDoctorData(doc).ferie = val;
   saveData();
   renderHpTable();
@@ -2070,13 +2136,16 @@ function editSpiroSlot(btn, doc, di) {
     input.focus();
     const commit = () => {
       const raw = input.value.trim().toLowerCase();
+      const dayN = ['LUN','MAR','MER','GIO','VEN','SAB','DOM'];
       if (raw === 'x') {
         getSpiroDoctorData(doc).slots[di] = { val: 'x', conf: true };
+        logSlotChange('Spirometria', doc, dayN[di] || di, 'x');
         saveData();
       } else {
         const num = parseInt(raw, 10);
         if (!isNaN(num) && num > 0) {
           getSpiroDoctorData(doc).slots[di] = { num, conf: true };
+          logSlotChange('Spirometria', doc, dayN[di] || di, num);
           saveData();
         }
       }
@@ -2086,6 +2155,8 @@ function editSpiroSlot(btn, doc, di) {
     input.addEventListener('blur', commit);
     return;
   } else {
+    const dayN = ['LUN','MAR','MER','GIO','VEN','SAB','DOM'];
+    logSlotChange('Spirometria', doc, dayN[di] || di, 'vuoto');
     delete dd.slots[di];
   }
   saveData();
@@ -2094,6 +2165,7 @@ function editSpiroSlot(btn, doc, di) {
 }
 
 function toggleSpiroFerie(doc, val) {
+  logAudit((val ? 'Attivate' : 'Disattivate') + ' ferie Spirometria per ' + doc);
   getSpiroDoctorData(doc).ferie = val;
   saveData();
   renderSpiroTable();
@@ -2196,13 +2268,16 @@ function editPlsSlot(btn, doc, di) {
     input.focus();
     const commit = () => {
       const raw = input.value.trim().toLowerCase();
+      const dayN = ['LUN','MAR','MER','GIO','VEN','SAB','DOM'];
       if (raw === 'x') {
         getPlsDoctorData(doc).slots[di] = { val: 'x', conf: true };
+        logSlotChange('PLS', doc, dayN[di] || di, 'x');
         saveData();
       } else {
         const num = parseInt(raw, 10);
         if (!isNaN(num) && num > 0) {
           getPlsDoctorData(doc).slots[di] = { num, conf: true };
+          logSlotChange('PLS', doc, dayN[di] || di, num);
           saveData();
         }
       }
@@ -2212,6 +2287,8 @@ function editPlsSlot(btn, doc, di) {
     input.addEventListener('blur', commit);
     return;
   } else {
+    const dayN = ['LUN','MAR','MER','GIO','VEN','SAB','DOM'];
+    logSlotChange('PLS', doc, dayN[di] || di, 'vuoto');
     delete dd.slots[di];
   }
   saveData();
@@ -2220,6 +2297,7 @@ function editPlsSlot(btn, doc, di) {
 }
 
 function togglePlsFerie(doc, val) {
+  logAudit((val ? 'Attivate' : 'Disattivate') + ' ferie PLS per ' + doc);
   getPlsDoctorData(doc).ferie = val;
   saveData();
   renderPlsTable();
@@ -3462,8 +3540,9 @@ function renderConferma() {
     html += confItems.map(({ doc, msg }) => {
       const idx = items.indexOf(items.find(i => i.doc === doc && !i.noConf));
       const phone = state.doctorPhones[doc];
+      const safeDoc = doc.replace(/'/g, "\\'");
       const waBtn = phone
-        ? `<button class="copy-btn" style="background:#25d366;color:#fff;border-color:#25d366;transition:all .2s;" onclick="sendWhatsApp('${phone}', window._confMsgs[${idx}], this)">📲 WhatsApp</button>`
+        ? `<button class="copy-btn wa-send-btn" data-doc="${doc}" data-week="${currentWeek}" style="background:#25d366;color:#fff;border-color:#25d366;transition:all .2s;" onclick="sendWhatsApp('${phone}', window._confMsgs[${idx}], this, '${safeDoc}')">📲 WhatsApp</button>`
         : `<span style="font-size:10px;color:var(--muted);">📱 No tel.</span>`;
       return `<div class="conf-item">
         <div class="name">${doc}</div>
@@ -3481,8 +3560,9 @@ function renderConferma() {
     html += noConfItems.map(({ doc, msg }) => {
       const idx = items.indexOf(items.find(i => i.doc === doc && i.noConf));
       const phone = state.doctorPhones[doc];
+      const safeDoc = doc.replace(/'/g, "\\'");
       const waBtn = phone
-        ? `<button class="copy-btn" style="background:#25d366;color:#fff;border-color:#25d366;transition:all .2s;" onclick="sendWhatsApp('${phone}', window._confMsgs[${idx}], this)">📲 WhatsApp</button>`
+        ? `<button class="copy-btn wa-send-btn" data-doc="${doc}" data-week="${currentWeek}" style="background:#25d366;color:#fff;border-color:#25d366;transition:all .2s;" onclick="sendWhatsApp('${phone}', window._confMsgs[${idx}], this, '${safeDoc}')">📲 WhatsApp</button>`
         : `<span style="font-size:10px;color:var(--muted);">📱 No tel.</span>`;
       return `<div class="conf-item" style="border-left:3px solid #dc2626;">
         <div class="name" style="color:#dc2626;">${doc}</div>
@@ -3496,6 +3576,29 @@ function renderConferma() {
   }
 
   list.innerHTML = html;
+  // Controlla Firebase per lo stato "inviato" e aggiorna i pulsanti
+  restoreWaSentState();
+}
+
+function restoreWaSentState() {
+  if (!currentWeek) return;
+  firebase.database().ref('cardio_wa_sent/' + currentWeek).once('value').then(snap => {
+    const sent = snap.val();
+    if (!sent) return;
+    document.querySelectorAll('.wa-send-btn').forEach(btn => {
+      const doc = btn.getAttribute('data-doc');
+      const week = btn.getAttribute('data-week');
+      if (week === currentWeek && doc) {
+        const safeDoc = doc.replace(/\./g, '%2E');
+        if (sent[safeDoc]) {
+          markWaSentUI(btn);
+          // Mostra chi ha inviato
+          const info = sent[safeDoc];
+          btn.title = 'Inviato da ' + (info.by || '?') + ' il ' + new Date(info.at).toLocaleString('it-IT');
+        }
+      }
+    });
+  });
 }
 
 
@@ -4116,6 +4219,7 @@ function getDoctorCaps(doc) {
 }
 
 function setDoctorCap(doc, cap, checked) {
+  logAudit((checked ? 'Abilitato' : 'Disabilitato') + ' ' + cap + ' per il medico ' + doc);
   const caps = getDoctorCaps(doc);
   caps[cap] = checked;
   // ECG 75 e 100 si escludono a vicenda
@@ -4315,6 +4419,7 @@ function saveTemplate() {
 
 function saveConfirmTemplate() {
   state.confirmTemplate = document.getElementById('confirm-template').value;
+  logAudit('Modificato template di conferma');
   saveData();
   showToast('Template conferma salvato');
 }
@@ -4323,8 +4428,10 @@ function saveDoctorPhone(doc, phone) {
   const cleaned = (phone || '').trim();
   if (cleaned) {
     state.doctorPhones[doc] = cleaned;
+    logAudit('Aggiornato telefono di ' + doc + ': ' + cleaned);
   } else {
     delete state.doctorPhones[doc];
+    logAudit('Rimosso telefono di ' + doc);
   }
   saveData(true);
 }
@@ -4345,13 +4452,13 @@ function addUser() {
   // Disabilita il pulsante durante la creazione
   const addBtn = document.querySelector('#user-mgmt-card .btn-success');
   if (addBtn) { addBtn.disabled = true; addBtn.textContent = '⏳ Creazione...'; }
-  firebase.database().ref('cardio_users/' + username).once('value').then(snap => {
+  firebase.database().ref('cardio_users/' + fbKey(username)).once('value').then(snap => {
     if (snap.exists()) {
       showToast('Username già esistente', 'danger');
       if (addBtn) { addBtn.disabled = false; addBtn.textContent = '+ Aggiungi'; }
       return;
     }
-    return firebase.database().ref('cardio_users/' + username).set({
+    return firebase.database().ref('cardio_users/' + fbKey(username)).set({
       password: password,
       role: role,
       fullName: fullName || username,
@@ -4378,22 +4485,24 @@ function loadUsersList() {
     const el = document.getElementById('users-list');
     if (!el) return;
     const entries = Object.entries(users).sort((a,b) => a[0].localeCompare(b[0]));
-    el.innerHTML = entries.map(([uname, u]) => `
+    el.innerHTML = entries.map(([fbName, u]) => {
+      const uname = fbKeyDecode(fbName);
+      return `
       <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-bottom:1px solid var(--border);font-size:12px;">
         <span style="font-weight:700;min-width:100px;">${uname}</span>
         <span style="color:var(--muted);flex:1;">${u.fullName || ''}</span>
         <span style="font-size:10px;padding:2px 8px;border-radius:4px;background:${u.role==='admin'?'var(--accent)':'var(--success)'};color:#fff;">${u.role}</span>
         <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 6px;" onclick="resetUserPassword('${uname}')">🔑</button>
         ${uname !== 'admin' ? `<button class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 6px;color:var(--danger);" onclick="deleteUser('${uname}')">✕</button>` : ''}
-      </div>
-    `).join('');
+      </div>`;
+    }).join('');
   });
 }
 
 function resetUserPassword(username) {
   const newPw = prompt('Nuova password per ' + username + ':');
   if (!newPw) return;
-  firebase.database().ref('cardio_users/' + username + '/password').set(newPw).then(() => {
+  firebase.database().ref('cardio_users/' + fbKey(username) + '/password').set(newPw).then(() => {
     showToast('Password aggiornata per ' + username);
     logAudit('Reset password utente: ' + username);
   });
@@ -4401,7 +4510,7 @@ function resetUserPassword(username) {
 
 function deleteUser(username) {
   if (!confirm('Eliminare utente ' + username + '?')) return;
-  firebase.database().ref('cardio_users/' + username).remove().then(() => {
+  firebase.database().ref('cardio_users/' + fbKey(username)).remove().then(() => {
     showToast('Utente ' + username + ' eliminato');
     loadUsersList();
     logAudit('Eliminato utente: ' + username);
@@ -4411,6 +4520,28 @@ function deleteUser(username) {
 // =============================================
 // AUDIT LOG
 // =============================================
+// ── Debounced audit: raccoglie modifiche slot e logga dopo 3s di inattività ──
+let _slotAuditBuffer = {};
+let _slotAuditTimer = null;
+
+function logSlotChange(table, doc, slotLabel, newValue) {
+  const key = table + '|' + doc;
+  if (!_slotAuditBuffer[key]) _slotAuditBuffer[key] = { table, doc, changes: [] };
+  _slotAuditBuffer[key].changes.push(slotLabel + '→' + (newValue || 'vuoto'));
+  if (_slotAuditTimer) clearTimeout(_slotAuditTimer);
+  _slotAuditTimer = setTimeout(flushSlotAudit, 3000);
+}
+
+function flushSlotAudit() {
+  const buf = _slotAuditBuffer;
+  _slotAuditBuffer = {};
+  _slotAuditTimer = null;
+  Object.values(buf).forEach(entry => {
+    const changeStr = entry.changes.join(', ');
+    logAudit('Modificata disponibilità ' + entry.table + ' di ' + entry.doc + ': ' + changeStr);
+  });
+}
+
 function logAudit(action) {
   if (!currentUser) return;
   const entry = {
@@ -4422,24 +4553,38 @@ function logAudit(action) {
   firebase.database().ref('cardio_audit').push(entry);
 }
 
+function getAuditIcon(action) {
+  if (action.includes('WhatsApp')) return '📲';
+  if (action.includes('Salvat')) return '💾';
+  if (action.includes('Aggiunto medico')) return '👨‍⚕️';
+  if (action.includes('Rimosso medico')) return '🗑';
+  if (action.includes('Creato utente')) return '👤';
+  if (action.includes('Eliminato utente')) return '❌';
+  if (action.includes('Reset password')) return '🔑';
+  if (action.includes('disponibilità')) return '📋';
+  return '📝';
+}
+
 function loadAuditLog() {
-  firebase.database().ref('cardio_audit').orderByChild('timestamp').limitToLast(100).once('value').then(snap => {
+  firebase.database().ref('cardio_audit').orderByChild('timestamp').limitToLast(200).once('value').then(snap => {
     const el = document.getElementById('audit-log');
     if (!el) return;
     const entries = [];
     snap.forEach(child => entries.push(child.val()));
     entries.reverse();
     if (entries.length === 0) {
-      el.innerHTML = '<div style="color:var(--muted);padding:12px;text-align:center;">Nessuna modifica registrata</div>';
+      el.innerHTML = '<div style="color:var(--muted);padding:24px;text-align:center;">Nessuna modifica registrata</div>';
       return;
     }
     el.innerHTML = entries.map(e => {
       const d = new Date(e.timestamp);
       const ts = d.toLocaleDateString('it-IT') + ' ' + d.toLocaleTimeString('it-IT', {hour:'2-digit',minute:'2-digit'});
-      return `<div style="padding:4px 8px;border-bottom:1px solid var(--border);display:flex;gap:8px;">
-        <span style="color:var(--muted);min-width:110px;">${ts}</span>
-        <span style="color:var(--accent);min-width:80px;font-weight:600;">${e.fullName || e.user}</span>
-        <span>${e.action}</span>
+      const icon = getAuditIcon(e.action);
+      return `<div style="padding:6px 10px;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:center;">
+        <span style="font-size:14px;">${icon}</span>
+        <span style="color:var(--muted);min-width:120px;font-size:11px;font-family:var(--font-mono);">${ts}</span>
+        <span style="color:var(--accent);min-width:90px;font-weight:600;font-size:12px;">${e.fullName || e.user}</span>
+        <span style="font-size:12px;flex:1;">${e.action}</span>
       </div>`;
     }).join('');
   });
@@ -4456,7 +4601,7 @@ function clearAuditLog() {
 // =============================================
 // WHATSAPP SEND
 // =============================================
-function sendWhatsApp(phone, message, btnElement) {
+function sendWhatsApp(phone, message, btnElement, docName) {
   // Pulisci il numero: rimuovi spazi, trattini, etc.
   let cleaned = phone.replace(/[\s\-\(\)]/g, '');
   // Aggiungi prefisso Italia se manca
@@ -4466,6 +4611,20 @@ function sendWhatsApp(phone, message, btnElement) {
   const url = 'whatsapp://send?phone=' + cleaned + '&text=' + encodeURIComponent(message);
   window.open(url, '_self');
   // Feedback visivo permanente sul pulsante
+  markWaSentUI(btnElement);
+  // Salva stato "inviato" in Firebase (persistente, visibile a tutti)
+  if (docName && currentWeek) {
+    const safeDoc = docName.replace(/\./g, '%2E');
+    firebase.database().ref('cardio_wa_sent/' + currentWeek + '/' + safeDoc).set({
+      by: currentUser ? (currentUser.fullName || currentUser.username) : 'unknown',
+      at: new Date().toISOString()
+    });
+    logAudit('Inviato messaggio WhatsApp al medico: ' + docName);
+  }
+  showToast('📲 WhatsApp aperto!');
+}
+
+function markWaSentUI(btnElement) {
   if (btnElement) {
     btnElement.innerHTML = '✅ Inviato!';
     btnElement.style.background = '#16a34a';
@@ -4473,7 +4632,6 @@ function sendWhatsApp(phone, message, btnElement) {
     btnElement.style.cursor = 'default';
     btnElement.style.opacity = '0.85';
   }
-  showToast('📲 WhatsApp aperto!');
 }
 
 function populateDoctorSelects() {
@@ -4510,6 +4668,7 @@ function toggleDispTable() {
 }
 
 function copyText(text) {
+  logAudit('Copiato testo conferma negli appunti');
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(text)
       .then(() => showToast('Copiato!'))
