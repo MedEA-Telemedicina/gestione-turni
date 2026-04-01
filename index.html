@@ -248,6 +248,14 @@
     margin-bottom: 10px;
   }
   .wa-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .ai-dots { animation: aiDots 1.2s infinite; }
+  @keyframes aiDots {
+    0%, 20% { content: '.'; }
+    40% { content: '..'; }
+    60%, 100% { content: '...'; }
+  }
+  #btn-ai-parse:hover { filter: brightness(1.15); }
+  #btn-ai-parse:disabled { opacity: 0.6; cursor: wait; }
   .wa-parse-badge {
     display: inline-flex;
     gap: 6px;
@@ -628,9 +636,11 @@
         <select class="styled" id="wa-doctor-select"></select>
       </div>
       <textarea class="wa-input" id="wa-msg-input" placeholder="Incolla il messaggio WhatsApp qui...&#10;Es: 'Disponibile lunedì mattina, martedì e venerdì'"></textarea>
-      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center;">
         <button class="btn btn-primary btn-sm" onclick="parseWaMessage()">🔍 Interpreta</button>
+        <button class="btn btn-sm" id="btn-ai-parse" onclick="parseWaMessageAI()" style="background:linear-gradient(135deg,#6366f1,#a855f7);color:#fff;border:none;">🤖 AI</button>
         <button class="btn btn-ghost btn-sm" onclick="clearWaInput()">✕ Cancella</button>
+        <span style="font-size:10px;color:var(--muted);margin-left:4px;">Regex = veloce &amp; offline · AI = capisce tutto</span>
       </div>
       <div id="wa-parse-result" style="margin-top:10px;"></div>
     </div>
@@ -2635,16 +2645,110 @@ function interpretMessageText(low, dateMap, defaultType) {
 let pendingWaResult = null;
 let pendingWaDoctor = null;
 let pendingWaMsg    = null;
+let _pendingSource  = 'regex'; // 'regex' o 'ai'
 
-function parseWaMessage() {
-  const docSel = document.getElementById('wa-doctor-select').value;
-  const msg = document.getElementById('wa-msg-input').value.trim();
-  if (!docSel || !msg) { showToast('Seleziona medico e inserisci messaggio', 'danger'); return; }
+// =============================================
+// AI PARSER — Gemini (fallback intelligente)
+// =============================================
+const GEMINI_API_KEY = 'AIzaSyAvFamkcqGRqo49GfJFAsPBbC5S_7CF5J4';
+const GEMINI_MODEL   = 'gemini-2.5-flash-lite';
 
-  pendingWaResult = interpretMessage(msg);
-  pendingWaDoctor = docSel;
-  pendingWaMsg    = msg;
+async function aiParseMessage(msg) {
+  const monday = currentWeek;
+  const dayNames = ['Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato','Domenica'];
+  const dates = [];
+  for (let i = 0; i < 7; i++) {
+    const d = parseLocalDate(addDays(monday, i));
+    dates.push(`${dayNames[i]} ${d.getDate()}/${d.getMonth()+1} (indice: ${i})`);
+  }
 
+  const prompt = `Sei un parser di messaggi WhatsApp per gestione turni medici ospedalieri.
+Settimana corrente (lunedì = indice 0): ${dates.join(', ')}
+
+Analizza il messaggio e restituisci SOLO JSON valido (no markdown, no commenti).
+
+REGOLE TURNI (slots):
+- Ogni giorno ha 2 slot: mattina (slot 0) e pomeriggio (slot 1)
+- Se non specifica mattina/pomeriggio → entrambi (genera 2 entry: slot 0 e slot 1)
+- Tipo "disponibile" = turno normale (default)
+- Tipo "solo-ecg" = il medico farà solo ECG quel giorno/slot
+- "Turno completo" o "Completa" = disponibile mattina + pomeriggio
+- I numeri (es. "il 5", "7/4") si riferiscono ai giorni della settimana corrente
+- Sabato (indice 5) va incluso solo se menzionato esplicitamente
+- Domenica (indice 6) raramente usata, includere solo se esplicita
+
+REGOLE FERIE:
+- "Ferie", "Non disponibile", "Indisponibile", "Nessuna disponibilità" → ferie: true
+- Se ferie specifiche per categoria (es. "ferie holter"), ferie: ["holter"] o ["hc","hp"] ecc.
+
+REGOLE HOLTER (holterSlots):
+- "Holter" senza "pressori"/"cardiaco" = holter generico → holterSlots
+- Chiave = indice giorno (stringa)
+
+REGOLE CONSUNTIVO (hcSlots, hpSlots, spiroSlots, plsSlots):
+- "Holter cardiaco" / "HC" / "Refertazione HC" → hcSlots
+- "Holter pressori" / "ABPM" / "HP" → hpSlots
+- "Spirometrie" / "Spiro" → spiroSlots
+- "Polisonnografie" / "PLS" / "PSG" / "Polisonno" → plsSlots
+- Se c'è un numero (es. "3 holter cardiaci") → "num": 3
+- Se nessun numero → "val": "x"
+- Chiave = indice giorno (numero)
+
+FORMATO RISPOSTA (JSON puro):
+{
+  "slots": [{"key": "GIORNO_SLOT", "type": "disponibile"|"solo-ecg"}],
+  "holterSlots": [{"key": "GIORNO"}],
+  "hcSlots": [{"key": GIORNO_NUM, "num": N}],
+  "hpSlots": [{"key": GIORNO_NUM, "num": N}],
+  "spiroSlots": [{"key": GIORNO_NUM, "num": N}],
+  "plsSlots": [{"key": GIORNO_NUM, "num": N}],
+  "ferie": false
+}
+Ometti array vuoti. Se ferie=false omettilo.
+
+MESSAGGIO DA ANALIZZARE:
+"""
+${msg}
+"""`;
+
+  const resp = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.1, maxOutputTokens: 1024 }
+      })
+    }
+  );
+
+  const data = await resp.json();
+  if (data.error) throw new Error(data.error.message || 'Errore API Gemini');
+  if (!data.candidates || !data.candidates[0]) throw new Error('Nessuna risposta da Gemini');
+
+  let text = data.candidates[0].content.parts[0].text;
+  // Strip markdown code fences
+  text = text.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim();
+
+  const parsed = JSON.parse(text);
+
+  // Normalizza al formato interno dell'app
+  const result = {
+    slots:       (parsed.slots || []).map(s => ({ key: String(s.key), type: s.type || 'disponibile' })),
+    holterSlots: (parsed.holterSlots || []).map(s => ({ key: String(s.key) })),
+    hcSlots:     (parsed.hcSlots || []).map(s => ({ key: Number(s.key), ...(s.num != null ? { num: s.num } : { val: 'x' }) })),
+    hpSlots:     (parsed.hpSlots || []).map(s => ({ key: Number(s.key), ...(s.num != null ? { num: s.num } : { val: 'x' }) })),
+    spiroSlots:  (parsed.spiroSlots || []).map(s => ({ key: Number(s.key), ...(s.num != null ? { num: s.num } : { val: 'x' }) })),
+    plsSlots:    (parsed.plsSlots || []).map(s => ({ key: Number(s.key), ...(s.num != null ? { num: s.num } : { val: 'x' }) })),
+    ferie:       parsed.ferie || false
+  };
+
+  return result;
+}
+
+// ── Pipeline comune: filtri medico + auto-populate consuntivo ──
+function _applyDoctorFilters(docSel, msg) {
   // Se il cardiologo non è in tabella turni (tipo 'nessuno'), non proporre turni
   const _docTipo = state.doctorTypes[docSel] || 'completo';
   if (_docTipo === 'nessuno') {
@@ -2652,7 +2756,6 @@ function parseWaMessage() {
   }
 
   // Filtra i slot consuntivo: mantieni solo le tabelle in cui il medico è specialista
-  // (se non è in nessuna lista, lascia tutto — potrebbe essere una nuova configurazione)
   const _hcList    = getHcDoctorsList();
   const _hpList    = getHpDoctorsList();
   const _spiroList = getSpiroDoctorsList();
@@ -2667,27 +2770,21 @@ function parseWaMessage() {
   }
 
   // ── Auto-populate consuntivo per medici single-type senza keyword esplicita
-  // Se il medico fa solo UN tipo di consuntivo (es. solo PLS) e non ha usato
-  // keyword "per le pls/spiro/psg", popola automaticamente dai giorni rilevati.
   {
     const _numConsTypes = [_hcList,_hpList,_spiroList,_plsList].filter(l => l.includes(docSel)).length;
     const _noConsParsed = ['hcSlots','hpSlots','spiroSlots','plsSlots'].every(k => (pendingWaResult[k]||[]).length === 0);
     if (_inAnyList && _numConsTypes >= 1 && _noConsParsed) {
-      // Raccogli i giorni dai turni rilevati
       const _autoDays = new Set();
       pendingWaResult.slots.forEach(s => _autoDays.add(parseInt(s.key.split('_')[0], 10)));
-      // Aggiunge i giorni riconosciuti anche dal testo raw (per medici solo consuntivo)
       const _origLow = msg.toLowerCase().replace(/[''`´]/g,"'");
       const _normLow = normalizeMsg(_origLow);
       DAY_MAP.forEach(([name, idx]) => {
         if (idx < 6 && _normLow.includes(name)) _autoDays.add(idx);
       });
-      // Se "completa" / "tutti i giorni" / "tutta la settimana" → usa tutti e 6
       if (/complet|tutti\s+i\s+gg|tutti\s+i\s+giorni|tutta\s+la\s+settimana|ogni\s+giorno/.test(_origLow)) {
         for (let _i = 0; _i < 7; _i++) _autoDays.add(_i);
       }
-      // Numero dal messaggio (0 se non specificato)
-      const _autoNum = extractConsuntivoNum(_origLow);  // null se nessun numero
+      const _autoNum = extractConsuntivoNum(_origLow);
       if (_autoDays.size > 0) {
         const _sortedDays = [..._autoDays].sort((a,b)=>a-b);
         const _mkSlot = di => _autoNum != null ? {key:di,num:_autoNum} : {key:di,val:'x'};
@@ -2698,8 +2795,58 @@ function parseWaMessage() {
       }
     }
   }
+}
+
+// ── Parser REGEX (veloce, offline) ──
+function parseWaMessage() {
+  const docSel = document.getElementById('wa-doctor-select').value;
+  const msg = document.getElementById('wa-msg-input').value.trim();
+  if (!docSel || !msg) { showToast('Seleziona medico e inserisci messaggio', 'danger'); return; }
+
+  pendingWaResult = interpretMessage(msg);
+  pendingWaDoctor = docSel;
+  pendingWaMsg    = msg;
+  _pendingSource  = 'regex';
+  _applyDoctorFilters(docSel, msg);
+
+  // Se il regex non ha trovato nulla, suggerisci AI
+  const _totalSlots = pendingWaResult.slots.length +
+    (pendingWaResult.holterSlots||[]).length +
+    ['hcSlots','hpSlots','spiroSlots','plsSlots'].reduce((n,k) => n + (pendingWaResult[k]||[]).length, 0);
 
   renderPendingResult();
+
+  if (_totalSlots === 0 && !pendingWaResult.ferie) {
+    // Auto-trigger AI se regex non trova nulla
+    parseWaMessageAI();
+  }
+}
+
+// ── Parser AI (Gemini) ──
+async function parseWaMessageAI() {
+  const docSel = document.getElementById('wa-doctor-select').value;
+  const msg = document.getElementById('wa-msg-input').value.trim();
+  if (!docSel || !msg) { showToast('Seleziona medico e inserisci messaggio', 'danger'); return; }
+
+  const el = document.getElementById('wa-parse-result');
+  const _btnAI = document.getElementById('btn-ai-parse');
+  if (_btnAI) { _btnAI.disabled = true; _btnAI.innerHTML = '🤖 Analisi AI in corso...'; }
+  el.innerHTML = '<div style="padding:12px;color:var(--accent2);font-size:13px;">🤖 Analisi AI in corso<span class="ai-dots">...</span></div>';
+
+  try {
+    const aiResult = await aiParseMessage(msg);
+    pendingWaResult = aiResult;
+    pendingWaDoctor = docSel;
+    pendingWaMsg    = msg;
+    _pendingSource  = 'ai';
+    _applyDoctorFilters(docSel, msg);
+    renderPendingResult();
+  } catch (e) {
+    console.error('AI Parser error:', e);
+    el.innerHTML = `<div style="padding:8px;color:#ef4444;font-size:12px;">⚠️ Errore AI: ${e.message}<br><small>Il parser regex è ancora disponibile.</small></div>`;
+  } finally {
+    if (_btnAI) { _btnAI.disabled = false; _btnAI.innerHTML = '🤖 AI'; }
+  }
 }
 
 function renderPendingResult() {
@@ -2724,8 +2871,11 @@ function renderPendingResult() {
     return;
   }
 
+  const _srcBadge = _pendingSource === 'ai'
+    ? '<span style="background:linear-gradient(135deg,#6366f1,#a855f7);color:#fff;font-size:9px;padding:2px 6px;border-radius:4px;margin-left:6px;">🤖 AI</span>'
+    : '<span style="background:#334155;color:#94a3b8;font-size:9px;padding:2px 6px;border-radius:4px;margin-left:6px;">⚡ Regex</span>';
   let html = `<div style="margin-bottom:6px;font-size:11px;color:var(--muted);">
-    Slot rilevati per <strong style="color:var(--accent2);">${pendingWaDoctor}</strong> — clicca <strong>✕</strong> su quelli errati per rimuoverli:
+    Slot rilevati per <strong style="color:var(--accent2);">${pendingWaDoctor}</strong>${_srcBadge} — clicca <strong>✕</strong> su quelli errati:
   </div><div class="wa-parse-badge" id="pending-badges">`;
 
   const _totalConsAll = ['hcSlots','hpSlots','spiroSlots','plsSlots'].reduce((n,k)=>n+(result[k]||[]).length,0);
@@ -2846,6 +2996,7 @@ function cancelPendingResult() {
   pendingWaResult = null;
   pendingWaDoctor = null;
   pendingWaMsg    = null;
+  _pendingSource  = 'regex';
   document.getElementById('wa-parse-result').innerHTML = '';
 }
 
