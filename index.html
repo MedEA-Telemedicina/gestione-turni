@@ -46,16 +46,16 @@
   }
   [data-theme="dark"] .conf-item { background: var(--surface); }
   [data-theme="dark"] header {
-    background: #ffffff !important;
-    border-bottom-color: #e2e8f0 !important;
+    background: #1e293b !important;
+    border-bottom-color: #334155 !important;
   }
-  [data-theme="dark"] header h1 { color: #6366f1 !important; }
-  [data-theme="dark"] header .week-display { color: #64748b !important; }
-  [data-theme="dark"] header .week-display strong { color: #6366f1 !important; }
-  [data-theme="dark"] header button { color: #334155 !important; }
+  [data-theme="dark"] header h1 { color: #818cf8 !important; }
+  [data-theme="dark"] header .week-display { color: #94a3b8 !important; }
+  [data-theme="dark"] header .week-display strong { color: #818cf8 !important; }
+  [data-theme="dark"] header button { color: #e2e8f0 !important; }
   [data-theme="dark"] header #save-indicator { color: #94a3b8 !important; }
-  [data-theme="dark"] header #online-indicator { color: #64748b !important; }
-  [data-theme="dark"] header #online-count { color: #64748b !important; }
+  [data-theme="dark"] header #online-indicator { color: #94a3b8 !important; }
+  [data-theme="dark"] header #online-count { color: #94a3b8 !important; }
   [data-theme="dark"] .tabs {
     background: #1e293b !important;
     border-bottom-color: #334155 !important;
@@ -63,20 +63,20 @@
   [data-theme="dark"] .tabs .tab-btn { color: #94a3b8 !important; }
   [data-theme="dark"] .tabs .tab-btn:hover { color: #e2e8f0 !important; }
   [data-theme="dark"] .tabs .tab-btn.active { color: #818cf8 !important; border-bottom-color: #818cf8 !important; }
-  [data-theme="dark"] header #user-info { color: #64748b !important; }
-  [data-theme="dark"] header #user-info span { color: #64748b !important; }
+  [data-theme="dark"] header #user-info { color: #94a3b8 !important; }
+  [data-theme="dark"] header #user-info span { color: #94a3b8 !important; }
   [data-theme="dark"] header #user-info button {
-    color: #dc2626 !important;
-    border: 1px solid #fecaca !important;
-    background: #fff5f5 !important;
+    color: #f87171 !important;
+    border: 1px solid #7f1d1d !important;
+    background: #450a0a !important;
     font-weight: 600 !important;
   }
   [data-theme="dark"] header #user-info button:hover {
-    background: #fee2e2 !important;
+    background: #7f1d1d !important;
   }
   [data-theme="dark"] header #theme-toggle {
-    border-color: #e2e8f0 !important;
-    background: #f8fafc !important;
+    border-color: #334155 !important;
+    background: #0f172a !important;
   }
   [data-theme="dark"] table th,
   [data-theme="dark"] table td { border-color: var(--border) !important; }
@@ -88,9 +88,24 @@
     background: #312e81 !important;
     color: #c7d2fe !important;
   }
-  [data-theme="dark"] .disp-table td.name-cell {
+  [data-theme="dark"] .disp-table td.name-cell:not(.styled-name) {
     background: #1e293b !important;
     color: #e2e8f0 !important;
+  }
+  [data-theme="dark"] .disp-table td.name-cell.ferie-name {
+    background: rgba(248,113,113,0.25) !important;
+    color: #f87171 !important;
+    border-left-color: #f87171 !important;
+  }
+  [data-theme="dark"] .disp-table td.name-cell.confirmed-name {
+    background: rgba(5,150,105,0.25) !important;
+    color: #34d399 !important;
+    border-left-color: #34d399 !important;
+  }
+  [data-theme="dark"] .disp-table td.name-cell.avail-name {
+    background: rgba(37,99,235,0.2) !important;
+    color: #818cf8 !important;
+    border-left-color: #818cf8 !important;
   }
   [data-theme="dark"] #holter-table th.day-header { background: #3730a3 !important; color: #c7d2fe !important; }
   [data-theme="dark"] #hc-table th.day-header { background: #155e75 !important; color: #a5f3fc !important; }
@@ -1824,7 +1839,8 @@ function renderTable() {
                    : tipo === 'completo+ecg100' ? ' <span style="color:#43a047;font-size:10px;font-weight:700;">(+100)</span>'
                    : '';
     bodyHtml += `<tr data-doc="${doc}">`;
-    bodyHtml += `<td class="name-cell" style="background:${nameBg};color:${nameColor};border-left:${nameBorder};font-weight:600;">${doc}${ecgBadge}</td>`;
+    const nameStatusCls = dd.ferie ? ' ferie-name styled-name' : nConf >= 1 ? ' confirmed-name styled-name' : nDisp >= 1 ? ' avail-name styled-name' : '';
+    bodyHtml += `<td class="name-cell${nameStatusCls}" style="background:${nameBg};color:${nameColor};border-left:${nameBorder};font-weight:600;">${doc}${ecgBadge}</td>`;
     DAYS.forEach((day, di) => {
       SLOTS.forEach((slot, si) => {
         const key = `${di}_${si}`;
@@ -1884,7 +1900,11 @@ function cycleSlot(doc, key) {
   const newVal = states[(idx + 1) % states.length];
   dd.slots[key] = newVal;
   const LABELS = {'': 'vuoto', 'disponibile': 'X', 'solo-ecg': 'Y', 'confermato': 'C', 'confermato-ecg': 'CY'};
-  logSlotChange('Ambulatorio', doc, key, LABELS[newVal] || newVal);
+  const _dayL = ['lunedì','martedì','mercoledì','giovedì','venerdì','sabato','domenica'];
+  const _slotL = ['mattina','pomeriggio'];
+  const _kp = key.split('_');
+  const _humanSlot = (_dayL[_kp[0]] || _kp[0]) + ' (' + (_slotL[_kp[1]] || _kp[1]) + ')';
+  logSlotChange('Ambulatorio', doc, _humanSlot, LABELS[newVal] || newVal);
   renderTable();
   renderStats();
   autoSave();
@@ -1994,8 +2014,9 @@ function renderHolterTable() {
     } else {
       nameBg = 'var(--surface2)'; nameColor = 'var(--text)'; nameBorder = '3px solid transparent';
     }
+    const nameStatusCls = dd.ferie ? ' ferie-name styled-name' : nConf >= 1 ? ' confirmed-name styled-name' : nDisp >= 1 ? ' avail-name styled-name' : '';
     bodyHtml += `<tr>`;
-    bodyHtml += `<td class="name-cell" style="background:${nameBg};color:${nameColor};border-left:${nameBorder};font-weight:600;">${doc}</td>`;
+    bodyHtml += `<td class="name-cell${nameStatusCls}" style="background:${nameBg};color:${nameColor};border-left:${nameBorder};font-weight:600;">${doc}</td>`;
     HOLTER_DAYS.forEach((day, di) => {
       const val = dd.slots[di] || '';
       const lbl = SLOT_LABELS_H[val] || '—';
@@ -2118,8 +2139,9 @@ function renderHcTable() {
     } else {
       nameBg = 'var(--surface2)'; nameColor = 'var(--text)'; nameBorder = '3px solid transparent';
     }
+    const nameStatusCls = dd.ferie ? ' ferie-name styled-name' : nConf >= 1 ? ' confirmed-name styled-name' : nDisp >= 1 ? ' avail-name styled-name' : '';
     bodyHtml += `<tr>`;
-    bodyHtml += `<td class="name-cell" style="background:${nameBg};color:${nameColor};border-left:${nameBorder};font-weight:600;">${displayName}</td>`;
+    bodyHtml += `<td class="name-cell${nameStatusCls}" style="background:${nameBg};color:${nameColor};border-left:${nameBorder};font-weight:600;">${displayName}</td>`;
     CONS_DAYS.forEach((day, di) => {
       const s = dd.slots[di];
       let cellStyle, lbl;
@@ -2251,8 +2273,9 @@ function renderHpTable() {
     } else {
       nameBg = 'var(--surface2)'; nameColor = 'var(--text)'; nameBorder = '3px solid transparent';
     }
+    const nameStatusCls = dd.ferie ? ' ferie-name styled-name' : nConf >= 1 ? ' confirmed-name styled-name' : nDisp >= 1 ? ' avail-name styled-name' : '';
     bodyHtml += `<tr>`;
-    bodyHtml += `<td class="name-cell" style="background:${nameBg};color:${nameColor};border-left:${nameBorder};font-weight:600;">${displayName}</td>`;
+    bodyHtml += `<td class="name-cell${nameStatusCls}" style="background:${nameBg};color:${nameColor};border-left:${nameBorder};font-weight:600;">${displayName}</td>`;
     CONS_DAYS.forEach((day, di) => {
       const s = dd.slots[di];
       let cellStyle, lbl;
@@ -2386,8 +2409,9 @@ function renderSpiroTable() {
     } else {
       nameBg = 'var(--surface2)'; nameColor = 'var(--text)'; nameBorder = '3px solid transparent';
     }
+    const nameStatusCls = dd.ferie ? ' ferie-name styled-name' : nConf >= 1 ? ' confirmed-name styled-name' : '';
     bodyHtml += `<tr>`;
-    bodyHtml += `<td class="name-cell" style="background:${nameBg};color:${nameColor};border-left:${nameBorder};font-weight:600;">${displayName}</td>`;
+    bodyHtml += `<td class="name-cell${nameStatusCls}" style="background:${nameBg};color:${nameColor};border-left:${nameBorder};font-weight:600;">${displayName}</td>`;
     CONS_DAYS.forEach((day, di) => {
       const s = dd.slots[di];
       let cellStyle, lbl;
@@ -2518,8 +2542,9 @@ function renderPlsTable() {
     } else {
       nameBg = 'var(--surface2)'; nameColor = 'var(--text)'; nameBorder = '3px solid transparent';
     }
+    const nameStatusCls = dd.ferie ? ' ferie-name styled-name' : nConf >= 1 ? ' confirmed-name styled-name' : '';
     bodyHtml += `<tr>`;
-    bodyHtml += `<td class="name-cell" style="background:${nameBg};color:${nameColor};border-left:${nameBorder};font-weight:600;">${displayName}</td>`;
+    bodyHtml += `<td class="name-cell${nameStatusCls}" style="background:${nameBg};color:${nameColor};border-left:${nameBorder};font-weight:600;">${displayName}</td>`;
     CONS_DAYS.forEach((day, di) => {
       const s = dd.slots[di];
       let cellStyle, lbl;
@@ -4718,8 +4743,18 @@ function flushSlotAudit() {
   _slotAuditBuffer = {};
   _slotAuditTimer = null;
   Object.values(buf).forEach(entry => {
-    const changeStr = entry.changes.join(', ');
-    logAudit('Modificata disponibilità ' + entry.table + ' di ' + entry.doc + ': ' + changeStr);
+    if (entry.table === 'Ambulatorio') {
+      // Log each Ambulatorio change as a separate, human-readable entry
+      entry.changes.forEach(ch => {
+        const idx = ch.indexOf('→');
+        const slot = idx >= 0 ? ch.substring(0, idx) : ch;
+        const val  = idx >= 0 ? ch.substring(idx + 1) : 'vuoto';
+        logAudit('Modificata disponibilità di ' + entry.doc + ' per ' + slot + ' in ' + val);
+      });
+    } else {
+      const changeStr = entry.changes.join(', ');
+      logAudit('Modificata disponibilità ' + entry.table + ' di ' + entry.doc + ': ' + changeStr);
+    }
   });
 }
 
@@ -4729,9 +4764,26 @@ function logAudit(action) {
     user: currentUser.username,
     fullName: currentUser.fullName || currentUser.username,
     action: action,
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    weekRef: currentWeek || ''
   };
   firebase.database().ref('cardio_audit').push(entry);
+}
+
+// Format week reference as compact label, e.g. "Sett. 31 Mar – 4 Apr 2025"
+function formatWeekLabel(weekStr) {
+  if (!weekStr) return '';
+  try {
+    const mon = parseLocalDate(weekStr);
+    const fri = new Date(mon); fri.setDate(fri.getDate() + 4);
+    const MESI = ['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
+    const d1 = mon.getDate(), m1 = MESI[mon.getMonth()];
+    const d2 = fri.getDate(), m2 = MESI[fri.getMonth()], y2 = fri.getFullYear();
+    if (mon.getMonth() === fri.getMonth()) {
+      return `Sett. ${d1}–${d2} ${m2} ${y2}`;
+    }
+    return `Sett. ${d1} ${m1} – ${d2} ${m2} ${y2}`;
+  } catch(e) { return ''; }
 }
 
 function getAuditIcon(action) {
@@ -4779,11 +4831,13 @@ function loadAuditLog() {
       const icon = getAuditIcon(e.action || '');
       const user = e.fullName || e.user || 'sistema';
       const action = e.action || '—';
+      const weekBadge = e.weekRef ? `<span style="background:var(--accent);color:#fff;font-size:10px;font-weight:600;padding:2px 7px;border-radius:8px;white-space:nowrap;flex-shrink:0;">${formatWeekLabel(e.weekRef)}</span>` : '';
       return `<div style="padding:8px 12px;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
         <span style="font-size:16px;flex-shrink:0;">${icon}</span>
         <span style="color:var(--muted);min-width:140px;font-size:11px;font-family:var(--font-mono);flex-shrink:0;">${ts}</span>
         <span style="color:var(--accent);min-width:100px;font-weight:600;font-size:12px;flex-shrink:0;">${user}</span>
         <span style="font-size:12px;flex:1;min-width:200px;">${action}</span>
+        ${weekBadge}
       </div>`;
     }).join('');
   }, err => {
