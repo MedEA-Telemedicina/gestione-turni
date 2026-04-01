@@ -5220,21 +5220,36 @@ function runAllTests() {
 // ONLINE PRESENCE
 // =============================================
 let _presenceRef = null;
+let _connectedRef = null;
+let _heartbeatInterval = null;
 
 function initPresence() {
   if (!currentUser) return;
-  const uid = currentUser.username;
+  // Clean up any previous presence first
+  removePresence();
+  // IMPORTANT: encode username with fbKey() — dots are not allowed in Firebase keys
+  const uid = fbKey(currentUser.username);
   _presenceRef = firebase.database().ref('cardio_presence/' + uid);
-  // Set online status with user info
-  _presenceRef.set({
-    fullName: currentUser.fullName || uid,
+  const presenceData = {
+    fullName: currentUser.fullName || currentUser.username,
     role: currentUser.role || 'user',
     lastSeen: firebase.database.ServerValue.TIMESTAMP
+  };
+  // Use .info/connected to handle connection drops and reconnections properly.
+  // Without this, if the connection drops and reconnects, onDisconnect fires
+  // and removes presence but it is never re-established.
+  _connectedRef = firebase.database().ref('.info/connected');
+  _connectedRef.on('value', (snap) => {
+    if (snap.val() === true && _presenceRef && currentUser) {
+      // FIRST register onDisconnect (before set) to avoid race conditions
+      _presenceRef.onDisconnect().remove().then(() => {
+        // THEN set the presence data
+        _presenceRef.set(presenceData);
+      });
+    }
   });
-  // Remove on disconnect
-  _presenceRef.onDisconnect().remove();
-  // Also update lastSeen periodically (heartbeat every 60s)
-  setInterval(() => {
+  // Heartbeat every 60s to keep lastSeen fresh (used for stale cleanup)
+  _heartbeatInterval = setInterval(() => {
     if (_presenceRef && currentUser) {
       _presenceRef.update({ lastSeen: firebase.database.ServerValue.TIMESTAMP });
     }
@@ -5242,7 +5257,16 @@ function initPresence() {
 }
 
 function removePresence() {
+  if (_connectedRef) {
+    _connectedRef.off('value');
+    _connectedRef = null;
+  }
+  if (_heartbeatInterval) {
+    clearInterval(_heartbeatInterval);
+    _heartbeatInterval = null;
+  }
   if (_presenceRef) {
+    _presenceRef.onDisconnect().cancel();
     _presenceRef.remove();
     _presenceRef = null;
   }
@@ -5251,11 +5275,22 @@ function removePresence() {
 function listenOnlineUsers() {
   firebase.database().ref('cardio_presence').on('value', snap => {
     const users = snap.val() || {};
-    const onlineList = Object.entries(users).map(([uid, data]) => ({
-      username: uid,
-      fullName: data.fullName || uid,
-      role: data.role || 'user'
-    }));
+    const now = Date.now();
+    const STALE_MS = 3 * 60 * 1000; // 3 minutes — no heartbeat = stale
+    const onlineList = Object.entries(users)
+      .filter(([uid, data]) => {
+        // Remove ghost entries whose heartbeat stopped (e.g. onDisconnect failed)
+        if (data.lastSeen && (now - data.lastSeen) > STALE_MS) {
+          firebase.database().ref('cardio_presence/' + uid).remove();
+          return false;
+        }
+        return true;
+      })
+      .map(([uid, data]) => ({
+        username: fbKeyDecode(uid),
+        fullName: data.fullName || fbKeyDecode(uid),
+        role: data.role || 'user'
+      }));
     // Update counter
     const countEl = document.getElementById('online-count');
     if (countEl) {
@@ -5293,6 +5328,21 @@ document.addEventListener('click', (e) => {
   const panel = document.getElementById('online-panel');
   if (panel && indicator && !indicator.contains(e.target)) {
     panel.style.display = 'none';
+  }
+});
+
+// Clean up presence when the user closes/refreshes the page
+window.addEventListener('beforeunload', () => {
+  if (_presenceRef) {
+    // Use sendBeacon-style sync removal (onDisconnect handles async)
+    _presenceRef.remove();
+  }
+});
+
+// Handle visibility change — update heartbeat when tab comes back
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && _presenceRef && currentUser) {
+    _presenceRef.update({ lastSeen: firebase.database.ServerValue.TIMESTAMP });
   }
 });
 
