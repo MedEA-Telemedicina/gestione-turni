@@ -3152,12 +3152,33 @@ let pendingWaMsg    = null;
 let _pendingSource  = 'regex'; // 'regex' o 'ai'
 
 // =============================================
-// AI PARSER — Gemini (fallback intelligente)
+// AI PARSER — Firebase AI Logic (nessuna API key esposta)
 // =============================================
-const GEMINI_API_KEY = 'AIzaSyAvFamkcqGRqo49GfJFAsPBbC5S_7CF5J4';
-const GEMINI_MODEL   = 'gemini-2.5-flash-lite';
+// Il SDK Firebase AI viene caricato solo quando serve (lazy loading)
+// Nessuna chiave Gemini nel codice — Firebase gestisce tutto internamente
+let _firebaseAIModel = null;
+
+async function _getFirebaseAIModel() {
+  if (_firebaseAIModel) return _firebaseAIModel;
+  const { initializeApp } = await import('https://www.gstatic.com/firebasejs/12.11.0/firebase-app.js');
+  const { getAI, getGenerativeModel, GoogleAIBackend } = await import('https://www.gstatic.com/firebasejs/12.11.0/firebase-ai.js');
+  const aiApp = initializeApp({
+    apiKey: firebaseConfig.apiKey,
+    authDomain: firebaseConfig.authDomain,
+    projectId: firebaseConfig.projectId,
+    appId: firebaseConfig.appId
+  }, 'gemini-ai');
+  const ai = getAI(aiApp, { backend: new GoogleAIBackend() });
+  _firebaseAIModel = getGenerativeModel(ai, {
+    model: 'gemini-2.5-flash-lite',
+    generationConfig: { temperature: 0.1, maxOutputTokens: 1024 }
+  });
+  return _firebaseAIModel;
+}
 
 async function aiParseMessage(msg) {
+  const model = await _getFirebaseAIModel();
+
   const monday = currentWeek;
   const dayNames = ['Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato','Domenica'];
   const dates = [];
@@ -3215,23 +3236,8 @@ MESSAGGIO DA ANALIZZARE:
 ${msg}
 """`;
 
-  const resp = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.1, maxOutputTokens: 1024 }
-      })
-    }
-  );
-
-  const data = await resp.json();
-  if (data.error) throw new Error(data.error.message || 'Errore API Gemini');
-  if (!data.candidates || !data.candidates[0]) throw new Error('Nessuna risposta da Gemini');
-
-  let text = data.candidates[0].content.parts[0].text;
+  const aiResponse = await model.generateContent(prompt);
+  let text = aiResponse.response.text();
   // Strip markdown code fences
   text = text.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim();
 
