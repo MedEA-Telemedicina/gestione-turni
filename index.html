@@ -24,6 +24,41 @@
     --font-display: 'Syne', sans-serif;
     --font-mono: 'DM Mono', monospace;
   }
+  [data-theme="dark"] {
+    --bg: #111827;
+    --surface: #1f2937;
+    --surface2: #374151;
+    --border: #4b5563;
+    --accent: #60a5fa;
+    --accent2: #a78bfa;
+    --success: #34d399;
+    --warn: #fbbf24;
+    --danger: #f87171;
+    --text: #f3f4f6;
+    --muted: #9ca3af;
+  }
+  [data-theme="dark"] input,
+  [data-theme="dark"] select,
+  [data-theme="dark"] textarea {
+    background: var(--surface2);
+    color: var(--text);
+    border-color: var(--border);
+  }
+  [data-theme="dark"] .conf-item { background: var(--surface); }
+  [data-theme="dark"] header {
+    background: #ffffff !important;
+    border-bottom-color: #e2e8f0 !important;
+  }
+  [data-theme="dark"] header h1 { color: #6366f1 !important; }
+  [data-theme="dark"] header .week-display { color: #64748b !important; }
+  [data-theme="dark"] header .week-display strong { color: #6366f1 !important; }
+  [data-theme="dark"] header button { color: #334155 !important; }
+  [data-theme="dark"] header #save-indicator { color: #94a3b8 !important; }
+  [data-theme="dark"] header #online-indicator { color: #64748b !important; }
+  [data-theme="dark"] header #online-count { color: #64748b !important; }
+  [data-theme="dark"] table th,
+  [data-theme="dark"] table td { border-color: var(--border) !important; }
+  [data-theme="dark"] .card { background: var(--surface); }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -353,6 +388,11 @@
   }
   .toast.show { opacity: 1; transform: translateY(0); }
 
+  @keyframes pulse-online {
+    0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(34,197,94,0.5); }
+    50% { opacity: 0.8; box-shadow: 0 0 0 4px rgba(34,197,94,0); }
+  }
+
   .input-add {
     display: flex;
     gap: 8px;
@@ -484,11 +524,24 @@
 
 <header>
   <h1 style="display:flex;flex-direction:column;align-items:flex-start;"><img src="data:image/png;base64,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" style="height:28px;width:auto;display:inline-block;margin-bottom:4px;" alt="Medea Logo"><span style="font-size:0.72rem;font-weight:400;color:#2563eb;font-family:'Syne',sans-serif;">Disponibilità medici</span></h1>
-  <div style="display:flex;align-items:center;gap:16px;">
+  <div style="display:flex;align-items:center;gap:12px;">
     <div class="week-display">
       Settimana: <strong id="hdr-week">—</strong>
     </div>
     <div id="save-indicator" style="font-size:11px;color:var(--muted);">💾 —</div>
+    <div id="online-indicator" style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);cursor:pointer;position:relative;" onclick="toggleOnlinePanel()" title="Utenti online">
+      <span style="width:8px;height:8px;border-radius:50%;background:#22c55e;display:inline-block;animation:pulse-online 2s infinite;"></span>
+      <span id="online-count">0 online</span>
+      <div id="online-panel" style="display:none;position:absolute;top:100%;right:0;margin-top:8px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 14px;min-width:180px;box-shadow:0 6px 24px rgba(0,0,0,0.15);z-index:200;">
+        <div style="font-size:10px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">👥 Utenti Online</div>
+        <div id="online-users-list" style="font-size:12px;color:var(--text);"></div>
+      </div>
+    </div>
+    <button id="theme-toggle" onclick="toggleTheme()" title="Tema chiaro/scuro" style="background:none;border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:16px;padding:4px 8px;line-height:1;">🌙</button>
+    <div id="user-info" style="display:none;font-size:11px;color:var(--muted);align-items:center;gap:6px;">
+      <span id="user-display"></span>
+      <button onclick="doLogout()" class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 8px;">Esci</button>
+    </div>
   </div>
 </header>
 
@@ -498,8 +551,8 @@
   <button class="tab-btn" onclick="switchTab('conferma')">✅ Messaggi Conferma</button>
   <button class="tab-btn" onclick="switchTab('riepilogo')">📊 Riepilogo Disponibilità</button>
   <button class="tab-btn" onclick="switchTab('calendar')">📅 Calendar</button>
-  <button class="tab-btn" onclick="switchTab('impostazioni')">⚙️ Impostazioni</button>
-  <button class="tab-btn" onclick="switchTab('test')">🧪 Test Parser</button>
+  <button class="tab-btn admin-only" onclick="switchTab('impostazioni')">⚙️ Impostazioni</button>
+  <button class="tab-btn admin-only" onclick="switchTab('test')">🧪 Test Parser</button>
 </div>
 
 <main>
@@ -696,7 +749,7 @@
   <div id="calendar-content"></div>
 </div>
 
-<div class="tab-content" id="tab-impostazioni">
+<div class="tab-content admin-only" id="tab-impostazioni">
   <div style="display:flex;flex-direction:column;gap:16px;max-width:900px;margin:0 auto;">
 
     <!-- GESTIONE CARDIOLOGI -->
@@ -709,6 +762,29 @@
         <input type="text" id="settings-search" placeholder="🔍 Cerca medico..." style="flex:1;min-width:160px;" oninput="renderSettings()">
       </div>
       <div id="doctors-list" style="display:flex;flex-direction:column;gap:0;max-height:480px;overflow-y:auto;padding-right:4px;"></div>
+    </div>
+
+    <!-- GESTIONE UTENTI (admin-only) -->
+    <div class="card admin-only" id="user-mgmt-card">
+      <div class="card-title">🔐 Gestione Utenti</div>
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center;">
+        <input type="text" id="new-user-name" placeholder="Username" style="flex:1;min-width:120px;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:7px 10px;border-radius:6px;font-family:var(--font-mono);font-size:12px;" onkeydown="if(event.key==='Enter') document.getElementById('new-user-fullname').focus()">
+        <input type="text" id="new-user-fullname" placeholder="Nome completo" style="flex:1;min-width:140px;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:7px 10px;border-radius:6px;font-family:var(--font-mono);font-size:12px;" onkeydown="if(event.key==='Enter') document.getElementById('new-user-pass').focus()">
+        <input type="password" id="new-user-pass" placeholder="Password" style="flex:1;min-width:120px;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:7px 10px;border-radius:6px;font-family:var(--font-mono);font-size:12px;" onkeydown="if(event.key==='Enter') addUser()">
+        <select id="new-user-role" class="styled" style="width:100px;"><option value="user">Utente</option><option value="admin">Admin</option></select>
+        <button class="btn btn-success btn-sm" onclick="addUser()">+ Aggiungi</button>
+      </div>
+      <div id="users-list" style="display:flex;flex-direction:column;gap:0;max-height:300px;overflow-y:auto;"></div>
+    </div>
+
+    <!-- AUDIT LOG (admin-only) -->
+    <div class="card admin-only">
+      <div class="card-title">📝 Storico Modifiche</div>
+      <div style="display:flex;gap:8px;margin-bottom:8px;">
+        <button class="btn btn-ghost btn-sm" onclick="loadAuditLog()">🔄 Aggiorna</button>
+        <button class="btn btn-ghost btn-sm" onclick="clearAuditLog()">🗑 Svuota Storico</button>
+      </div>
+      <div id="audit-log" style="max-height:300px;overflow-y:auto;font-size:11px;"></div>
     </div>
 
     <!-- PREFERENZE -->
@@ -732,7 +808,7 @@
 </div>
 
 <!-- ===== TAB 6: TEST PARSER ===== -->
-<div class="tab-content" id="tab-test">
+<div class="tab-content admin-only" id="tab-test">
   <div style="max-width:900px;">
     <div class="card">
       <div class="card-title">🧪 Test Parser Messaggi WhatsApp</div>
@@ -831,6 +907,141 @@ function mergeDoctors(savedDoctors) {
   return [...FULL_DOCTORS, ...extra].sort((a, b) => a.localeCompare(b));
 }
 
+// =============================================
+// DARK MODE
+// =============================================
+function toggleTheme() {
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  const newTheme = isDark ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', newTheme);
+  localStorage.setItem('theme', newTheme);
+  document.getElementById('theme-toggle').textContent = newTheme === 'dark' ? '☀️' : '🌙';
+}
+function initTheme() {
+  const saved = localStorage.getItem('theme') || 'light';
+  document.documentElement.setAttribute('data-theme', saved);
+  const btn = document.getElementById('theme-toggle');
+  if (btn) btn.textContent = saved === 'dark' ? '☀️' : '🌙';
+}
+
+// =============================================
+// AUTH / LOGIN
+// =============================================
+let currentUser = null; // { username, role, fullName }
+
+function initAuth() {
+  const saved = sessionStorage.getItem('loggedUser');
+  if (saved) {
+    try { currentUser = JSON.parse(saved); } catch(e) { currentUser = null; }
+  }
+  if (!currentUser) {
+    showLoginScreen();
+  } else {
+    onLoginSuccess();
+  }
+}
+
+function showLoginScreen() {
+  let overlay = document.getElementById('login-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'login-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;';
+    overlay.innerHTML = `
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:32px;max-width:360px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.15);">
+        <div style="text-align:center;margin-bottom:24px;">
+          <div style="font-size:40px;margin-bottom:8px;">🏥</div>
+          <h2 style="font-family:var(--font-display);font-size:20px;color:var(--accent);margin-bottom:4px;">Gestione Turni</h2>
+          <p style="color:var(--muted);font-size:11px;">Accedi per continuare</p>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:12px;">
+          <input type="text" id="login-user" placeholder="Username" style="padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface2);color:var(--text);"
+            onkeydown="if(event.key==='Enter') document.getElementById('login-pass').focus()">
+          <input type="password" id="login-pass" placeholder="Password" style="padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface2);color:var(--text);"
+            onkeydown="if(event.key==='Enter') doLogin()">
+          <button onclick="doLogin()" class="btn btn-primary" style="padding:10px;font-size:13px;font-weight:700;">Accedi</button>
+          <div id="login-error" style="color:var(--danger);font-size:11px;text-align:center;display:none;"></div>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+  }
+  overlay.style.display = 'flex';
+  setTimeout(() => { const u = document.getElementById('login-user'); if (u) u.focus(); }, 100);
+}
+
+function doLogin() {
+  const username = (document.getElementById('login-user').value || '').trim().toLowerCase();
+  const password = document.getElementById('login-pass').value || '';
+  const errEl = document.getElementById('login-error');
+  if (!username || !password) {
+    errEl.textContent = 'Inserisci username e password';
+    errEl.style.display = 'block';
+    return;
+  }
+  // Check against Firebase users
+  const dbRef = firebase.database().ref('cardio_users/' + username);
+  dbRef.once('value').then(snap => {
+    const user = snap.val();
+    if (!user) {
+      errEl.textContent = 'Utente non trovato';
+      errEl.style.display = 'block';
+      return;
+    }
+    if (user.password !== password) {
+      errEl.textContent = 'Password errata';
+      errEl.style.display = 'block';
+      return;
+    }
+    currentUser = { username: username, role: user.role || 'user', fullName: user.fullName || username };
+    sessionStorage.setItem('loggedUser', JSON.stringify(currentUser));
+    onLoginSuccess();
+  }).catch(err => {
+    errEl.textContent = 'Errore di connessione';
+    errEl.style.display = 'block';
+  });
+}
+
+function onLoginSuccess() {
+  const overlay = document.getElementById('login-overlay');
+  if (overlay) overlay.style.display = 'none';
+  const userInfo = document.getElementById('user-info');
+  if (userInfo) {
+    userInfo.style.display = 'flex';
+    document.getElementById('user-display').textContent = '👤 ' + (currentUser.fullName || currentUser.username) + (currentUser.role === 'admin' ? ' ⭐' : '');
+  }
+  // Show/hide admin-only elements
+  document.querySelectorAll('.admin-only').forEach(el => {
+    el.style.display = currentUser.role === 'admin' ? '' : 'none';
+  });
+  // Attiva presenza online
+  initPresence();
+  listenOnlineUsers();
+}
+
+function doLogout() {
+  removePresence();
+  currentUser = null;
+  sessionStorage.removeItem('loggedUser');
+  showLoginScreen();
+  const userInfo = document.getElementById('user-info');
+  if (userInfo) userInfo.style.display = 'none';
+}
+
+// Create default admin if no users exist
+function ensureDefaultAdmin() {
+  const ref = firebase.database().ref('cardio_users');
+  ref.once('value').then(snap => {
+    if (!snap.exists() || !snap.val()) {
+      ref.child('admin').set({
+        password: 'admin',
+        role: 'admin',
+        fullName: 'Amministratore',
+        createdAt: new Date().toISOString()
+      });
+    }
+  });
+}
+
 let state = {
   doctors: [],
   weeks: {},
@@ -842,6 +1053,7 @@ let state = {
   spiroWeeks: {}, // { [weekKey]: { [doc]: { slots: { [di]: {num,conf}|{val:'x',conf}|null }, ferie: bool } } }
   plsWeeks: {},   // stessa struttura Polisonnografie
   doctorExtra: {}, // { [doctorName]: { hcCons, hpCons, spiro, pls } }
+  doctorPhones: {}, // { [doctorName]: phoneNumber }
   requestTemplate: "Buongiorno Dott. [NOME],\npotrebbe indicarci le sue disponibilità per la settimana del [DATA]?\nGrazie mille!",
   confirmTemplate: "Salve, per la prossima settimana Le confermiamo i seguenti turni:\n[TURNI]\nGrazie!"
 };
@@ -957,6 +1169,11 @@ function saveData(silent) {
     cloned.hpWeeks = pruneToAllowedWeeks(cloned.hpWeeks);
     cloned.spiroWeeks = pruneToAllowedWeeks(cloned.spiroWeeks);
     cloned.plsWeeks = pruneToAllowedWeeks(cloned.plsWeeks);
+    // Aggiungi info utente che ha salvato
+    if (currentUser) {
+      cloned._lastModifiedBy = currentUser.fullName || currentUser.username;
+      cloned._lastModifiedAt = new Date().toISOString();
+    }
     const stateToSave = encodeKeys(cloned);
     _isSaving = true;
     db.ref('cardio_state').set(stateToSave)
@@ -964,8 +1181,9 @@ function saveData(silent) {
         const now = new Date();
         const hh = String(now.getHours()).padStart(2,'0');
         const mm = String(now.getMinutes()).padStart(2,'0');
+        const who = currentUser ? (' da ' + (currentUser.fullName || currentUser.username)) : '';
         const el = document.getElementById('save-indicator');
-        if (el) el.textContent = `💾 Salvato ${hh}:${mm}`;
+        if (el) el.textContent = `💾 ${hh}:${mm}${who}`;
         if (!silent) showToast('✓ Salvato!');
       })
       .catch(e => {
@@ -1238,7 +1456,7 @@ function switchTab(id) {
   if (id === 'riepilogo') renderRiepilogo();
   if (id === 'calendar') renderCalendar();
   if (id === 'whatsapp') renderWaHistory();
-  if (id === 'impostazioni') renderSettings();
+  if (id === 'impostazioni') { renderSettings(); loadUsersList(); loadAuditLog(); }
   if (id === 'test') initTestTab();
 }
 
@@ -3113,6 +3331,7 @@ function applyParsedResult() {
   if (spiroSl.length > 0)  parts.push(`${spiroSl.length} Spiro`);
   if (plsSl.length > 0)    parts.push(`${plsSl.length} PLS`);
   const toastMsg = `✓ ${pendingWaDoctor}: ${parts.join(' + ')} applicati`;
+  logAudit('Applicata disponibilità WA: ' + pendingWaDoctor + ' (' + parts.join(' + ') + ')');
   showToast(toastMsg);
 
   document.getElementById('wa-parse-result').innerHTML =
@@ -3242,10 +3461,17 @@ function renderConferma() {
     html += `<div style="font-size:12px;font-weight:700;color:#16a34a;margin-bottom:6px;padding:4px 0;border-bottom:2px solid #16a34a;">✅ Cardiologi con turni confermati (${confItems.length})</div>`;
     html += confItems.map(({ doc, msg }) => {
       const idx = items.indexOf(items.find(i => i.doc === doc && !i.noConf));
+      const phone = state.doctorPhones[doc];
+      const waBtn = phone
+        ? `<button class="copy-btn" style="background:#25d366;color:#fff;border-color:#25d366;transition:all .2s;" onclick="sendWhatsApp('${phone}', window._confMsgs[${idx}], this)">📲 WhatsApp</button>`
+        : `<span style="font-size:10px;color:var(--muted);">📱 No tel.</span>`;
       return `<div class="conf-item">
         <div class="name">${doc}</div>
         <div class="msg">${msg.replace(/\n/g,'<br>')}</div>
-        <button class="copy-btn" onclick="copyText(window._confMsgs[${idx}])">Copia</button>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <button class="copy-btn" onclick="copyText(window._confMsgs[${idx}])">Copia</button>
+          ${waBtn}
+        </div>
       </div>`;
     }).join('');
   }
@@ -3254,10 +3480,17 @@ function renderConferma() {
     html += `<div style="font-size:12px;font-weight:700;color:#dc2626;margin:18px 0 6px;padding:4px 0;border-bottom:2px solid #dc2626;">⛔ Cardiologi senza conferme (${noConfItems.length})</div>`;
     html += noConfItems.map(({ doc, msg }) => {
       const idx = items.indexOf(items.find(i => i.doc === doc && i.noConf));
+      const phone = state.doctorPhones[doc];
+      const waBtn = phone
+        ? `<button class="copy-btn" style="background:#25d366;color:#fff;border-color:#25d366;transition:all .2s;" onclick="sendWhatsApp('${phone}', window._confMsgs[${idx}], this)">📲 WhatsApp</button>`
+        : `<span style="font-size:10px;color:var(--muted);">📱 No tel.</span>`;
       return `<div class="conf-item" style="border-left:3px solid #dc2626;">
         <div class="name" style="color:#dc2626;">${doc}</div>
         <div class="msg" style="color:#666;">${msg.replace(/\n/g,'<br>')}</div>
-        <button class="copy-btn" onclick="copyText(window._confMsgs[${idx}])">Copia</button>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <button class="copy-btn" onclick="copyText(window._confMsgs[${idx}])">Copia</button>
+          ${waBtn}
+        </div>
       </div>`;
     }).join('');
   }
@@ -3998,12 +4231,19 @@ function renderSettings() {
         <!-- Gruppo Extra -->
         <div style="display:flex;flex-direction:column;gap:4px;">
           <span style="font-size:9px;font-weight:700;color:#cbd5e1;text-transform:uppercase;letter-spacing:.5px;">Extra — Consuntivo</span>
-          <div style="display:flex;gap:5px;flex-wrap:wrap;">
+          <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center;">
             ${chipExtra(doc,'hcCons','HC Cons.')}
             ${chipExtra(doc,'hpCons','HP Cons.')}
             ${chipExtra(doc,'spiro','SPIRO')}
             ${chipExtra(doc,'pls','PLS')}
           </div>
+        </div>
+        <!-- Separatore -->
+        <div style="width:1px;background:var(--border);align-self:stretch;margin:0 2px;"></div>
+        <!-- Telefono -->
+        <div style="display:flex;flex-direction:column;gap:4px;">
+          <span style="font-size:9px;font-weight:700;color:#cbd5e1;text-transform:uppercase;letter-spacing:.5px;">📱 Telefono</span>
+          <input type="tel" value="${state.doctorPhones[doc] || ''}" placeholder="3xx xxx xxxx" onblur="saveDoctorPhone('${doc}', this.value)" style="width:140px;min-width:140px;font-size:11px;font-family:var(--font-mono);border:1px solid var(--border);border-radius:6px;padding:5px 8px;background:var(--surface2);color:var(--text);">
         </div>
       </div>
     </div>
@@ -4028,11 +4268,14 @@ function addDoctor() {
   renderTable();
   renderHolterTable();
   saveData();
+  logAudit('Aggiunto medico: ' + name);
   showToast(`✓ ${name} aggiunto`);
 }
 
 function removeDoctor(i) {
-  if (!confirm(`Rimuovere ${state.doctors[i]}?`)) return;
+  const docName = state.doctors[i];
+  if (!confirm(`Rimuovere ${docName}?`)) return;
+  logAudit('Rimosso medico: ' + docName);
   state.doctors.splice(i, 1);
   renderSettings();
   renderTable();
@@ -4074,6 +4317,163 @@ function saveConfirmTemplate() {
   state.confirmTemplate = document.getElementById('confirm-template').value;
   saveData();
   showToast('Template conferma salvato');
+}
+
+function saveDoctorPhone(doc, phone) {
+  const cleaned = (phone || '').trim();
+  if (cleaned) {
+    state.doctorPhones[doc] = cleaned;
+  } else {
+    delete state.doctorPhones[doc];
+  }
+  saveData(true);
+}
+
+// =============================================
+// GESTIONE UTENTI
+// =============================================
+function addUser() {
+  const usernameEl = document.getElementById('new-user-name');
+  const fullnameEl = document.getElementById('new-user-fullname');
+  const passEl = document.getElementById('new-user-pass');
+  const username = (usernameEl.value || '').trim().toLowerCase();
+  const fullName = (fullnameEl.value || '').trim();
+  const password = passEl.value || '';
+  const role = document.getElementById('new-user-role').value;
+  if (!username || !password) { showToast('Username e password obbligatori', 'danger'); return; }
+  if (!/^[a-z0-9._-]+$/.test(username)) { showToast('Username: solo lettere, numeri, punti, trattini', 'danger'); return; }
+  // Disabilita il pulsante durante la creazione
+  const addBtn = document.querySelector('#user-mgmt-card .btn-success');
+  if (addBtn) { addBtn.disabled = true; addBtn.textContent = '⏳ Creazione...'; }
+  firebase.database().ref('cardio_users/' + username).once('value').then(snap => {
+    if (snap.exists()) {
+      showToast('Username già esistente', 'danger');
+      if (addBtn) { addBtn.disabled = false; addBtn.textContent = '+ Aggiungi'; }
+      return;
+    }
+    return firebase.database().ref('cardio_users/' + username).set({
+      password: password,
+      role: role,
+      fullName: fullName || username,
+      createdAt: new Date().toISOString()
+    }).then(() => {
+      showToast('✓ Utente ' + username + ' creato');
+      usernameEl.value = '';
+      fullnameEl.value = '';
+      passEl.value = '';
+      loadUsersList();
+      logAudit('Creato utente: ' + username + ' (' + role + ')');
+    });
+  }).catch(err => {
+    console.error('Errore creazione utente:', err);
+    showToast('❌ Errore: ' + (err.message || 'impossibile creare utente'), 'danger');
+  }).finally(() => {
+    if (addBtn) { addBtn.disabled = false; addBtn.textContent = '+ Aggiungi'; }
+  });
+}
+
+function loadUsersList() {
+  firebase.database().ref('cardio_users').once('value').then(snap => {
+    const users = snap.val() || {};
+    const el = document.getElementById('users-list');
+    if (!el) return;
+    const entries = Object.entries(users).sort((a,b) => a[0].localeCompare(b[0]));
+    el.innerHTML = entries.map(([uname, u]) => `
+      <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-bottom:1px solid var(--border);font-size:12px;">
+        <span style="font-weight:700;min-width:100px;">${uname}</span>
+        <span style="color:var(--muted);flex:1;">${u.fullName || ''}</span>
+        <span style="font-size:10px;padding:2px 8px;border-radius:4px;background:${u.role==='admin'?'var(--accent)':'var(--success)'};color:#fff;">${u.role}</span>
+        <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 6px;" onclick="resetUserPassword('${uname}')">🔑</button>
+        ${uname !== 'admin' ? `<button class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 6px;color:var(--danger);" onclick="deleteUser('${uname}')">✕</button>` : ''}
+      </div>
+    `).join('');
+  });
+}
+
+function resetUserPassword(username) {
+  const newPw = prompt('Nuova password per ' + username + ':');
+  if (!newPw) return;
+  firebase.database().ref('cardio_users/' + username + '/password').set(newPw).then(() => {
+    showToast('Password aggiornata per ' + username);
+    logAudit('Reset password utente: ' + username);
+  });
+}
+
+function deleteUser(username) {
+  if (!confirm('Eliminare utente ' + username + '?')) return;
+  firebase.database().ref('cardio_users/' + username).remove().then(() => {
+    showToast('Utente ' + username + ' eliminato');
+    loadUsersList();
+    logAudit('Eliminato utente: ' + username);
+  });
+}
+
+// =============================================
+// AUDIT LOG
+// =============================================
+function logAudit(action) {
+  if (!currentUser) return;
+  const entry = {
+    user: currentUser.username,
+    fullName: currentUser.fullName || currentUser.username,
+    action: action,
+    timestamp: new Date().toISOString()
+  };
+  firebase.database().ref('cardio_audit').push(entry);
+}
+
+function loadAuditLog() {
+  firebase.database().ref('cardio_audit').orderByChild('timestamp').limitToLast(100).once('value').then(snap => {
+    const el = document.getElementById('audit-log');
+    if (!el) return;
+    const entries = [];
+    snap.forEach(child => entries.push(child.val()));
+    entries.reverse();
+    if (entries.length === 0) {
+      el.innerHTML = '<div style="color:var(--muted);padding:12px;text-align:center;">Nessuna modifica registrata</div>';
+      return;
+    }
+    el.innerHTML = entries.map(e => {
+      const d = new Date(e.timestamp);
+      const ts = d.toLocaleDateString('it-IT') + ' ' + d.toLocaleTimeString('it-IT', {hour:'2-digit',minute:'2-digit'});
+      return `<div style="padding:4px 8px;border-bottom:1px solid var(--border);display:flex;gap:8px;">
+        <span style="color:var(--muted);min-width:110px;">${ts}</span>
+        <span style="color:var(--accent);min-width:80px;font-weight:600;">${e.fullName || e.user}</span>
+        <span>${e.action}</span>
+      </div>`;
+    }).join('');
+  });
+}
+
+function clearAuditLog() {
+  if (!confirm('Eliminare tutto lo storico modifiche?')) return;
+  firebase.database().ref('cardio_audit').remove().then(() => {
+    showToast('Storico svuotato');
+    loadAuditLog();
+  });
+}
+
+// =============================================
+// WHATSAPP SEND
+// =============================================
+function sendWhatsApp(phone, message, btnElement) {
+  // Pulisci il numero: rimuovi spazi, trattini, etc.
+  let cleaned = phone.replace(/[\s\-\(\)]/g, '');
+  // Aggiungi prefisso Italia se manca
+  if (cleaned.startsWith('3') && cleaned.length === 10) cleaned = '39' + cleaned;
+  if (cleaned.startsWith('+')) cleaned = cleaned.substring(1);
+  // Usa whatsapp:// per aprire direttamente l'app senza pagina web intermedia
+  const url = 'whatsapp://send?phone=' + cleaned + '&text=' + encodeURIComponent(message);
+  window.open(url, '_self');
+  // Feedback visivo permanente sul pulsante
+  if (btnElement) {
+    btnElement.innerHTML = '✅ Inviato!';
+    btnElement.style.background = '#16a34a';
+    btnElement.disabled = true;
+    btnElement.style.cursor = 'default';
+    btnElement.style.opacity = '0.85';
+  }
+  showToast('📲 WhatsApp aperto!');
 }
 
 function populateDoctorSelects() {
@@ -4455,7 +4855,91 @@ function runAllTests() {
       ${passed}/${cases.length} test superati ${failed > 0 ? `— ${failed} falliti` : '✅'}
     </div>` + html;
 }
+// =============================================
+// ONLINE PRESENCE
+// =============================================
+let _presenceRef = null;
+
+function initPresence() {
+  if (!currentUser) return;
+  const uid = currentUser.username;
+  _presenceRef = firebase.database().ref('cardio_presence/' + uid);
+  // Set online status with user info
+  _presenceRef.set({
+    fullName: currentUser.fullName || uid,
+    role: currentUser.role || 'user',
+    lastSeen: firebase.database.ServerValue.TIMESTAMP
+  });
+  // Remove on disconnect
+  _presenceRef.onDisconnect().remove();
+  // Also update lastSeen periodically (heartbeat every 60s)
+  setInterval(() => {
+    if (_presenceRef && currentUser) {
+      _presenceRef.update({ lastSeen: firebase.database.ServerValue.TIMESTAMP });
+    }
+  }, 60000);
+}
+
+function removePresence() {
+  if (_presenceRef) {
+    _presenceRef.remove();
+    _presenceRef = null;
+  }
+}
+
+function listenOnlineUsers() {
+  firebase.database().ref('cardio_presence').on('value', snap => {
+    const users = snap.val() || {};
+    const onlineList = Object.entries(users).map(([uid, data]) => ({
+      username: uid,
+      fullName: data.fullName || uid,
+      role: data.role || 'user'
+    }));
+    // Update counter
+    const countEl = document.getElementById('online-count');
+    if (countEl) {
+      countEl.textContent = onlineList.length + ' online';
+      countEl.style.color = onlineList.length > 0 ? '#22c55e' : 'var(--muted)';
+    }
+    // Update list
+    const listEl = document.getElementById('online-users-list');
+    if (listEl) {
+      if (onlineList.length === 0) {
+        listEl.innerHTML = '<div style="color:var(--muted);font-size:11px;">Nessun utente online</div>';
+      } else {
+        listEl.innerHTML = onlineList.map(u => {
+          const adminBadge = u.role === 'admin' ? ' ⭐' : '';
+          return `<div style="display:flex;align-items:center;gap:6px;padding:3px 0;">
+            <span style="width:6px;height:6px;border-radius:50%;background:#22c55e;flex-shrink:0;"></span>
+            <span>${u.fullName}${adminBadge}</span>
+          </div>`;
+        }).join('');
+      }
+    }
+  });
+}
+
+function toggleOnlinePanel() {
+  const panel = document.getElementById('online-panel');
+  if (panel) {
+    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+  }
+}
+
+// Close online panel when clicking outside
+document.addEventListener('click', (e) => {
+  const indicator = document.getElementById('online-indicator');
+  const panel = document.getElementById('online-panel');
+  if (panel && indicator && !indicator.contains(e.target)) {
+    panel.style.display = 'none';
+  }
+});
+
 function init() {
+  initTheme();
+  ensureDefaultAdmin();
+  initAuth();
+
   // 1. Carica cache locale SINCRONA e renderizza subito
   let loaded = null;
   const rawLocal = localStorage.getItem('cardio_state');
@@ -4473,6 +4957,7 @@ function init() {
       if (loaded.confirmTemplate) state.confirmTemplate = loaded.confirmTemplate;
       if (loaded.doctorTypes) state.doctorTypes = loaded.doctorTypes;
       if (loaded.doctorExtra) state.doctorExtra = loaded.doctorExtra;
+      if (loaded.doctorPhones) state.doctorPhones = loaded.doctorPhones;
       state.doctors = mergeDoctors(loaded.doctors);
       // Holter
       if (loaded.holterEnabled) {
@@ -4537,6 +5022,7 @@ function init() {
       if (data.spiroWeeks) state.spiroWeeks = pruneToAllowedWeeks(data.spiroWeeks);
       if (data.plsWeeks) state.plsWeeks = pruneToAllowedWeeks(data.plsWeeks);
       if (data.doctorExtra) state.doctorExtra = data.doctorExtra;
+      if (data.doctorPhones) state.doctorPhones = data.doctorPhones;
       if (data.doctorTypes) state.doctorTypes = data.doctorTypes;
       if (data.holterEnabled) state.holterEnabled = data.holterEnabled;
       if (data.requestTemplate) state.requestTemplate = data.requestTemplate;
