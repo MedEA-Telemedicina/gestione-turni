@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="it">
 <head>
@@ -1126,10 +1127,12 @@ const DEFAULT_HOLTER = [
   "MUSUMECI C.","NICOLÌ L.","RUOCCO G.","SCARDIA A.","TORLONE F.","TUCCI S."
 ];
 
-// Merge doctors: FULL_DOCTORS + eventuali extra, ordinati
-function mergeDoctors(savedDoctors) {
-  const extra = (savedDoctors || []).filter(d => !FULL_DOCTORS.includes(d));
-  return [...FULL_DOCTORS, ...extra].sort((a, b) => a.localeCompare(b));
+// Merge doctors: FULL_DOCTORS + eventuali extra, ordinati — esclude i rimossi
+function mergeDoctors(savedDoctors, removedDoctors) {
+  const removed = removedDoctors || [];
+  const base = FULL_DOCTORS.filter(d => !removed.includes(d));
+  const extra = (savedDoctors || []).filter(d => !FULL_DOCTORS.includes(d) && !removed.includes(d));
+  return [...base, ...extra].sort((a, b) => a.localeCompare(b));
 }
 
 // =============================================
@@ -1290,6 +1293,7 @@ let state = {
   spiroWeeks: {}, // { [weekKey]: { [doc]: { slots: { [di]: {num,conf}|{val:'x',conf}|null }, ferie: bool } } }
   plsWeeks: {},   // stessa struttura Polisonnografie
   doctorExtra: {}, // { [doctorName]: { hcCons, hpCons, spiro, pls } }
+  removedDoctors: [], // nomi medici rimossi esplicitamente (per non riaggiungerli da FULL_DOCTORS)
   doctorPhones: {}, // { [doctorName]: phoneNumber }
   requestTemplate: "Buongiorno Dott. [NOME],\npotrebbe indicarci le sue disponibilità per la settimana del [DATA]?\nGrazie mille!",
   confirmTemplate: "Salve, per la prossima settimana Le confermiamo i seguenti turni:\n[TURNI]\nGrazie!"
@@ -1632,9 +1636,11 @@ async function loadData() {
       if (loaded.spiroWeeks) state.spiroWeeks = loaded.spiroWeeks;
       if (loaded.plsWeeks) state.plsWeeks = loaded.plsWeeks;
       if (loaded.doctorExtra) state.doctorExtra = loaded.doctorExtra;
-      // Doctors: start from full list, then add any extra saved manually
-      const extra = (loaded.doctors || []).filter(d => !FULL_DOCTORS.includes(d));
-      state.doctors = [...FULL_DOCTORS, ...extra].sort((a, b) => a.localeCompare(b));
+      if (loaded.removedDoctors) state.removedDoctors = loaded.removedDoctors;
+      // Doctors: start from full list, then add any extra saved manually — escludi i rimossi
+      const removed = state.removedDoctors || [];
+      const extra = (loaded.doctors || []).filter(d => !FULL_DOCTORS.includes(d) && !removed.includes(d));
+      state.doctors = [...FULL_DOCTORS.filter(d => !removed.includes(d)), ...extra].sort((a, b) => a.localeCompare(b));
       // Migrate holterEnabled
       if (loaded.holterEnabled) {
         state.holterEnabled = loaded.holterEnabled;
@@ -4769,6 +4775,10 @@ function addDoctor() {
   const name = inp.value.trim().toUpperCase();
   if (!name) return;
   if (state.doctors.includes(name)) { showToast('Cardiologo già presente', 'warn'); return; }
+  // Se era stato rimosso in precedenza, toglilo dalla lista rimossi
+  if (state.removedDoctors && state.removedDoctors.includes(name)) {
+    state.removedDoctors = state.removedDoctors.filter(d => d !== name);
+  }
   state.doctors.push(name);
   state.doctors.sort((a, b) => a.localeCompare(b));
   inp.value = '';
@@ -4784,6 +4794,9 @@ function removeDoctor(i) {
   const docName = state.doctors[i];
   if (!confirm(`Rimuovere ${docName}?`)) return;
   logAudit('Rimosso medico: ' + docName);
+  // Traccia la rimozione per non riaggiungerlo dal merge con FULL_DOCTORS
+  if (!state.removedDoctors) state.removedDoctors = [];
+  if (!state.removedDoctors.includes(docName)) state.removedDoctors.push(docName);
   state.doctors.splice(i, 1);
   renderSettings();
   renderTable();
@@ -4796,7 +4809,28 @@ function removeDoctor(i) {
 }
 
 function updateDoctor(i, val) {
-  state.doctors[i] = val.trim().toUpperCase();
+  const oldName = state.doctors[i];
+  const newName = val.trim().toUpperCase();
+  if (!newName || newName === oldName) return;
+  // Traccia il vecchio nome come rimosso per evitare che ricompaia da FULL_DOCTORS
+  if (!state.removedDoctors) state.removedDoctors = [];
+  if (FULL_DOCTORS.includes(oldName) && !state.removedDoctors.includes(oldName)) {
+    state.removedDoctors.push(oldName);
+  }
+  state.doctors[i] = newName;
+  // Aggiorna anche le strutture collegate che usano il nome come chiave
+  if (state.doctorTypes[oldName] !== undefined) { state.doctorTypes[newName] = state.doctorTypes[oldName]; delete state.doctorTypes[oldName]; }
+  if (state.holterEnabled[oldName] !== undefined) { state.holterEnabled[newName] = state.holterEnabled[oldName]; delete state.holterEnabled[oldName]; }
+  if (state.doctorExtra[oldName] !== undefined) { state.doctorExtra[newName] = state.doctorExtra[oldName]; delete state.doctorExtra[oldName]; }
+  if (state.doctorPhones[oldName] !== undefined) { state.doctorPhones[newName] = state.doctorPhones[oldName]; delete state.doctorPhones[oldName]; }
+  logAudit('Rinominato medico: ' + oldName + ' → ' + newName);
+  renderSettings();
+  renderTable();
+  renderHolterTable();
+  renderHcTable();
+  renderHpTable();
+  renderSpiroTable();
+  renderPlsTable();
   saveData();
 }
 
@@ -5714,7 +5748,8 @@ function init() {
       // Decodifica le chiavi (i "." erano stati codificati con "·" al salvataggio)
       data = decodeKeys(data);
       // Applica i dati remoti allo state (solo le 3 settimane consentite)
-      state.doctors = mergeDoctors(data.doctors);
+      if (data.removedDoctors) state.removedDoctors = data.removedDoctors;
+      state.doctors = mergeDoctors(data.doctors, state.removedDoctors);
       if (data.weeks) state.weeks = pruneToAllowedWeeks(data.weeks);
       if (data.holterWeeks) state.holterWeeks = pruneToAllowedWeeks(data.holterWeeks);
       if (data.hcWeeks) state.hcWeeks = pruneToAllowedWeeks(data.hcWeeks);
