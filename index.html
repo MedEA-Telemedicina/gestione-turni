@@ -2142,7 +2142,7 @@ function showNoAvailPopup() {
   let itemsHtml = docs.map(doc => {
     const phone = state.doctorPhones?.[doc];
     const waBtn = phone
-      ? `<a class="no-avail-wa-btn" href="https://wa.me/${phone.replace(/[^0-9+]/g,'')}?text=${waMsg}" target="_blank" rel="noopener">📲 WhatsApp</a>`
+      ? `<a class="no-avail-wa-btn" href="whatsapp://send?phone=${phone.replace(/[^0-9+]/g,'')}&text=${waMsg}" target="_blank" rel="noopener">📲 WhatsApp</a>`
       : `<span class="no-avail-no-phone">📱 No tel.</span>`;
     return `<div class="no-avail-item"><span class="no-avail-name">${doc}</span>${waBtn}</div>`;
   }).join('');
