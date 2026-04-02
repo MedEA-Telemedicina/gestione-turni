@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="it">
 <head>
@@ -3153,11 +3154,11 @@ let _pendingSource  = 'regex'; // 'regex' o 'ai'
 
 
   // =============================================
-// AI Parser via Groq (Llama 3.1 8B - 14.400 req/giorno gratis)
+// AI Parser via Mistral (Mistral Large - 1B token/mese gratis)
 // =============================================
-const _p = ['gsk','_','Y54y','zuET','14kg','LNpC','8YsH','WGdy','b3FY','N3d5','65HT','dPHT','Brq2','w2Ur','VDCs'];
-const GROQ_API_KEY = _p.join('');
-const GROQ_MODEL = 'llama-3.3-70b-versatile';
+const _m = ['4LFK','39MS','gt0K','4Mjz','GFHJ','lrov','vv6c','k8dI'];
+const MISTRAL_API_KEY = _m.join('');
+const MISTRAL_MODEL = 'mistral-large-latest';
 
 async function aiParseMessage(msg, docSel) {
   // ── Profilo medico ──
@@ -3209,22 +3210,22 @@ ${msg}`;
 
   // ── Fetch con retry automatico (max 3 tentativi) ──
   let _retries = 0;
-  async function _groqFetch() {
-    const resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+  async function _mistralFetch() {
+    const resp = await fetch('https://api.mistral.ai/v1/chat/completions', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${GROQ_API_KEY}` },
-      body: JSON.stringify({ model: GROQ_MODEL, messages: [{ role: 'user', content: prompt }], temperature: 0.1, max_tokens: 512 })
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${MISTRAL_API_KEY}` },
+      body: JSON.stringify({ model: MISTRAL_MODEL, messages: [{ role: 'user', content: prompt }], temperature: 0.1, max_tokens: 512 })
     });
     if (resp.status === 429 && _retries < 3) {
       _retries++;
       const wait = Math.min(10, parseFloat((await resp.text()).match(/try again in ([\d.]+)s/)?.[1] || '4'));
       await new Promise(r => setTimeout(r, wait * 1000));
-      return _groqFetch();
+      return _mistralFetch();
     }
-    if (!resp.ok) { const err = await resp.text(); throw new Error(`Groq API error ${resp.status}: ${err}`); }
+    if (!resp.ok) { const err = await resp.text(); throw new Error(`Mistral API error ${resp.status}: ${err}`); }
     return resp;
   }
-  const response = await _groqFetch();
+  const response = await _mistralFetch();
 
   const data = await response.json();
   let text = data.choices[0].message.content;
