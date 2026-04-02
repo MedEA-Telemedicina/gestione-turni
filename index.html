@@ -4365,7 +4365,6 @@ function renderCalendar() {
   // Build table 1 HTML
   let t1 = '<table style="border-collapse:collapse;font-size:11px;margin-bottom:32px;">';
   t1 += '<thead><tr>';
-  t1 += '<th style="' + thS + 'min-width:140px;">CARDIOLOGO</th>';
   const dateRow = {};
   for (let di = 0; di < nDays; di++) {
     const dayStr = addDays(currentWeek, di);
@@ -4376,13 +4375,12 @@ function renderCalendar() {
   t1 += '</tr></thead><tbody>';
 
   if (turniDoctors.length === 0) {
-    t1 += '<tr><td colspan="8" style="padding:12px;text-align:center;color:#888;font-size:11px;font-style:italic;">Nessun cardiologo confermato</td></tr>';
+    t1 += '<tr><td colspan="7" style="padding:12px;text-align:center;color:#888;font-size:11px;font-style:italic;">Nessun cardiologo confermato</td></tr>';
   } else {
     turniDoctors.forEach(doc => {
       const isGregori = doc.toUpperCase().indexOf('GREGORI') !== -1;
       const rowBg = isGregori ? '#a9d08e' : '#bdd7ee';
       t1 += '<tr>';
-      t1 += '<td style="' + tdNameS + 'background:' + rowBg + ';font-size:11px;">' + doc + '</td>';
       const dd = w[doc];
       for (let di = 0; di < nDays; di++) {
         const mattVal = (dd.slots && dd.slots[di + '_0']) || null;
@@ -4421,7 +4419,6 @@ function renderCalendar() {
 
   let t2 = '<table style="border-collapse:collapse;font-size:11px;">';
   t2 += '<thead><tr>';
-  t2 += '<th style="' + thS + 'min-width:140px;background:#e8d5f5;">CARDIOLOGO</th>';
   for (let di = 0; di < nDays; di++) {
     const dayStr = addDays(currentWeek, di);
     const d = new Date(dayStr + 'T00:00:00');
@@ -4431,12 +4428,11 @@ function renderCalendar() {
   t2 += '</tr></thead><tbody>';
 
   if (holterDoctors.length === 0) {
-    t2 += '<tr><td colspan="8" style="padding:12px;text-align:center;color:#888;font-size:11px;font-style:italic;">Nessun cardiologo Holter confermato</td></tr>';
+    t2 += '<tr><td colspan="7" style="padding:12px;text-align:center;color:#888;font-size:11px;font-style:italic;">Nessun cardiologo Holter confermato</td></tr>';
   } else {
     holterDoctors.forEach(doc => {
       const hdoc = holterW[doc];
       t2 += '<tr>';
-      t2 += '<td style="' + tdNameS + 'background:' + holterColor + ';font-size:11px;">' + doc + '</td>';
       for (let di = 0; di < nDays; di++) {
         const val = (hdoc.slots && hdoc.slots[di]) || null;
         const cellText = (val === 'confermato') ? doc : '';
