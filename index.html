@@ -3193,16 +3193,17 @@ async function aiParseMessage(msg, docSel) {
 Medico: ${docSel} | Campi ABILITATI: [${allow.join(',')}]
 Genera SOLO campi abilitati. Rispondi SOLO JSON valido.
 
-Regole slots: mattina=slot 0, pomeriggio=slot 1. Se non specifica→entrambi. key="GIORNO_SLOT". type="disponibile" default.${_canEcg ? ' "turno ecg"/"solo ecg"→type:"solo-ecg".' : ' MAI type "solo-ecg".'}
+${_canTurni ? 'Regole slots: mattina=slot 0, pomeriggio=slot 1. Se non specifica→entrambi. key="GIORNO_SLOT". type="disponibile" default.' + (_canEcg ? ' "turno ecg"/"solo ecg"→type:"solo-ecg".' : ' MAI type "solo-ecg".') : 'NON generare slots (il medico non fa turni ambulatorio).'}
 Regole ferie: "ferie"/"non disponibile"→ferie:true
-${_holter ? 'holterSlots: "holter" generico senza numero→key=indice giorno(stringa)' : ''}
-${_canHc ? 'hcSlots: "holter cardiaco"/"HC"/"N holter"(con num)→key=indice(num),num:N' : ''}
+${_holter ? 'holterSlots: "holter" generico SENZA numero specifico→key=indice giorno(stringa)' : ''}
+${_canHc ? 'hcSlots: "holter cardiaco"/"holter ecg"/"HC"/"holter"(con numero davanti)→key=indice(num),num:N. IMPORTANTE: se il messaggio dice "N holter" o "N holter ecg" dove N è un numero, DEVI mettere num:N.' : ''}
 ${_canHp ? 'hpSlots: "holter pressori"/"HP"/"ABPM"→key=indice(num),num:N' : ''}
 ${_canSpiro ? 'spiroSlots: "spirometrie"/"spiro"→key=indice(num),num:N' : ''}
 ${_canPls ? 'plsSlots: "polisonnografie"/"PLS"/"PSG"→key=indice(num),num:N' : ''}
 Se num assente→"val":"x". Ometti array vuoti e ferie:false.
+${!_canTurni && (_canHc||_canHp||_canSpiro||_canPls) ? 'Questo medico fa SOLO consuntivo. NON generare slots ambulatorio.' : ''}
 
-Es: "Disponibile lunedì mattina e mercoledì"→{"slots":[{"key":"0_0","type":"disponibile"},{"key":"2_0","type":"disponibile"},{"key":"2_1","type":"disponibile"}]}
+${_canHc ? 'Es: "solo 5 holter ecg il sabato"→{"hcSlots":[{"key":5,"num":5}]}' : 'Es: "Disponibile lunedì mattina e mercoledì"→{"slots":[{"key":"0_0","type":"disponibile"},{"key":"2_0","type":"disponibile"},{"key":"2_1","type":"disponibile"}]}'}
 
 Messaggio:
 ${msg}`;
