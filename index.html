@@ -107,6 +107,11 @@
     color: #818cf8 !important;
     border-left-color: #818cf8 !important;
   }
+  [data-theme="dark"] .disp-table td.name-cell.single-avail-name {
+    background: rgba(251,191,36,0.2) !important;
+    color: #fbbf24 !important;
+    border-left-color: #fbbf24 !important;
+  }
   [data-theme="dark"] #holter-table th.day-header { background: #3730a3 !important; color: #c7d2fe !important; }
   [data-theme="dark"] #hc-table th.day-header { background: #155e75 !important; color: #a5f3fc !important; }
   [data-theme="dark"] #hp-table th.day-header { background: #9a3412 !important; color: #fed7aa !important; }
@@ -756,9 +761,13 @@
       </div>
     </div>
     <button id="theme-toggle" onclick="toggleTheme()" title="Tema chiaro/scuro" style="background:none;border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:16px;padding:4px 8px;line-height:1;">🌙</button>
-    <div id="user-info" style="display:none;font-size:11px;color:var(--muted);align-items:center;gap:6px;">
-      <span id="user-display"></span>
-      <button onclick="doLogout()" class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 8px;color:#dc2626;border:1px solid #fecaca;background:#fff5f5;font-weight:600;">Esci</button>
+    <div id="user-info" style="display:none;font-size:11px;color:var(--muted);align-items:center;gap:6px;position:relative;">
+      <span id="user-display" style="cursor:pointer;" onclick="toggleUserMenu()"></span>
+      <div id="user-menu" style="display:none;position:absolute;top:100%;right:0;margin-top:8px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:6px 0;min-width:200px;box-shadow:0 6px 24px rgba(0,0,0,0.15);z-index:300;">
+        <div style="padding:8px 14px;font-size:11px;color:var(--muted);border-bottom:1px solid var(--border);" id="user-menu-name"></div>
+        <button onclick="changeOwnPassword()" style="display:flex;align-items:center;gap:8px;width:100%;padding:8px 14px;background:none;border:none;cursor:pointer;font-size:12px;color:var(--text);text-align:left;" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background='none'">🔑 Cambia Password</button>
+        <button onclick="doLogout()" style="display:flex;align-items:center;gap:8px;width:100%;padding:8px 14px;background:none;border:none;cursor:pointer;font-size:12px;color:var(--danger);text-align:left;border-top:1px solid var(--border);" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background='none'">🚪 Esci</button>
+      </div>
     </div>
   </div>
 </header>
@@ -926,7 +935,10 @@
     </div>
 
     <div class="card">
-      <div class="card-title">💬 Messaggi Ricevuti Questa Settimana</div>
+      <div class="card-title" style="display:flex;align-items:center;gap:8px;">
+        💬 Messaggi Ricevuti Questa Settimana
+        <button onclick="toggleMsgHistory()" id="toggle-msg-btn" title="Riduci/Espandi" style="background:none;border:1px solid var(--border);border-radius:4px;cursor:pointer;color:var(--muted);font-size:15px;font-weight:700;line-height:1;padding:1px 8px;user-select:none;">−</button>
+      </div>
       <div id="wa-history-list">
         <div class="empty-state">Nessun messaggio salvato per questa settimana.</div>
       </div>
@@ -1008,6 +1020,7 @@
         <input type="text" id="new-user-fullname" placeholder="Nome completo" style="flex:1;min-width:140px;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:7px 10px;border-radius:6px;font-family:var(--font-mono);font-size:12px;" onkeydown="if(event.key==='Enter') document.getElementById('new-user-pass').focus()">
         <input type="password" id="new-user-pass" placeholder="Password" style="flex:1;min-width:120px;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:7px 10px;border-radius:6px;font-family:var(--font-mono);font-size:12px;" onkeydown="if(event.key==='Enter') addUser()">
         <select id="new-user-role" class="styled" style="width:100px;"><option value="user">Utente</option><option value="admin">Admin</option></select>
+        <select id="new-user-gender" class="styled" style="width:60px;" title="Sesso"><option value="M">♂ M</option><option value="F">♀ F</option></select>
         <button class="btn btn-success btn-sm" onclick="addUser()">+ Aggiungi</button>
       </div>
       <div id="users-list" style="display:flex;flex-direction:column;gap:0;max-height:300px;overflow-y:auto;"></div>
@@ -1028,6 +1041,37 @@
           <button class="btn btn-primary btn-sm" style="margin-top:6px;" onclick="saveConfirmTemplate()">Salva Template</button>
         </div>
       </div>
+    </div>
+
+    <!-- CONFLITTI MEDICI (admin-only) -->
+    <div class="card admin-only" id="conflicts-card">
+      <div class="card-title">⚠️ Conflitti Turno Medici</div>
+      <p style="font-size:11px;color:var(--muted);margin-bottom:12px;">Medici che <strong>non possono</strong> essere confermati nello stesso turno/giorno. Quando entrambi sono disponibili, verrà mostrato un avviso.</p>
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center;">
+        <select id="conflict-doc-a" class="styled" style="flex:1;min-width:140px;"></select>
+        <span style="font-weight:700;color:var(--muted);">⚡</span>
+        <select id="conflict-doc-b" class="styled" style="flex:1;min-width:140px;"></select>
+        <button class="btn btn-warning btn-sm" onclick="addConflict()">+ Aggiungi Conflitto</button>
+      </div>
+      <div id="conflicts-list" style="display:flex;flex-direction:column;gap:0;max-height:300px;overflow-y:auto;"></div>
+    </div>
+
+    <!-- REGOLE PERSONALIZZATE (admin-only) -->
+    <div class="card admin-only" id="rules-card">
+      <div class="card-title">📏 Regole Turni Personalizzate</div>
+      <p style="font-size:11px;color:var(--muted);margin-bottom:12px;">Regole che generano un <strong>avviso</strong> in fase di conferma se non soddisfatte (es: "Bini R. almeno 3 turni").</p>
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center;">
+        <select id="rule-doc" class="styled" style="flex:1;min-width:140px;"></select>
+        <select id="rule-operator" class="styled" style="width:120px;">
+          <option value="min">almeno</option>
+          <option value="max">massimo</option>
+          <option value="exact">esattamente</option>
+        </select>
+        <input type="number" id="rule-value" min="1" max="14" value="3" style="width:60px;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:7px 10px;border-radius:6px;font-size:12px;text-align:center;">
+        <span style="font-size:12px;color:var(--muted);">turni confermati</span>
+        <button class="btn btn-warning btn-sm" onclick="addCustomRule()">+ Aggiungi Regola</button>
+      </div>
+      <div id="rules-list" style="display:flex;flex-direction:column;gap:0;max-height:300px;overflow-y:auto;"></div>
     </div>
 
   </div>
@@ -1215,12 +1259,17 @@ function doLogin() {
       errEl.style.display = 'block';
       return;
     }
+    if (user.blocked) {
+      errEl.textContent = 'Accesso bloccato. Contattare l\'amministratore.';
+      errEl.style.display = 'block';
+      return;
+    }
     if (user.password !== password) {
       errEl.textContent = 'Password errata';
       errEl.style.display = 'block';
       return;
     }
-    currentUser = { username: username, role: user.role || 'user', fullName: user.fullName || username };
+    currentUser = { username: username, role: user.role || 'user', fullName: user.fullName || username, gender: user.gender || 'M' };
     sessionStorage.setItem('loggedUser', JSON.stringify(currentUser));
     onLoginSuccess();
   }).catch(err => {
@@ -1237,6 +1286,15 @@ function onLoginSuccess() {
     userInfo.style.display = 'flex';
     document.getElementById('user-display').textContent = '👤 ' + (currentUser.fullName || currentUser.username) + (currentUser.role === 'admin' ? ' ⭐' : '');
   }
+  // Welcome banner
+  const welcomeBanner = document.createElement('div');
+  welcomeBanner.id = 'welcome-banner';
+  const welcomeGender = (currentUser.gender === 'F') ? 'Benvenuta' : 'Benvenuto';
+  welcomeBanner.textContent = welcomeGender + ' ' + (currentUser.fullName || currentUser.username) + ' nella gestione dei turni medici';
+  welcomeBanner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:10000;background:linear-gradient(135deg,#6366f1,#a855f7);color:#fff;text-align:center;padding:10px 16px;font-family:var(--font-display);font-size:14px;font-weight:600;letter-spacing:0.5px;box-shadow:0 4px 16px rgba(99,102,241,0.35);transform:translateY(-100%);transition:transform 0.4s ease,opacity 0.4s ease;opacity:0;';
+  document.body.appendChild(welcomeBanner);
+  requestAnimationFrame(() => { welcomeBanner.style.transform = 'translateY(0)'; welcomeBanner.style.opacity = '1'; });
+  setTimeout(() => { welcomeBanner.style.transform = 'translateY(-100%)'; welcomeBanner.style.opacity = '0'; setTimeout(() => welcomeBanner.remove(), 500); }, 3500);
   logAudit('Login effettuato');
   // Show/hide admin-only elements
   document.querySelectorAll('.admin-only').forEach(el => {
@@ -1261,6 +1319,40 @@ function doLogout() {
   showLoginScreen();
   const userInfo = document.getElementById('user-info');
   if (userInfo) userInfo.style.display = 'none';
+  const um = document.getElementById('user-menu');
+  if (um) um.style.display = 'none';
+}
+
+function toggleUserMenu() {
+  const m = document.getElementById('user-menu');
+  if (!m) return;
+  const isOpen = m.style.display !== 'none';
+  m.style.display = isOpen ? 'none' : 'block';
+  const nameEl = document.getElementById('user-menu-name');
+  if (nameEl && currentUser) nameEl.textContent = currentUser.fullName || currentUser.username;
+  if (!isOpen) {
+    // Close on outside click
+    const handler = (e) => {
+      if (!m.contains(e.target) && e.target.id !== 'user-display') {
+        m.style.display = 'none';
+        document.removeEventListener('click', handler);
+      }
+    };
+    setTimeout(() => document.addEventListener('click', handler), 10);
+  }
+}
+
+function changeOwnPassword() {
+  document.getElementById('user-menu').style.display = 'none';
+  const newPw = prompt('Inserisci la nuova password:');
+  if (!newPw || !newPw.trim()) return;
+  if (newPw.trim().length < 3) { showToast('La password deve avere almeno 3 caratteri', 'danger'); return; }
+  firebase.database().ref('cardio_users/' + fbKey(currentUser.username) + '/password').set(newPw.trim()).then(() => {
+    showToast('✓ Password aggiornata con successo');
+    logAudit('Cambio password propria');
+  }).catch(err => {
+    showToast('❌ Errore aggiornamento password', 'danger');
+  });
 }
 
 // Firebase key encoding — dots are forbidden in Firebase keys
@@ -1294,6 +1386,8 @@ let state = {
   plsWeeks: {},   // stessa struttura Polisonnografie
   doctorExtra: {}, // { [doctorName]: { hcCons, hpCons, spiro, pls } }
   removedDoctors: [], // nomi medici rimossi esplicitamente (per non riaggiungerli da FULL_DOCTORS)
+  doctorConflicts: [], // [[docA, docB], ...] pairs that cannot work same shift
+  customRules: [], // [{doctor, operator, value, description}] custom rules for warnings
   doctorPhones: {}, // { [doctorName]: phoneNumber }
   requestTemplate: "Buongiorno Dott. [NOME],\npotrebbe indicarci le sue disponibilità per la settimana del [DATA]?\nGrazie mille!",
   confirmTemplate: "Salve, per la prossima settimana Le confermiamo i seguenti turni:\n[TURNI]\nGrazie!"
@@ -1354,7 +1448,7 @@ function pruneToAllowedWeeks(obj) {
   return pruned;
 }
 
-let currentWeek = getMondayStr(new Date());
+let currentWeek = addDays(getMondayStr(new Date()), 7);
 
 function getWeekData() {
   if (!state.weeks[currentWeek]) state.weeks[currentWeek] = {};
@@ -1692,6 +1786,23 @@ function showToast(msg, type='success') {
   setTimeout(() => t.classList.remove('show'), 2200);
 }
 
+// ── Warning banner for conflicts & rule violations ──
+function showWarningBanner(messages) {
+  let banner = document.getElementById('warning-banner');
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'warning-banner';
+    banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:linear-gradient(135deg,#f59e0b,#ef4444);color:#fff;text-align:center;padding:12px 16px;font-family:var(--font-display);font-size:13px;font-weight:600;box-shadow:0 4px 16px rgba(239,68,68,0.35);transform:translateY(-100%);transition:transform 0.4s ease,opacity 0.4s ease;opacity:0;cursor:pointer;';
+    banner.onclick = () => { banner.style.transform = 'translateY(-100%)'; banner.style.opacity = '0'; };
+    document.body.appendChild(banner);
+  }
+  banner.innerHTML = messages.map(m => '⚠️ ' + m).join('<br>');
+  banner.style.transform = 'translateY(0)';
+  banner.style.opacity = '1';
+  if (banner._timer) clearTimeout(banner._timer);
+  banner._timer = setTimeout(() => { banner.style.transform = 'translateY(-100%)'; banner.style.opacity = '0'; }, 6000);
+}
+
 function switchTab(id) {
   // Stacca il listener real-time dello storico quando si esce dal tab
   if (id !== 'storico' && _auditListener) {
@@ -1708,7 +1819,7 @@ function switchTab(id) {
   if (id === 'calendar') renderCalendar();
   if (id === 'whatsapp') renderWaHistory();
   if (id === 'storico') loadAuditLog();
-  if (id === 'impostazioni') { renderSettings(); loadUsersList(); }
+  if (id === 'impostazioni') { renderSettings(); loadUsersList(); loadConflicts(); populateConflictSelects(); loadCustomRules(); populateRuleSelects(); }
   if (id === 'test') initTestTab();
 }
 
@@ -1834,7 +1945,9 @@ function renderTable() {
       nameBg = 'rgba(220,38,38,0.18)'; nameColor = 'var(--danger)';  nameBorder = '3px solid var(--danger)';
     } else if (nConf >= 1) {
       nameBg = 'rgba(5,150,105,0.18)'; nameColor = 'var(--success)'; nameBorder = '3px solid var(--success)';
-    } else if (nDisp >= 1) {
+    } else if (nDisp === 1) {
+      nameBg = 'rgba(217,119,6,0.14)'; nameColor = 'var(--warn)'; nameBorder = '3px solid var(--warn)';
+    } else if (nDisp >= 2) {
       nameBg = 'rgba(37,99,235,0.14)'; nameColor = 'var(--accent)';  nameBorder = '3px solid var(--accent)';
     } else {
       nameBg = 'var(--surface2)'; nameColor = 'var(--text)'; nameBorder = '3px solid transparent';
@@ -1846,7 +1959,7 @@ function renderTable() {
                    : tipo === 'completo+ecg100' ? ' <span style="color:#43a047;font-size:10px;font-weight:700;">(+100)</span>'
                    : '';
     bodyHtml += `<tr data-doc="${doc}">`;
-    const nameStatusCls = dd.ferie ? ' ferie-name styled-name' : nConf >= 1 ? ' confirmed-name styled-name' : nDisp >= 1 ? ' avail-name styled-name' : '';
+    const nameStatusCls = dd.ferie ? ' ferie-name styled-name' : nConf >= 1 ? ' confirmed-name styled-name' : nDisp === 1 ? ' single-avail-name styled-name' : nDisp >= 2 ? ' avail-name styled-name' : '';
     bodyHtml += `<td class="name-cell${nameStatusCls}" style="background:${nameBg};color:${nameColor};border-left:${nameBorder};font-weight:600;">${doc}${ecgBadge}</td>`;
     DAYS.forEach((day, di) => {
       SLOTS.forEach((slot, si) => {
@@ -1912,6 +2025,26 @@ function cycleSlot(doc, key) {
   const _kp = key.split('_');
   const _humanSlot = (_dayL[_kp[0]] || _kp[0]) + ' (' + (_slotL[_kp[1]] || _kp[1]) + ')';
   logSlotChange('Turno', doc, _humanSlot, LABELS[newVal] || newVal);
+  // Check conflicts & rules when confirming
+  if (newVal === 'confermato' || newVal === 'confermato-ecg') {
+    const warnings = [];
+    const dayIdx = _kp[0];
+    const slotIdx = _kp[1];
+    const w = getWeekData();
+    // Check conflict pairs for same day+slot
+    for (const otherDoc of state.doctors) {
+      if (otherDoc === doc) continue;
+      const odd = w[otherDoc];
+      if (!odd || !odd.slots) continue;
+      const oVal = odd.slots[key] || '';
+      if ((oVal === 'confermato' || oVal === 'confermato-ecg') && doctorsConflict(doc, otherDoc)) {
+        warnings.push(doc + ' e ' + otherDoc + ' sono in conflitto per ' + _humanSlot + '!');
+      }
+    }
+    // Check custom rules
+    warnings.push(...checkCustomRulesForDoc(doc));
+    if (warnings.length > 0) showWarningBanner(warnings);
+  }
   renderTable();
   renderStats();
   autoSave();
@@ -1972,6 +2105,20 @@ function cycleHolterSlot(doc, dayIdx) {
   else dd.slots[dayIdx] = next;
   const dayNames = ['LUN','MAR','MER','GIO','VEN','SAB','DOM'];
   logSlotChange('Holter', doc, dayNames[dayIdx] || dayIdx, next || 'vuoto');
+  // Check conflicts when confirming holter
+  if (next === 'confermato') {
+    const warnings = [];
+    const hw = getHolterWeekData();
+    for (const otherDoc of state.doctors) {
+      if (otherDoc === doc) continue;
+      const odd = hw[otherDoc];
+      if (!odd || !odd.slots) continue;
+      if (odd.slots[dayIdx] === 'confermato' && doctorsConflict(doc, otherDoc)) {
+        warnings.push(doc + ' e ' + otherDoc + ' sono in conflitto per Holter ' + (dayNames[dayIdx] || dayIdx) + '!');
+      }
+    }
+    if (warnings.length > 0) showWarningBanner(warnings);
+  }
   renderHolterTable();
   autoSave();
 }
@@ -2016,12 +2163,14 @@ function renderHolterTable() {
       nameBg = 'rgba(220,38,38,0.18)'; nameColor = 'var(--danger)'; nameBorder = '3px solid var(--danger)';
     } else if (nConf >= 1) {
       nameBg = 'rgba(5,150,105,0.18)'; nameColor = 'var(--success)'; nameBorder = '3px solid var(--success)';
-    } else if (nDisp >= 1) {
+    } else if (nDisp === 1) {
+      nameBg = 'rgba(217,119,6,0.14)'; nameColor = 'var(--warn)'; nameBorder = '3px solid var(--warn)';
+    } else if (nDisp >= 2) {
       nameBg = 'rgba(99,102,241,0.14)'; nameColor = '#6366f1'; nameBorder = '3px solid #6366f1';
     } else {
       nameBg = 'var(--surface2)'; nameColor = 'var(--text)'; nameBorder = '3px solid transparent';
     }
-    const nameStatusCls = dd.ferie ? ' ferie-name styled-name' : nConf >= 1 ? ' confirmed-name styled-name' : nDisp >= 1 ? ' avail-name styled-name' : '';
+    const nameStatusCls = dd.ferie ? ' ferie-name styled-name' : nConf >= 1 ? ' confirmed-name styled-name' : nDisp === 1 ? ' single-avail-name styled-name' : nDisp >= 2 ? ' avail-name styled-name' : '';
     bodyHtml += `<tr>`;
     bodyHtml += `<td class="name-cell${nameStatusCls}" style="background:${nameBg};color:${nameColor};border-left:${nameBorder};font-weight:600;">${doc}</td>`;
     HOLTER_DAYS.forEach((day, di) => {
@@ -2083,7 +2232,7 @@ function editHcSlot(btn, doc, di) {
     const commit = () => {
       const num = parseInt(input.value, 10);
       if (!isNaN(num) && num > 0) {
-        getHcDoctorData(doc).slots[di] = { num, conf: true };
+        getHcDoctorData(doc).slots[di] = { num, conf: false };
         const dayN = ['LUN','MAR','MER','GIO','VEN','SAB','DOM'];
         logSlotChange('HC', doc, dayN[di] || di, num);
         saveData();
@@ -2215,7 +2364,7 @@ function editHpSlot(btn, doc, di) {
     const commit = () => {
       const num = parseInt(input.value, 10);
       if (!isNaN(num) && num > 0) {
-        getHpDoctorData(doc).slots[di] = { num, conf: true };
+        getHpDoctorData(doc).slots[di] = { num, conf: false };
         const dayN = ['LUN','MAR','MER','GIO','VEN','SAB','DOM'];
         logSlotChange('HP', doc, dayN[di] || di, num);
         saveData();
@@ -2349,13 +2498,13 @@ function editSpiroSlot(btn, doc, di) {
       const raw = input.value.trim().toLowerCase();
       const dayN = ['LUN','MAR','MER','GIO','VEN','SAB','DOM'];
       if (raw === 'x') {
-        getSpiroDoctorData(doc).slots[di] = { val: 'x', conf: true };
+        getSpiroDoctorData(doc).slots[di] = { val: 'x', conf: false };
         logSlotChange('Spirometria', doc, dayN[di] || di, 'x');
         saveData();
       } else {
         const num = parseInt(raw, 10);
         if (!isNaN(num) && num > 0) {
-          getSpiroDoctorData(doc).slots[di] = { num, conf: true };
+          getSpiroDoctorData(doc).slots[di] = { num, conf: false };
           logSlotChange('Spirometria', doc, dayN[di] || di, num);
           saveData();
         }
@@ -2407,16 +2556,19 @@ function renderSpiroTable() {
     const displayName = getConsuntivoDisplayName(doc, 'spiro');
     const dd = getSpiroDoctorData(doc);
     const slots = Object.values(dd.slots || {}).filter(Boolean);
+    const nDisp = slots.filter(s => s && !s.conf).length;
     const nConf = slots.filter(s => s && s.conf).length;
     let nameBg, nameColor, nameBorder;
     if (dd.ferie) {
       nameBg = 'rgba(220,38,38,0.18)'; nameColor = 'var(--danger)'; nameBorder = '3px solid var(--danger)';
     } else if (nConf >= 1) {
       nameBg = 'rgba(5,150,105,0.18)'; nameColor = 'var(--success)'; nameBorder = '3px solid var(--success)';
+    } else if (nDisp >= 1) {
+      nameBg = 'rgba(22,163,74,0.14)'; nameColor = COLOR; nameBorder = `3px solid ${COLOR}`;
     } else {
       nameBg = 'var(--surface2)'; nameColor = 'var(--text)'; nameBorder = '3px solid transparent';
     }
-    const nameStatusCls = dd.ferie ? ' ferie-name styled-name' : nConf >= 1 ? ' confirmed-name styled-name' : '';
+    const nameStatusCls = dd.ferie ? ' ferie-name styled-name' : nConf >= 1 ? ' confirmed-name styled-name' : nDisp >= 1 ? ' avail-name styled-name' : '';
     bodyHtml += `<tr>`;
     bodyHtml += `<td class="name-cell${nameStatusCls}" style="background:${nameBg};color:${nameColor};border-left:${nameBorder};font-weight:600;">${displayName}</td>`;
     CONS_DAYS.forEach((day, di) => {
@@ -2424,15 +2576,18 @@ function renderSpiroTable() {
       let cellStyle, lbl;
       if (!s) {
         cellStyle = ''; lbl = '—';
+      } else if (!s.conf) {
+        cellStyle = `background:rgba(22,163,74,0.15);color:${COLOR};font-weight:700;`; lbl = (s.val === 'x' ? 'x' : s.num);
       } else {
-        cellStyle = 'background:rgba(5,150,105,0.18);color:var(--success);font-weight:700;';
-        lbl = s.val === 'x' ? 'x' : s.num;
+        cellStyle = 'background:rgba(5,150,105,0.18);color:var(--success);font-weight:700;'; lbl = (s.val === 'x' ? 'x' : s.num);
       }
       bodyHtml += `<td><button class="slot-btn" style="min-width:36px;${cellStyle}" onclick="editSpiroSlot(this,'${doc.replace(/'/g,"\'")}',${di})" title="${day}: ${s ? (s.val==='x'?'x':s.num)+' (conf)' : 'vuoto'}">${lbl}</button></td>`;
     });
+    const dispColor = nDisp > 0 ? COLOR : 'var(--muted)';
     const confColor = nConf > 0 ? 'var(--success)' : 'var(--muted)';
     bodyHtml += `<td style="text-align:center;padding:4px 6px;min-width:52px;">
       <div style="display:flex;flex-direction:column;align-items:center;gap:2px;font-size:12px;font-weight:700;line-height:1.3;">
+        <span style="color:${dispColor}" title="Disponibilità totali">📅 ${nDisp + nConf}</span>
         <span style="color:${confColor}" title="Conferme">✅ ${nConf}</span>
       </div>
     </td>`;
@@ -2482,13 +2637,13 @@ function editPlsSlot(btn, doc, di) {
       const raw = input.value.trim().toLowerCase();
       const dayN = ['LUN','MAR','MER','GIO','VEN','SAB','DOM'];
       if (raw === 'x') {
-        getPlsDoctorData(doc).slots[di] = { val: 'x', conf: true };
+        getPlsDoctorData(doc).slots[di] = { val: 'x', conf: false };
         logSlotChange('PLS', doc, dayN[di] || di, 'x');
         saveData();
       } else {
         const num = parseInt(raw, 10);
         if (!isNaN(num) && num > 0) {
-          getPlsDoctorData(doc).slots[di] = { num, conf: true };
+          getPlsDoctorData(doc).slots[di] = { num, conf: false };
           logSlotChange('PLS', doc, dayN[di] || di, num);
           saveData();
         }
@@ -2540,16 +2695,19 @@ function renderPlsTable() {
     const displayName = getConsuntivoDisplayName(doc, 'pls');
     const dd = getPlsDoctorData(doc);
     const slots = Object.values(dd.slots || {}).filter(Boolean);
+    const nDisp = slots.filter(s => s && !s.conf).length;
     const nConf = slots.filter(s => s && s.conf).length;
     let nameBg, nameColor, nameBorder;
     if (dd.ferie) {
       nameBg = 'rgba(220,38,38,0.18)'; nameColor = 'var(--danger)'; nameBorder = '3px solid var(--danger)';
     } else if (nConf >= 1) {
       nameBg = 'rgba(5,150,105,0.18)'; nameColor = 'var(--success)'; nameBorder = '3px solid var(--success)';
+    } else if (nDisp >= 1) {
+      nameBg = 'rgba(124,58,237,0.14)'; nameColor = COLOR; nameBorder = `3px solid ${COLOR}`;
     } else {
       nameBg = 'var(--surface2)'; nameColor = 'var(--text)'; nameBorder = '3px solid transparent';
     }
-    const nameStatusCls = dd.ferie ? ' ferie-name styled-name' : nConf >= 1 ? ' confirmed-name styled-name' : '';
+    const nameStatusCls = dd.ferie ? ' ferie-name styled-name' : nConf >= 1 ? ' confirmed-name styled-name' : nDisp >= 1 ? ' avail-name styled-name' : '';
     bodyHtml += `<tr>`;
     bodyHtml += `<td class="name-cell${nameStatusCls}" style="background:${nameBg};color:${nameColor};border-left:${nameBorder};font-weight:600;">${displayName}</td>`;
     CONS_DAYS.forEach((day, di) => {
@@ -2557,15 +2715,18 @@ function renderPlsTable() {
       let cellStyle, lbl;
       if (!s) {
         cellStyle = ''; lbl = '—';
+      } else if (!s.conf) {
+        cellStyle = `background:rgba(124,58,237,0.15);color:${COLOR};font-weight:700;`; lbl = (s.val === 'x' ? 'x' : s.num);
       } else {
-        cellStyle = 'background:rgba(124,58,237,0.15);color:${COLOR};font-weight:700;';
-        lbl = s.val === 'x' ? 'x' : s.num;
+        cellStyle = 'background:rgba(5,150,105,0.18);color:var(--success);font-weight:700;'; lbl = (s.val === 'x' ? 'x' : s.num);
       }
       bodyHtml += `<td><button class="slot-btn" style="min-width:36px;${cellStyle}" onclick="editPlsSlot(this,'${doc.replace(/'/g,"\'")}',${di})" title="${day}: ${s ? (s.val==='x'?'x':s.num)+' (conf)' : 'vuoto'}">${lbl}</button></td>`;
     });
+    const dispColor = nDisp > 0 ? COLOR : 'var(--muted)';
     const confColor = nConf > 0 ? 'var(--success)' : 'var(--muted)';
     bodyHtml += `<td style="text-align:center;padding:4px 6px;min-width:52px;">
       <div style="display:flex;flex-direction:column;align-items:center;gap:2px;font-size:12px;font-weight:700;line-height:1.3;">
+        <span style="color:${dispColor}" title="Disponibilità totali">📅 ${nDisp + nConf}</span>
         <span style="color:${confColor}" title="Conferme">✅ ${nConf}</span>
       </div>
     </td>`;
@@ -2588,6 +2749,14 @@ function renderPlsTable() {
 function togglePlsTableVis() {
   const wrap = document.getElementById('pls-table-wrap');
   const btn  = document.getElementById('toggle-pls-btn');
+  const hidden = wrap.style.display === 'none';
+  wrap.style.display = hidden ? '' : 'none';
+  btn.textContent = hidden ? '−' : '+';
+}
+
+function toggleMsgHistory() {
+  const wrap = document.getElementById('wa-history-list');
+  const btn  = document.getElementById('toggle-msg-btn');
   const hidden = wrap.style.display === 'none';
   wrap.style.display = hidden ? '' : 'none';
   btn.textContent = hidden ? '−' : '+';
@@ -4911,10 +5080,12 @@ function addUser() {
       if (addBtn) { addBtn.disabled = false; addBtn.textContent = '+ Aggiungi'; }
       return;
     }
+    const gender = document.getElementById('new-user-gender').value || 'M';
     return firebase.database().ref('cardio_users/' + fbKey(username)).set({
       password: password,
       role: role,
       fullName: fullName || username,
+      gender: gender,
       createdAt: new Date().toISOString()
     }).then(() => {
       showToast('✓ Utente ' + username + ' creato');
@@ -4940,13 +5111,21 @@ function loadUsersList() {
     const entries = Object.entries(users).sort((a,b) => a[0].localeCompare(b[0]));
     el.innerHTML = entries.map(([fbName, u]) => {
       const uname = fbKeyDecode(fbName);
+      const isBlocked = !!u.blocked;
+      const isAdmin = u.role === 'admin';
+      const gender = u.gender || 'M';
+      const genderIcon = gender === 'F' ? '♀' : '♂';
+      const genderColor = gender === 'F' ? '#ec4899' : '#3b82f6';
       return `
-      <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-bottom:1px solid var(--border);font-size:12px;">
+      <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-bottom:1px solid var(--border);font-size:12px;${isBlocked ? 'opacity:0.5;' : ''}">
+        <button class="btn btn-ghost btn-sm" style="font-size:12px;padding:2px 4px;color:${genderColor};min-width:22px;" onclick="toggleUserGender('${uname}', '${gender}')" title="Cambia sesso (${gender})">${genderIcon}</button>
         <span style="font-weight:700;min-width:100px;">${uname}</span>
         <span style="color:var(--muted);flex:1;">${u.fullName || ''}</span>
-        <span style="font-size:10px;padding:2px 8px;border-radius:4px;background:${u.role==='admin'?'var(--accent)':'var(--success)'};color:#fff;">${u.role}</span>
+        ${isBlocked ? '<span style="font-size:10px;padding:2px 8px;border-radius:4px;background:var(--danger);color:#fff;">bloccato</span>' : ''}
+        <span style="font-size:10px;padding:2px 8px;border-radius:4px;background:${isAdmin?'var(--accent)':'var(--success)'};color:#fff;">${u.role}</span>
+        ${!isAdmin ? `<button class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 6px;color:${isBlocked ? 'var(--success)' : 'var(--warning)'};" onclick="toggleBlockUser('${uname}', ${isBlocked})" title="${isBlocked ? 'Sblocca' : 'Blocca'}">${isBlocked ? '🔓' : '🔒'}</button>` : ''}
         <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 6px;" onclick="resetUserPassword('${uname}')">🔑</button>
-        ${uname !== 'admin' ? `<button class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 6px;color:var(--danger);" onclick="deleteUser('${uname}')">✕</button>` : ''}
+        <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 6px;color:var(--danger);" onclick="deleteUser('${uname}')">✕</button>
       </div>`;
     }).join('');
   });
@@ -4968,6 +5147,239 @@ function deleteUser(username) {
     loadUsersList();
     logAudit('Eliminato utente: ' + username);
   });
+}
+
+function toggleBlockUser(username, currentlyBlocked) {
+  const action = currentlyBlocked ? 'Sbloccare' : 'Bloccare';
+  if (!confirm(action + ' l\'accesso per ' + username + '?')) return;
+  const newVal = !currentlyBlocked;
+  firebase.database().ref('cardio_users/' + fbKey(username) + '/blocked').set(newVal ? true : null).then(() => {
+    showToast(newVal ? '🔒 Utente ' + username + ' bloccato' : '🔓 Utente ' + username + ' sbloccato');
+    loadUsersList();
+    logAudit((newVal ? 'Bloccato' : 'Sbloccato') + ' utente: ' + username);
+  });
+}
+
+function toggleUserGender(username, currentGender) {
+  const newGender = currentGender === 'M' ? 'F' : 'M';
+  firebase.database().ref('cardio_users/' + fbKey(username) + '/gender').set(newGender).then(() => {
+    showToast((newGender === 'F' ? '♀' : '♂') + ' Sesso aggiornato per ' + username);
+    loadUsersList();
+    logAudit('Cambiato sesso utente ' + username + ' a ' + newGender);
+    // Update currentUser gender if it's the logged-in user
+    if (currentUser && currentUser.username === username) {
+      currentUser.gender = newGender;
+      sessionStorage.setItem('loggedUser', JSON.stringify(currentUser));
+    }
+  });
+}
+
+// =============================================
+// DOCTOR CONFLICTS
+// =============================================
+function loadConflicts() {
+  firebase.database().ref('cardio_conflicts').once('value').then(snap => {
+    state.doctorConflicts = snap.val() || [];
+    renderConflictsList();
+  });
+}
+
+function renderConflictsList() {
+  const el = document.getElementById('conflicts-list');
+  if (!el) return;
+  const conflicts = state.doctorConflicts || [];
+  if (conflicts.length === 0) {
+    el.innerHTML = '<div style="text-align:center;padding:16px;color:var(--muted);font-size:12px;">Nessun conflitto configurato</div>';
+    return;
+  }
+  el.innerHTML = conflicts.map((pair, idx) => `
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid var(--border);font-size:12px;">
+      <span style="font-weight:700;color:var(--danger);">⚡</span>
+      <span style="flex:1;font-weight:600;">${pair[0]}</span>
+      <span style="color:var(--muted);font-size:10px;">non può essere in turno con</span>
+      <span style="flex:1;font-weight:600;text-align:right;">${pair[1]}</span>
+      <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 6px;color:var(--danger);" onclick="removeConflict(${idx})">✕</button>
+    </div>
+  `).join('');
+}
+
+function populateConflictSelects() {
+  const selA = document.getElementById('conflict-doc-a');
+  const selB = document.getElementById('conflict-doc-b');
+  if (!selA || !selB) return;
+  const docs = state.doctors || [];
+  const opts = docs.map(d => '<option value="' + d + '">' + d + '</option>').join('');
+  selA.innerHTML = opts;
+  selB.innerHTML = opts;
+}
+
+function addConflict() {
+  const a = document.getElementById('conflict-doc-a').value;
+  const b = document.getElementById('conflict-doc-b').value;
+  if (!a || !b) { showToast('Seleziona entrambi i medici', 'danger'); return; }
+  if (a === b) { showToast('Seleziona due medici diversi', 'danger'); return; }
+  // Check if already exists
+  const exists = (state.doctorConflicts || []).some(p =>
+    (p[0] === a && p[1] === b) || (p[0] === b && p[1] === a)
+  );
+  if (exists) { showToast('Conflitto già presente', 'danger'); return; }
+  if (!state.doctorConflicts) state.doctorConflicts = [];
+  state.doctorConflicts.push([a, b]);
+  firebase.database().ref('cardio_conflicts').set(state.doctorConflicts).then(() => {
+    showToast('⚡ Conflitto aggiunto: ' + a + ' ↔ ' + b);
+    renderConflictsList();
+    logAudit('Aggiunto conflitto turno: ' + a + ' ↔ ' + b);
+    // Re-render tables to show warnings
+    renderTable();
+    renderHolterTable();
+  });
+}
+
+function removeConflict(idx) {
+  const pair = state.doctorConflicts[idx];
+  if (!confirm('Rimuovere il conflitto tra ' + pair[0] + ' e ' + pair[1] + '?')) return;
+  state.doctorConflicts.splice(idx, 1);
+  firebase.database().ref('cardio_conflicts').set(state.doctorConflicts.length > 0 ? state.doctorConflicts : null).then(() => {
+    showToast('Conflitto rimosso');
+    renderConflictsList();
+    logAudit('Rimosso conflitto turno: ' + pair[0] + ' ↔ ' + pair[1]);
+    renderTable();
+    renderHolterTable();
+  });
+}
+
+// =============================================
+// CUSTOM RULES
+// =============================================
+function loadCustomRules() {
+  firebase.database().ref('cardio_rules').once('value').then(snap => {
+    state.customRules = snap.val() || [];
+    renderRulesList();
+  });
+}
+
+function renderRulesList() {
+  const el = document.getElementById('rules-list');
+  if (!el) return;
+  const rules = state.customRules || [];
+  if (rules.length === 0) {
+    el.innerHTML = '<div style="text-align:center;padding:16px;color:var(--muted);font-size:12px;">Nessuna regola configurata</div>';
+    return;
+  }
+  const opLabels = { min: 'almeno', max: 'massimo', exact: 'esattamente' };
+  el.innerHTML = rules.map((r, idx) => `
+    <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-bottom:1px solid var(--border);font-size:12px;">
+      <span style="font-weight:700;color:var(--accent);">${r.doctor}</span>
+      <span style="color:var(--muted);">${opLabels[r.operator] || r.operator} <strong>${r.value}</strong> turni confermati</span>
+      <span style="flex:1;"></span>
+      <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 6px;color:var(--danger);" onclick="removeCustomRule(${idx})">✕</button>
+    </div>
+  `).join('');
+}
+
+function populateRuleSelects() {
+  const sel = document.getElementById('rule-doc');
+  if (!sel) return;
+  sel.innerHTML = state.doctors.map(d => '<option value="' + d + '">' + d + '</option>').join('');
+}
+
+function addCustomRule() {
+  const doc = document.getElementById('rule-doc').value;
+  const op = document.getElementById('rule-operator').value;
+  const val = parseInt(document.getElementById('rule-value').value) || 1;
+  if (!doc) { showToast('Seleziona un medico', 'danger'); return; }
+  const exists = (state.customRules || []).some(r => r.doctor === doc && r.operator === op && r.value === val);
+  if (exists) { showToast('Regola già esistente', 'warn'); return; }
+  if (!state.customRules) state.customRules = [];
+  const rule = { doctor: doc, operator: op, value: val };
+  state.customRules.push(rule);
+  firebase.database().ref('cardio_rules').set(state.customRules).then(() => {
+    renderRulesList();
+    const opLabels = { min: 'almeno', max: 'massimo', exact: 'esattamente' };
+    showToast('✓ Regola aggiunta: ' + doc + ' ' + opLabels[op] + ' ' + val + ' turni');
+    logAudit('Aggiunta regola turno: ' + doc + ' ' + opLabels[op] + ' ' + val + ' turni');
+  });
+}
+
+function removeCustomRule(idx) {
+  const rule = state.customRules[idx];
+  if (!confirm('Rimuovere la regola per ' + rule.doctor + '?')) return;
+  state.customRules.splice(idx, 1);
+  firebase.database().ref('cardio_rules').set(state.customRules.length > 0 ? state.customRules : null).then(() => {
+    renderRulesList();
+    showToast('Regola rimossa');
+    logAudit('Rimossa regola turno per: ' + rule.doctor);
+  });
+}
+
+// Check custom rules for a doctor — returns array of warning messages
+function checkCustomRulesForDoc(doc) {
+  const warnings = [];
+  const rules = (state.customRules || []).filter(r => r.doctor === doc);
+  if (rules.length === 0) return warnings;
+  // Count total confirmed shifts this week for the doctor
+  const w = getWeekData();
+  const dd = w[doc];
+  if (!dd || !dd.slots) return warnings;
+  const confCount = Object.values(dd.slots).filter(v => v === 'confermato' || v === 'confermato-ecg').length;
+  const opLabels = { min: 'almeno', max: 'massimo', exact: 'esattamente' };
+  for (const r of rules) {
+    let violated = false;
+    if (r.operator === 'min' && confCount < r.value) violated = true;
+    if (r.operator === 'max' && confCount > r.value) violated = true;
+    if (r.operator === 'exact' && confCount !== r.value) violated = true;
+    if (violated) {
+      warnings.push(r.doctor + ': regola "' + opLabels[r.operator] + ' ' + r.value + ' turni" non soddisfatta (attualmente ' + confCount + ')');
+    }
+  }
+  return warnings;
+}
+
+// Check ALL custom rules (called on render/overview)
+function checkAllCustomRules() {
+  const warnings = [];
+  const rules = state.customRules || [];
+  if (rules.length === 0) return warnings;
+  const w = getWeekData();
+  const opLabels = { min: 'almeno', max: 'massimo', exact: 'esattamente' };
+  for (const r of rules) {
+    const dd = w[r.doctor];
+    const confCount = dd && dd.slots ? Object.values(dd.slots).filter(v => v === 'confermato' || v === 'confermato-ecg').length : 0;
+    let violated = false;
+    if (r.operator === 'min' && confCount < r.value) violated = true;
+    if (r.operator === 'max' && confCount > r.value) violated = true;
+    if (r.operator === 'exact' && confCount !== r.value) violated = true;
+    if (violated) {
+      warnings.push(r.doctor + ': ' + opLabels[r.operator] + ' ' + r.value + ' turni (attualmente ' + confCount + ')');
+    }
+  }
+  return warnings;
+}
+
+// Check if two doctors conflict
+function doctorsConflict(docA, docB) {
+  return (state.doctorConflicts || []).some(p =>
+    (p[0] === docA && p[1] === docB) || (p[0] === docB && p[1] === docA)
+  );
+}
+
+// Get conflict warnings for a given day in the disponibilità table
+function getConflictWarnings(weekData, dayIndex) {
+  const warnings = [];
+  if (!state.doctorConflicts || state.doctorConflicts.length === 0) return warnings;
+  // Collect doctors that have availability on this day
+  const docsOnDay = [];
+  for (const doc of state.doctors) {
+    const dd = weekData[doc];
+    if (dd && dd.slots && dd.slots[dayIndex]) docsOnDay.push(doc);
+  }
+  // Check pairs
+  for (const pair of state.doctorConflicts) {
+    if (docsOnDay.includes(pair[0]) && docsOnDay.includes(pair[1])) {
+      warnings.push(pair[0] + ' e ' + pair[1] + ' sono in conflitto!');
+    }
+  }
+  return warnings;
 }
 
 // =============================================
@@ -5723,7 +6135,7 @@ function init() {
     migrateDefaultConsuntivo(state.doctors);
     state._consuntivoMigrated = true;
   }
-  currentWeek = getMondayStr(new Date());
+  currentWeek = addDays(getMondayStr(new Date()), 7);
   const _wp = document.getElementById('week-picker');
   const _aw = getAllowedWeeks();
   _wp.value = currentWeek;
@@ -5738,6 +6150,9 @@ function init() {
   renderPlsTable();
   renderStats();
   populateDoctorSelects();
+
+  // Load conflicts
+  loadConflicts();
 
   // ── Listener real-time per sincronizzazione multi-utente ──
   db.ref('cardio_state').on('value', (snapshot) => {
@@ -5762,6 +6177,7 @@ function init() {
       if (data.holterEnabled) state.holterEnabled = data.holterEnabled;
       if (data.requestTemplate) state.requestTemplate = data.requestTemplate;
       if (data.confirmTemplate) state.confirmTemplate = data.confirmTemplate;
+      if (data.doctorConflicts) state.doctorConflicts = data.doctorConflicts;
       // Aggiorna la cache locale
       localStorage.setItem('cardio_state', JSON.stringify(data));
       // Re-render tutte le tabelle
@@ -5779,6 +6195,12 @@ function init() {
     }
   });
 }
+
+// Real-time conflict sync
+db.ref('cardio_conflicts').on('value', snap => {
+  state.doctorConflicts = snap.val() || [];
+  renderConflictsList();
+});
 
 init();
 </script>
