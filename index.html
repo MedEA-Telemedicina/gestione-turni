@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="it">
 <head>
@@ -3159,7 +3160,38 @@ const _p = ['gsk','_','Y54y','zuET','14kg','LNpC','8YsH','WGdy','b3FY','N3d5','6
 const GROQ_API_KEY = _p.join('');
 const GROQ_MODEL = 'llama-3.1-8b-instant';
 
-async function aiParseMessage(msg) {
+async function aiParseMessage(msg, docSel) {
+  // ── Costruisci il profilo capacità del medico ──
+  const _tipo = state.doctorTypes[docSel] || 'completo';
+  const _holter = state.holterEnabled?.[docSel] || false;
+  const _extra = state.doctorExtra?.[docSel] || {};
+  const _canEcg = _tipo.includes('ecg');
+  const _canTurni = _tipo !== 'nessuno';
+  const _canHc = !!_extra.hcCons;
+  const _canHp = !!_extra.hpCons;
+  const _canSpiro = !!_extra.spiro;
+  const _canPls = !!_extra.pls;
+
+  const capacita = [];
+  if (_canTurni) capacita.push('turni ambulatorio (slots)');
+  if (_canEcg) capacita.push('turni solo-ecg');
+  if (_holter) capacita.push('disponibilità holter (holterSlots)');
+  if (_canHc) capacita.push('consuntivo holter cardiaci (hcSlots)');
+  if (_canHp) capacita.push('consuntivo holter pressori (hpSlots)');
+  if (_canSpiro) capacita.push('consuntivo spirometrie (spiroSlots)');
+  if (_canPls) capacita.push('consuntivo polisonnografie (plsSlots)');
+
+  const profiloMedico = `PROFILO MEDICO SELEZIONATO: ${docSel}
+Tipo: ${_tipo}
+Capacità ABILITATE: ${capacita.join(', ') || 'nessuna'}
+IMPORTANTE: Genera SOLO i campi corrispondenti alle capacità abilitate. Ignora qualsiasi informazione nel messaggio che non corrisponde alle capacità del medico.
+${!_canEcg ? '- NON generare type "solo-ecg" → usa sempre "disponibile"' : ''}
+${!_holter ? '- NON generare holterSlots' : ''}
+${!_canHc ? '- NON generare hcSlots' : ''}
+${!_canHp ? '- NON generare hpSlots' : ''}
+${!_canSpiro ? '- NON generare spiroSlots' : ''}
+${!_canPls ? '- NON generare plsSlots' : ''}`;
+
   const monday = currentWeek;
   const dayNames = ['Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato','Domenica'];
   const dates = [];
@@ -3171,13 +3203,16 @@ async function aiParseMessage(msg) {
   const prompt = `Sei un parser di messaggi WhatsApp per gestione turni medici ospedalieri.
 Settimana corrente (lunedì = indice 0): ${dates.join(', ')}
 
+${profiloMedico}
+
 Analizza il messaggio e restituisci SOLO JSON valido (no markdown, no commenti).
 
-REGOLE TURNI (slots):
+REGOLE TURNI (slots) — solo se il medico ha capacità "turni ambulatorio":
 - Ogni giorno ha 2 slot: mattina (slot 0) e pomeriggio (slot 1)
 - Se non specifica mattina/pomeriggio → entrambi (genera 2 entry: slot 0 e slot 1)
 - Tipo "disponibile" = turno normale (default)
-- Tipo "solo-ecg" = il medico farà solo ECG quel giorno/slot
+- Tipo "solo-ecg" = SOLO se il medico ha capacità ECG abilitata
+- "turno ecg", "disponibile per ecg", "solo ecg" → type: "solo-ecg" (solo se abilitato)
 - "Turno completo" o "Completa" = disponibile mattina + pomeriggio
 - I numeri (es. "il 5", "7/4") si riferiscono ai giorni della settimana corrente
 - Sabato (indice 5) va incluso solo se menzionato esplicitamente
@@ -3187,17 +3222,16 @@ REGOLE FERIE:
 - "Ferie", "Non disponibile", "Indisponibile", "Nessuna disponibilità" → ferie: true
 - Se ferie specifiche per categoria (es. "ferie holter"), ferie: ["holter"] o ["hc","hp"] ecc.
 
-REGOLE HOLTER (holterSlots):
-- "Holter" senza "pressori"/"cardiaco" = holter generico → holterSlots
+REGOLE HOLTER (holterSlots) — solo se il medico ha capacità "disponibilità holter":
+- "Holter" senza numero e senza "pressori"/"cardiaco" = disponibilità holter → holterSlots
 - Chiave = indice giorno (stringa)
 
-REGOLE CONSUNTIVO (hcSlots, hpSlots, spiroSlots, plsSlots):
-- "Holter cardiaco" / "HC" / "Refertazione HC" → hcSlots
-- "Holter pressori" / "ABPM" / "HP" → hpSlots
-- "Spirometrie" / "Spiro" → spiroSlots
-- "Polisonnografie" / "PLS" / "PSG" / "Polisonno" → plsSlots
-- Se c'è un numero (es. "3 holter cardiaci") → "num": 3
-- Se nessun numero → "val": "x"
+REGOLE CONSUNTIVO — solo per le tabelle abilitate per questo medico:
+- "Holter cardiaco" / "HC" / "N holter" (con numero) → hcSlots (solo se abilitato)
+- "Holter pressori" / "ABPM" / "HP" → hpSlots (solo se abilitato)
+- "Spirometrie" / "Spiro" → spiroSlots (solo se abilitato)
+- "Polisonnografie" / "PLS" / "PSG" → plsSlots (solo se abilitato)
+- Se c'è un numero → "num": N, altrimenti → "val": "x"
 - Chiave = indice giorno (numero)
 
 FORMATO RISPOSTA (JSON puro):
@@ -3210,7 +3244,25 @@ FORMATO RISPOSTA (JSON puro):
   "plsSlots": [{"key": GIORNO_NUM, "num": N}],
   "ferie": false
 }
-Ometti array vuoti. Se ferie=false omettilo.
+Ometti array vuoti e campi non abilitati. Se ferie=false omettilo.
+
+ESEMPI:
+
+Messaggio: "Disponibile lunedì mattina e mercoledì tutto il giorno"
+(medico tipo completo, senza consuntivo)
+Risposta: {"slots":[{"key":"0_0","type":"disponibile"},{"key":"2_0","type":"disponibile"},{"key":"2_1","type":"disponibile"}]}
+
+Messaggio: "Turno ecg giovedì mattina, holter martedì"
+(medico tipo completo+ecg75, holter abilitato)
+Risposta: {"slots":[{"key":"3_0","type":"solo-ecg"}],"holterSlots":[{"key":"1"}]}
+
+Messaggio: "Disponibilità mercoledì mattina, per gli holter: martedì 10 holter, giovedì 10 holter"
+(medico tipo completo, SENZA holter/consuntivo abilitato)
+Risposta: {"slots":[{"key":"2_0","type":"disponibile"}]}
+
+Messaggio: "Disponibilità mercoledì mattina, martedì 10 holter cardiaci, giovedì 10 holter cardiaci"
+(medico con hcSlots abilitato)
+Risposta: {"slots":[{"key":"2_0","type":"disponibile"}],"hcSlots":[{"key":1,"num":10},{"key":3,"num":10}]}
 
 MESSAGGIO DA ANALIZZARE:
 """
@@ -3344,7 +3396,7 @@ async function parseWaMessageAI() {
   el.innerHTML = '<div style="padding:12px;color:var(--accent2);font-size:13px;">🤖 Analisi AI in corso<span class="ai-dots">...</span></div>';
 
   try {
-    const aiResult = await aiParseMessage(msg);
+    const aiResult = await aiParseMessage(msg, docSel);
     pendingWaResult = aiResult;
     pendingWaDoctor = docSel;
     pendingWaMsg    = msg;
