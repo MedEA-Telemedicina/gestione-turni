@@ -778,12 +778,12 @@
 <!-- ===== TAB 1: DISPONIBILITA ===== -->
 <div class="tab-content active" id="tab-disponibilita">
   <div class="week-bar">
-    <label>Lunedì settimana:</label>
-    <input type="date" id="week-picker" onchange="onWeekChange()">
+    <span class="admin-only"><label>Lunedì settimana:</label>
+    <input type="date" id="week-picker" onchange="onWeekChange()"></span>
     <button class="btn btn-ghost btn-sm" onclick="prevWeek()">← Sett. prec.</button>
     <button class="btn btn-ghost btn-sm" onclick="nextWeek()">Sett. succ. →</button>
     <button class="btn btn-primary btn-sm" onclick="saveData()">💾 Salva</button>
-    <button class="btn btn-ghost btn-sm" onclick="clearWeek()">🗑️ Azzera settimana</button>
+    <button class="btn btn-ghost btn-sm admin-only" onclick="clearWeek()">🗑️ Azzera settimana</button>
   </div>
 
   <div class="stat-row" id="stat-row"></div>
@@ -994,6 +994,9 @@
         <input type="text" id="settings-search" placeholder="🔍 Cerca medico..." style="flex:1;min-width:160px;" oninput="renderSettings()">
       </div>
       <div id="doctors-list" style="display:flex;flex-direction:column;gap:0;max-height:480px;overflow-y:auto;padding-right:4px;"></div>
+      <div style="margin-top:12px;display:flex;justify-content:flex-end;">
+        <button class="btn btn-primary btn-sm" onclick="forceSaveDoctors()" style="font-size:13px;padding:8px 20px;">💾 Salva Modifiche</button>
+      </div>
     </div>
 
     <!-- GESTIONE UTENTI (admin-only) -->
@@ -1902,7 +1905,7 @@ function cycleSlot(doc, key) {
   const _slotL = ['mattina','pomeriggio'];
   const _kp = key.split('_');
   const _humanSlot = (_dayL[_kp[0]] || _kp[0]) + ' (' + (_slotL[_kp[1]] || _kp[1]) + ')';
-  logSlotChange('Ambulatorio', doc, _humanSlot, LABELS[newVal] || newVal);
+  logSlotChange('Turno', doc, _humanSlot, LABELS[newVal] || newVal);
   renderTable();
   renderStats();
   autoSave();
@@ -1911,7 +1914,7 @@ function cycleSlot(doc, key) {
 function toggleFerie(doc, val) {
   const dd = getDoctorData(doc);
   dd.ferie = val;
-  logAudit((val ? 'Attivate' : 'Disattivate') + ' ferie Ambulatorio per ' + doc);
+  logAudit((val ? 'Attivate' : 'Disattivate') + ' ferie Turno per ' + doc);
   renderTable();
   renderStats();
   autoSave();
@@ -3166,6 +3169,7 @@ async function aiParseMessage(msg, docSel) {
   const _holter = state.holterEnabled?.[docSel] || false;
   const _extra = state.doctorExtra?.[docSel] || {};
   const _canEcg = _tipo.includes('ecg');
+  const _onlyEcg = (_tipo === 'ecg75' || _tipo === 'ecg100');
   const _canTurni = _tipo !== 'nessuno';
   const _canHc = !!_extra.hcCons;
   const _canHp = !!_extra.hpCons;
@@ -3192,18 +3196,22 @@ async function aiParseMessage(msg, docSel) {
   const prompt = `Parser turni medici. Settimana: ${dates.join(', ')}
 Medico: ${docSel} | Campi ABILITATI: [${allow.join(',')}]
 Genera SOLO campi abilitati. Rispondi SOLO JSON valido.
+⚠️ CHIAVI: usa SEMPRE INDICI NUMERICI 0-6. MAI usare date, nomi giorni, o formati tipo "6/4". Riferisciti al mapping: ${dates.join(', ')}
 
-${_canTurni ? 'Regole slots: mattina=slot 0, pomeriggio=slot 1. Se non specifica→entrambi. key="GIORNO_SLOT". type="disponibile" default.' + (_canEcg ? ' "turno ecg"/"solo ecg"→type:"solo-ecg".' : ' MAI type "solo-ecg".') : 'NON generare slots (il medico non fa turni ambulatorio).'}
+${_canTurni ? 'Regole slots: mattina=slot 0, pomeriggio=slot 1. Se non specifica matt/pom→entrambi. key="INDICE_SLOT" (es "2_0"=mercoledì mattina).' + (_onlyEcg ? ' Questo medico fa SOLO ECG: usa SEMPRE type:"solo-ecg" per OGNI turno.' : _canEcg ? ' type:"disponibile" default. "turno ecg"/"solo ecg"→type:"solo-ecg".' : ' type:"disponibile" SEMPRE. MAI type "solo-ecg".') : 'NON generare slots.'}
+REGOLA ALTERNATIVE: "X o Y o Z"/"X oppure Y"=ALTERNATIVE, genera UN SOLO slot per giorno/fascia. Se c'è "normale"/"completo"→"disponibile". MAI duplicare.
 Regole ferie: "ferie"/"non disponibile"→ferie:true
-${_holter ? 'holterSlots: "holter" generico SENZA numero specifico→key=indice giorno(stringa)' : ''}
-${_canHc ? 'hcSlots: "holter cardiaco"/"holter ecg"/"HC"/"holter"(con numero davanti)→key=indice(num),num:N. IMPORTANTE: se il messaggio dice "N holter" o "N holter ecg" dove N è un numero, DEVI mettere num:N.' : ''}
-${_canHp ? 'hpSlots: "holter pressori"/"HP"/"ABPM"→key=indice(num),num:N' : ''}
-${_canSpiro ? 'spiroSlots: "spirometrie"/"spiro"→key=indice(num),num:N' : ''}
-${_canPls ? 'plsSlots: "polisonnografie"/"PLS"/"PSG"→key=indice(num),num:N' : ''}
+${_holter ? 'holterSlots: key=STRINGA indice ("0","1",...). "holter"/"solo holter"→aggiungi. Giorno con SOLO holter→holterSlots senza slots.' : ''}
+${_canHc ? 'hcSlots: "holter cardiaco"/"holter ecg"/"HC"/"N holter"→key=indice(num),num:N.' : ''}
+${_canHp ? 'hpSlots: "holter pressori"/"HP"/"ABPM"→key=indice(num),num:N.' : ''}
+${_canSpiro ? 'spiroSlots: "spirometrie"/"spiro"→key=indice(num),num:N.' : ''}
+${_canPls ? 'plsSlots: "polisonnografie"/"PLS"/"PSG"→key=indice(num),num:N.' : ''}
+${(_canHc||_canHp||_canSpiro||_canPls) ? '"N al giorno"/"N ogni giorno"→genera entry per OGNI giorno 0-6 con num:N.' : ''}
 Se num assente→"val":"x". Ometti array vuoti e ferie:false.
-${!_canTurni && (_canHc||_canHp||_canSpiro||_canPls) ? 'Questo medico fa SOLO consuntivo. NON generare slots ambulatorio.' : ''}
+${!_canTurni && (_canHc||_canHp||_canSpiro||_canPls) ? 'Medico SOLO consuntivo. NON generare slots.' : ''}
 
-${_canHc ? 'Es: "solo 5 holter ecg il sabato"→{"hcSlots":[{"key":5,"num":5}]}' : 'Es: "Disponibile lunedì mattina e mercoledì"→{"slots":[{"key":"0_0","type":"disponibile"},{"key":"2_0","type":"disponibile"},{"key":"2_1","type":"disponibile"}]}'}
+Es: msg "Lun Holter, Mar matt normale o ecg o Holter, Mer matt solo Holter"→{"slots":[{"key":"1_0","type":"disponibile"}],"holterSlots":[{"key":"0"},{"key":"1"},{"key":"2"}]}
+Es: msg "10 holter al giorno"→{"hcSlots":[{"key":0,"num":10},{"key":1,"num":10},{"key":2,"num":10},{"key":3,"num":10},{"key":4,"num":10},{"key":5,"num":10},{"key":6,"num":10}]}
 
 Messaggio:
 ${msg}`;
@@ -3239,14 +3247,96 @@ ${msg}`;
   try { parsed = JSON.parse(jsonMatch[0]); }
   catch(e) { throw new Error('JSON non valido dalla AI: ' + text.substring(0, 100)); }
 
+  // Helper: mappa nomi giorno → indice
+  const _dMap = {'lunedi':0,'lunedì':0,'lun':0,'monday':0,'martedi':1,'martedì':1,'mar':1,'tuesday':1,'mercoledi':2,'mercoledì':2,'mer':2,'wednesday':2,'giovedi':3,'giovedì':3,'gio':3,'thursday':3,'venerdi':4,'venerdì':4,'ven':4,'friday':4,'sabato':5,'sab':5,'saturday':5,'domenica':6,'dom':6,'sunday':6};
+
+  // Mappa date della settimana corrente → indice (es. "6/4" → 0, "6 aprile" → 0)
+  const _dateToIdx = {};
+  const _mNames = ['gennaio','febbraio','marzo','aprile','maggio','giugno','luglio','agosto','settembre','ottobre','novembre','dicembre'];
+  for (let _i = 0; _i < 7; _i++) {
+    const _dd = parseLocalDate(addDays(monday, _i));
+    const _day = _dd.getDate(), _mon = _dd.getMonth() + 1;
+    _dateToIdx[`${_day}/${_mon}`] = _i;
+    _dateToIdx[`${_day}-${_mon}`] = _i;
+    _dateToIdx[`${_day}.${_mon}`] = _i;
+    _dateToIdx[`${_day} ${_mNames[_mon-1]}`] = _i;
+    _dateToIdx[`${_day}${_mNames[_mon-1]}`] = _i;
+    // Giorno del mese con zero padding
+    if (_day < 10) {
+      _dateToIdx[`0${_day}/${_mon}`] = _i;
+      _dateToIdx[`0${_day}-${_mon}`] = _i;
+    }
+  }
+
+  function _dayToIdx(k) {
+    const s = String(k).toLowerCase().trim().replace(/\s+/g,' ');
+    // 1. Nome giorno esatto
+    if (_dMap[s] !== undefined) return _dMap[s];
+    // 2. Nome giorno come prefisso (es "lunedì pomeriggio")
+    for (const [name, idx] of Object.entries(_dMap)) {
+      if (name.length >= 3 && s.startsWith(name)) return idx;
+    }
+    // 3. Data con mese (es "6/4", "6 aprile", "11-4")
+    if (_dateToIdx[s] !== undefined) return _dateToIdx[s];
+    // 4. Formato "N mese" con spazi variabili
+    const _dm = s.match(/^(\d{1,2})\s*[\/\-\.]?\s*([a-z]+)$/);
+    if (_dm) {
+      const _ck1 = _dm[1] + ' ' + _dm[2];
+      const _ck2 = _dm[1] + _dm[2];
+      if (_dateToIdx[_ck1] !== undefined) return _dateToIdx[_ck1];
+      if (_dateToIdx[_ck2] !== undefined) return _dateToIdx[_ck2];
+    }
+    // 5. Formato "N/M" con slash/punto/dash
+    const _ds = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})$/);
+    if (_ds) {
+      const _ckd = _ds[1] + '/' + _ds[2];
+      if (_dateToIdx[_ckd] !== undefined) return _dateToIdx[_ckd];
+    }
+    // 6. Numero puro 0-6 → indice giorno
+    const n = parseInt(s);
+    if (!isNaN(n) && n >= 0 && n <= 6) return n;
+    // 7. Numero > 6 → potrebbe essere giorno del mese
+    if (!isNaN(n) && n > 6 && n <= 31) {
+      for (const [dk, di] of Object.entries(_dateToIdx)) {
+        if (dk.startsWith(n + '/') || dk.startsWith(n + '-')) return di;
+      }
+    }
+    return null;
+  }
+
+  // Normalizza slot keys: "lunedi_1" → "0_1", "6/4_0" → "0_0", "3_0" → "3_0"
+  function _normSlotKey(rawKey) {
+    const str = String(rawKey).toLowerCase().trim();
+    // Prova a separare: tutto tranne l'ultimo pezzo = giorno, ultimo = slot (0|1)
+    const parts = str.split(/[_\-]/);
+    if (parts.length >= 2) {
+      const slotPart = parseInt(parts[parts.length - 1]);
+      if (slotPart === 0 || slotPart === 1) {
+        const dayStr = parts.slice(0, -1).join(' ');
+        const dayPart = _dayToIdx(dayStr);
+        if (dayPart !== null) return dayPart + '_' + slotPart;
+      }
+    }
+    // Prova formato "N/M_S" (es "6/4_0")
+    const _dsm = str.match(/^(\d{1,2}[\/\.\-]\d{1,2})[_\-](\d)$/);
+    if (_dsm) {
+      const di = _dayToIdx(_dsm[1]);
+      if (di !== null) return di + '_' + _dsm[2];
+    }
+    // Solo giorno senza slot → incompleto, skip
+    const d = _dayToIdx(str);
+    if (d !== null) return null;
+    return str;
+  }
+
   // Normalizza al formato interno dell'app
   const result = {
-    slots:       (parsed.slots || []).map(s => ({ key: String(s.key), type: s.type || 'disponibile' })),
-    holterSlots: (parsed.holterSlots || []).map(s => ({ key: String(s.key) })),
-    hcSlots:     (parsed.hcSlots || []).map(s => ({ key: Number(s.key), ...(s.num != null ? { num: s.num } : { val: 'x' }) })),
-    hpSlots:     (parsed.hpSlots || []).map(s => ({ key: Number(s.key), ...(s.num != null ? { num: s.num } : { val: 'x' }) })),
-    spiroSlots:  (parsed.spiroSlots || []).map(s => ({ key: Number(s.key), ...(s.num != null ? { num: s.num } : { val: 'x' }) })),
-    plsSlots:    (parsed.plsSlots || []).map(s => ({ key: Number(s.key), ...(s.num != null ? { num: s.num } : { val: 'x' }) })),
+    slots:       (parsed.slots || []).map(s => ({ key: _normSlotKey(s.key), type: s.type || 'disponibile' })).filter(s => s.key !== null),
+    holterSlots: (parsed.holterSlots || []).map(s => { const d = _dayToIdx(s.key); return d !== null ? { key: String(d) } : null; }).filter(Boolean),
+    hcSlots:     (parsed.hcSlots || []).map(s => { const d = _dayToIdx(s.key); return d !== null ? { key: d, ...(s.num != null ? { num: s.num } : { val: 'x' }) } : null; }).filter(Boolean),
+    hpSlots:     (parsed.hpSlots || []).map(s => { const d = _dayToIdx(s.key); return d !== null ? { key: d, ...(s.num != null ? { num: s.num } : { val: 'x' }) } : null; }).filter(Boolean),
+    spiroSlots:  (parsed.spiroSlots || []).map(s => { const d = _dayToIdx(s.key); return d !== null ? { key: d, ...(s.num != null ? { num: s.num } : { val: 'x' }) } : null; }).filter(Boolean),
+    plsSlots:    (parsed.plsSlots || []).map(s => { const d = _dayToIdx(s.key); return d !== null ? { key: d, ...(s.num != null ? { num: s.num } : { val: 'x' }) } : null; }).filter(Boolean),
     ferie:       parsed.ferie || false
   };
 
@@ -3255,11 +3345,12 @@ ${msg}`;
   // ══════════════════════════════════════════
   const _msgLow = msg.toLowerCase().replace(/[''`´]/g, "'");
 
-  // 1) Rimuovi slots se il medico non fa turni ambulatorio
+  // 1) Rimuovi slots se il medico non fa turni
   if (!_canTurni) result.slots = [];
 
-  // 2) Rimuovi solo-ecg se il medico non ha ECG abilitato
-  if (!_canEcg) result.slots = result.slots.map(s => ({ ...s, type: 'disponibile' }));
+  // 2) Normalizza tipo slot in base al profilo medico
+  if (_onlyEcg) result.slots = result.slots.map(s => ({ ...s, type: 'solo-ecg' })); // ecg75/ecg100 → SEMPRE solo-ecg
+  else if (!_canEcg) result.slots = result.slots.map(s => ({ ...s, type: 'disponibile' })); // completo → MAI solo-ecg
 
   // 3) Rimuovi campi consuntivo non abilitati
   if (!_holter) result.holterSlots = [];
@@ -3268,7 +3359,18 @@ ${msg}`;
   if (!_canSpiro) result.spiroSlots = [];
   if (!_canPls) result.plsSlots = [];
 
-  // 4) Correggi numeri consuntivo: estrai numeri dal messaggio e correggile val:"x" → num:N
+  // 4) DEDUP SLOTS: un solo entry per giorno_fascia, preferisci "disponibile"
+  const _slotMap = new Map();
+  result.slots.forEach(s => {
+    if (!_slotMap.has(s.key) || s.type === 'disponibile') _slotMap.set(s.key, s);
+  });
+  result.slots = [..._slotMap.values()];
+
+  // 5) Dedup holter (keys già normalizzate sopra)
+  const _hSet = new Set();
+  result.holterSlots = result.holterSlots.filter(s => { if (_hSet.has(s.key)) return false; _hSet.add(s.key); return true; });
+
+  // 6) Correggi numeri consuntivo: estrai numeri dal messaggio e correggile val:"x" → num:N
   const _consFields = [
     { key: 'hcSlots', patterns: [/(\d+)\s*holter(?:\s+(?:ecg|cardiaci|cardiac[oi]))?/gi, /holter(?:\s+(?:ecg|cardiaci|cardiac[oi]))?\s*[:\-]?\s*(\d+)/gi] },
     { key: 'hpSlots', patterns: [/(\d+)\s*(?:holter\s+pressor[ie]|abpm|hp)/gi, /(?:holter\s+pressor[ie]|abpm|hp)\s*[:\-]?\s*(\d+)/gi] },
@@ -3292,14 +3394,39 @@ ${msg}`;
     }
   });
 
-  // 5) Fallback globale numeri: se c'è un solo numero nel messaggio e consuntivo ha val:"x"
+  // 7) Fallback globale numeri: se c'è un solo numero nel messaggio e consuntivo ha val:"x"
   const _globalNums = _msgLow.match(/\b(\d+)\b/g);
   if (_globalNums && _globalNums.length === 1) {
     const gNum = parseInt(_globalNums[0], 10);
-    if (gNum > 0 && gNum <= 50) { // range ragionevole per consuntivo
+    if (gNum > 0 && gNum <= 50) {
       ['hcSlots','hpSlots','spiroSlots','plsSlots'].forEach(k => {
         result[k] = result[k].map(s => s.val === 'x' ? { key: s.key, num: gNum } : s);
       });
+    }
+  }
+
+  // 8) "AL GIORNO" expansion: "N al giorno"/"N ogni giorno"/"N tutti i giorni" → tutti i giorni 0-6
+  if (/al\s+giorno|ogni\s+giorno|tutti\s+i\s+giorni|tutta\s+la\s+settimana/i.test(_msgLow)) {
+    ['hcSlots','hpSlots','spiroSlots','plsSlots'].forEach(k => {
+      if (result[k].length > 0) {
+        const _firstNum = result[k].find(s => s.num != null);
+        const _num = _firstNum ? _firstNum.num : null;
+        const _existing = new Set(result[k].map(s => s.key));
+        for (let _d = 0; _d < 7; _d++) {
+          if (!_existing.has(_d)) {
+            result[k].push(_num != null ? {key: _d, num: _num} : {key: _d, val: 'x'});
+          }
+        }
+        result[k].sort((a,b) => a.key - b.key);
+      }
+    });
+    // Anche per holterSlots
+    if (result.holterSlots.length > 0) {
+      const _hExist = new Set(result.holterSlots.map(s => s.key));
+      for (let _d = 0; _d < 7; _d++) {
+        if (!_hExist.has(String(_d))) result.holterSlots.push({key: String(_d)});
+      }
+      result.holterSlots.sort((a,b) => parseInt(a.key) - parseInt(b.key));
     }
   }
 
@@ -3589,6 +3716,13 @@ function applyParsedResult() {
     renderHolterTable();
     renderHcTable(); renderHpTable(); renderSpiroTable(); renderPlsTable();
     pendingWaResult = null; pendingWaDoctor = null; pendingWaMsg = null;
+    // Reset parser box
+    document.getElementById('wa-msg-input').value = '';
+    document.getElementById('wa-doctor-select').selectedIndex = 0;
+    setTimeout(() => {
+      const _prEl = document.getElementById('wa-parse-result');
+      if (_prEl && _prEl.textContent.includes('Ferie')) _prEl.innerHTML = '';
+    }, 3000);
     return;
   }
 
@@ -3677,6 +3811,15 @@ function applyParsedResult() {
     `<div style="color:var(--success);font-size:12px;">✓ ${parts.join(' + ')} applicati per <strong>${pendingWaDoctor}</strong></div>`;
 
   pendingWaResult = null; pendingWaDoctor = null; pendingWaMsg = null;
+
+  // Reset parser box: svuota textarea e resetta selettore medico
+  document.getElementById('wa-msg-input').value = '';
+  document.getElementById('wa-doctor-select').selectedIndex = 0;
+  // Dopo 3 secondi nascondi anche il messaggio di conferma
+  setTimeout(() => {
+    const _prEl = document.getElementById('wa-parse-result');
+    if (_prEl && _prEl.textContent.includes('applicati')) _prEl.innerHTML = '';
+  }, 3000);
 }
 
 function clearWaInput() {
@@ -4416,9 +4559,9 @@ function renderRiepilogo() {
       </div>`;
     }
 
-    // Altrimenti mostra badge per ogni tabella specifica (escluso Turno generico)
-    const badges = labels.filter(l => l !== 'Turno').map(l =>
-      `<span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;margin-left:4px;background:${l==='HC'?'#0e7490':l==='HP'?'#ea7c1e':l==='Holter'?'#7c3aed':l==='Spiro'?'#16a34a':l==='Pls'?'#7c3aed':'#dc2626'};color:#fff;">${l}</span>`
+    // Mostra badge per ogni tabella specifica in ferie (incluso Turno)
+    const badges = labels.map(l =>
+      `<span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;margin-left:4px;background:${l==='Turno'?'#dc2626':l==='HC'?'#0e7490':l==='HP'?'#ea7c1e':l==='Holter'?'#7c3aed':l==='Spiro'?'#16a34a':l==='Pls'?'#7c3aed':'#dc2626'};color:#fff;">${l}</span>`
     ).join('');
     return `<div style="font-size:12px;font-weight:600;color:var(--danger);padding:4px 7px;background:rgba(220,38,38,0.07);border-radius:5px;display:flex;align-items:center;flex-wrap:wrap;gap:2px;">
       • ${doc}${badges}
@@ -4608,7 +4751,7 @@ function renderSettings() {
         <!-- Telefono -->
         <div style="display:flex;flex-direction:column;gap:4px;">
           <span style="font-size:9px;font-weight:700;color:#cbd5e1;text-transform:uppercase;letter-spacing:.5px;">📱 Telefono</span>
-          <input type="tel" value="${state.doctorPhones[doc] || ''}" placeholder="3xx xxx xxxx" onblur="saveDoctorPhone('${doc}', this.value)" style="width:140px;min-width:140px;font-size:11px;font-family:var(--font-mono);border:1px solid var(--border);border-radius:6px;padding:5px 8px;background:var(--surface2);color:var(--text);">
+          <input type="tel" value="${state.doctorPhones[doc] || ''}" placeholder="3xx xxx xxxx" onblur="saveDoctorPhone('${doc}', this.value)" style="width:140px;min-width:140px;font-size:11px;font-family:var(--font-mono);border-radius:6px;padding:5px 8px;${state.doctorPhones[doc] ? 'border:2px solid #25d366;background:rgba(37,211,102,0.08);color:var(--text);' : 'border:1px solid var(--border);background:var(--surface2);color:var(--text);'}">
         </div>
       </div>
     </div>
@@ -4678,6 +4821,12 @@ function saveTemplate() {
   showToast('Template salvato');
 }
 
+function forceSaveDoctors() {
+  saveData();
+  logAudit('Salvataggio forzato gestione medici');
+  showToast('✓ Modifiche medici salvate!', 'success');
+}
+
 function saveConfirmTemplate() {
   state.confirmTemplate = document.getElementById('confirm-template').value;
   logAudit('Modificato template di conferma');
@@ -4687,12 +4836,21 @@ function saveConfirmTemplate() {
 
 function saveDoctorPhone(doc, phone) {
   const cleaned = (phone || '').trim();
+  const inputEl = event && event.target;
   if (cleaned) {
     state.doctorPhones[doc] = cleaned;
     logAudit('Aggiornato telefono di ' + doc + ': ' + cleaned);
+    if (inputEl) {
+      inputEl.style.border = '2px solid #25d366';
+      inputEl.style.background = 'rgba(37,211,102,0.08)';
+    }
   } else {
     delete state.doctorPhones[doc];
     logAudit('Rimosso telefono di ' + doc);
+    if (inputEl) {
+      inputEl.style.border = '1px solid var(--border)';
+      inputEl.style.background = 'var(--surface2)';
+    }
   }
   saveData(true);
 }
@@ -4798,8 +4956,8 @@ function flushSlotAudit() {
   _slotAuditBuffer = {};
   _slotAuditTimer = null;
   Object.values(buf).forEach(entry => {
-    if (entry.table === 'Ambulatorio') {
-      // Log each Ambulatorio change as a separate, human-readable entry
+    if (entry.table === 'Turno') {
+      // Log each Turno change as a separate, human-readable entry
       entry.changes.forEach(ch => {
         const idx = ch.indexOf('→');
         const slot = idx >= 0 ? ch.substring(0, idx) : ch;
