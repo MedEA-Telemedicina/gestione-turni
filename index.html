@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="it">
 <head>
@@ -936,8 +935,9 @@
 
 <!-- ===== TAB 3: MESSAGGI CONFERMA ===== -->
 <div class="tab-content" id="tab-conferma">
-  <div class="week-bar">
-    <p style="color:var(--muted);font-size:12px;">Messaggi da inviare ai cardiologi con turni confermati (C) per la settimana selezionata.</p>
+  <div class="week-bar" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+    <p style="color:var(--muted);font-size:12px;margin:0;">Messaggi da inviare ai cardiologi con turni confermati (C) per la settimana selezionata.</p>
+    <button id="reset-wa-btn" class="admin-only" onclick="resetWhatsAppSent()" style="display:none;padding:6px 14px;font-size:11px;font-weight:700;border-radius:8px;border:1.5px solid #f59e0b;background:#fffbeb;color:#b45309;cursor:pointer;transition:all .2s;white-space:nowrap;" onmouseover="this.style.background='#fef3c7'" onmouseout="this.style.background='#fffbeb'" title="Resetta lo stato 'Inviato' di tutti i WhatsApp per questa settimana">🔄 Reset WhatsApp</button>
   </div>
   <div class="conf-list" id="conf-list">
     <div class="empty-state">Nessun turno confermato questa settimana.</div>
@@ -1850,7 +1850,7 @@ function renderTable() {
         const lbl = SLOT_LABELS[val] || '—';
         bodyHtml += `<td>
           <button class="slot-btn ${cls}" 
-            onclick="cycleSlot('${doc}','${key}')" 
+            onclick="cycleSlot('${doc.replace(/'/g,"\\'")}','${key}')" 
             title="${day} ${slot}: ${val||'vuoto'}">
             ${lbl}
           </button>
@@ -1870,7 +1870,7 @@ function renderTable() {
     bodyHtml += `<td class="ferie-td">
       <input type="checkbox" class="ferie-check" 
         ${ferieChecked}
-        onchange="toggleFerie('${doc}', this.checked)" 
+        onchange="toggleFerie('${doc.replace(/'/g,"\\'")}', this.checked)" 
         title="Ferie">
     </td>`;
     bodyHtml += '</tr>';
@@ -2022,7 +2022,7 @@ function renderHolterTable() {
       const val = dd.slots[di] || '';
       const lbl = SLOT_LABELS_H[val] || '—';
       const cls = SLOT_CSS_H[val] || '';
-      bodyHtml += `<td><button class="slot-btn ${cls}" onclick="cycleHolterSlot('${doc}',${di})" title="${day}: ${val||'vuoto'}">${lbl}</button></td>`;
+      bodyHtml += `<td><button class="slot-btn ${cls}" onclick="cycleHolterSlot('${doc.replace(/'/g,"\\'")}',${di})" title="${day}: ${val||'vuoto'}">${lbl}</button></td>`;
     });
     const dispColor = nDisp > 0 ? '#6366f1' : 'var(--muted)';
     const confColor = nConf > 0 ? 'var(--success)' : 'var(--muted)';
@@ -2033,7 +2033,7 @@ function renderHolterTable() {
       </div>
     </td>`;
     const ferieChecked = dd.ferie ? 'checked' : '';
-    bodyHtml += `<td class="ferie-td"><input type="checkbox" class="ferie-check" ${ferieChecked} onchange="toggleHolterFerie('${doc}', this.checked)" title="Ferie"></td>`;
+    bodyHtml += `<td class="ferie-td"><input type="checkbox" class="ferie-check" ${ferieChecked} onchange="toggleHolterFerie('${doc.replace(/'/g,"\\'")}', this.checked)" title="Ferie"></td>`;
     bodyHtml += '</tr>';
   });
 
@@ -4674,7 +4674,7 @@ function renderSettings() {
       ? `background:${bgOn};color:${colorOn};border:1.5px solid ${borderOn};font-weight:700;`
       : `background:#f1f5f9;color:#94a3b8;border:1.5px solid #e2e8f0;font-weight:400;`;
     return `<label style="display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:20px;cursor:pointer;font-size:12px;transition:all .15s;${style}user-select:none;">
-      <input type="checkbox" ${on?'checked':''} onchange="setDoctorCap('${doc}','${cap}',this.checked)" style="display:none;">
+      <input type="checkbox" ${on?'checked':''} onchange="setDoctorCap('${doc.replace(/'/g,"\\'")}','${cap}',this.checked)" style="display:none;">
       ${on ? '✓ ' : ''}${label}
     </label>`;
   };
@@ -4685,7 +4685,7 @@ function renderSettings() {
       ? `background:#fef9c3;color:#92400e;border:1.5px solid #fde68a;font-weight:700;`
       : `background:#f8fafc;color:#cbd5e1;border:1.5px dashed #e2e8f0;font-weight:400;`;
     return `<label style="display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:20px;cursor:pointer;font-size:11px;transition:all .15s;${style}user-select:none;">
-      <input type="checkbox" ${on?'checked':''} onchange="setDoctorCap('${doc}','${cap}',this.checked)" style="display:none;">
+      <input type="checkbox" ${on?'checked':''} onchange="setDoctorCap('${doc.replace(/'/g,"\\'")}','${cap}',this.checked)" style="display:none;">
       ${on ? '✓ ' : ''}${label}
     </label>`;
   };
@@ -4751,7 +4751,7 @@ function renderSettings() {
         <!-- Telefono -->
         <div style="display:flex;flex-direction:column;gap:4px;">
           <span style="font-size:9px;font-weight:700;color:#cbd5e1;text-transform:uppercase;letter-spacing:.5px;">📱 Telefono</span>
-          <input type="tel" value="${state.doctorPhones[doc] || ''}" placeholder="3xx xxx xxxx" onblur="saveDoctorPhone('${doc}', this.value)" style="width:140px;min-width:140px;font-size:11px;font-family:var(--font-mono);border-radius:6px;padding:5px 8px;${state.doctorPhones[doc] ? 'border:2px solid #25d366;background:rgba(37,211,102,0.08);color:var(--text);' : 'border:1px solid var(--border);background:var(--surface2);color:var(--text);'}">
+          <input type="tel" value="${state.doctorPhones[doc] || ''}" placeholder="3xx xxx xxxx" onblur="saveDoctorPhone('${doc.replace(/'/g,"\\'")}', this.value)" style="width:140px;min-width:140px;font-size:11px;font-family:var(--font-mono);border-radius:6px;padding:5px 8px;${state.doctorPhones[doc] ? 'border:2px solid #25d366;background:rgba(37,211,102,0.08);color:var(--text);' : 'border:1px solid var(--border);background:var(--surface2);color:var(--text);'}">
         </div>
       </div>
     </div>
@@ -5091,6 +5091,28 @@ function sendWhatsApp(phone, message, btnElement, docName) {
     logAudit('Inviato messaggio WhatsApp al medico: ' + docName);
   }
   showToast('📲 WhatsApp aperto!');
+}
+
+function resetWhatsAppSent() {
+  if (!currentWeek) { showToast('⚠️ Nessuna settimana selezionata'); return; }
+  if (!confirm('Vuoi resettare lo stato WhatsApp per tutti i medici di questa settimana?\n\nI pulsanti torneranno cliccabili.')) return;
+  firebase.database().ref('cardio_wa_sent/' + currentWeek).remove().then(() => {
+    // Ripristina tutti i pulsanti WhatsApp nella UI
+    document.querySelectorAll('.wa-send-btn').forEach(btn => {
+      btn.innerHTML = '📲 WhatsApp';
+      btn.style.background = '#25d366';
+      btn.style.color = '#fff';
+      btn.disabled = false;
+      btn.style.cursor = 'pointer';
+      btn.style.opacity = '1';
+      btn.title = '';
+    });
+    logAudit('Reset stato WhatsApp per settimana ' + currentWeek);
+    showToast('✅ WhatsApp resettati! Puoi inviare di nuovo.');
+  }).catch(err => {
+    console.error('Errore reset WA:', err);
+    showToast('❌ Errore nel reset');
+  });
 }
 
 function markWaSentUI(btnElement) {
