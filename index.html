@@ -3161,7 +3161,7 @@ const GROQ_API_KEY = _p.join('');
 const GROQ_MODEL = 'llama-3.1-8b-instant';
 
 async function aiParseMessage(msg, docSel) {
-  // ── Costruisci il profilo capacità del medico ──
+  // ── Profilo medico ──
   const _tipo = state.doctorTypes[docSel] || 'completo';
   const _holter = state.holterEnabled?.[docSel] || false;
   const _extra = state.doctorExtra?.[docSel] || {};
@@ -3172,128 +3172,71 @@ async function aiParseMessage(msg, docSel) {
   const _canSpiro = !!_extra.spiro;
   const _canPls = !!_extra.pls;
 
-  const capacita = [];
-  if (_canTurni) capacita.push('turni ambulatorio (slots)');
-  if (_canEcg) capacita.push('turni solo-ecg');
-  if (_holter) capacita.push('disponibilità holter (holterSlots)');
-  if (_canHc) capacita.push('consuntivo holter cardiaci (hcSlots)');
-  if (_canHp) capacita.push('consuntivo holter pressori (hpSlots)');
-  if (_canSpiro) capacita.push('consuntivo spirometrie (spiroSlots)');
-  if (_canPls) capacita.push('consuntivo polisonnografie (plsSlots)');
-
-  const profiloMedico = `PROFILO MEDICO SELEZIONATO: ${docSel}
-Tipo: ${_tipo}
-Capacità ABILITATE: ${capacita.join(', ') || 'nessuna'}
-IMPORTANTE: Genera SOLO i campi corrispondenti alle capacità abilitate. Ignora qualsiasi informazione nel messaggio che non corrisponde alle capacità del medico.
-${!_canEcg ? '- NON generare type "solo-ecg" → usa sempre "disponibile"' : ''}
-${!_holter ? '- NON generare holterSlots' : ''}
-${!_canHc ? '- NON generare hcSlots' : ''}
-${!_canHp ? '- NON generare hpSlots' : ''}
-${!_canSpiro ? '- NON generare spiroSlots' : ''}
-${!_canPls ? '- NON generare plsSlots' : ''}`;
+  const allow = [];
+  if (_canTurni) allow.push('slots');
+  if (_canEcg) allow.push('solo-ecg');
+  if (_holter) allow.push('holterSlots');
+  if (_canHc) allow.push('hcSlots');
+  if (_canHp) allow.push('hpSlots');
+  if (_canSpiro) allow.push('spiroSlots');
+  if (_canPls) allow.push('plsSlots');
 
   const monday = currentWeek;
-  const dayNames = ['Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato','Domenica'];
+  const dn = ['Lun','Mar','Mer','Gio','Ven','Sab','Dom'];
   const dates = [];
   for (let i = 0; i < 7; i++) {
     const d = parseLocalDate(addDays(monday, i));
-    dates.push(`${dayNames[i]} ${d.getDate()}/${d.getMonth()+1} (indice: ${i})`);
+    dates.push(`${dn[i]} ${d.getDate()}/${d.getMonth()+1}=i${i}`);
   }
 
-  const prompt = `Sei un parser di messaggi WhatsApp per gestione turni medici ospedalieri.
-Settimana corrente (lunedì = indice 0): ${dates.join(', ')}
+  const prompt = `Parser turni medici. Settimana: ${dates.join(', ')}
+Medico: ${docSel} | Campi ABILITATI: [${allow.join(',')}]
+Genera SOLO campi abilitati. Rispondi SOLO JSON valido.
 
-${profiloMedico}
+Regole slots: mattina=slot 0, pomeriggio=slot 1. Se non specifica→entrambi. key="GIORNO_SLOT". type="disponibile" default.${_canEcg ? ' "turno ecg"/"solo ecg"→type:"solo-ecg".' : ' MAI type "solo-ecg".'}
+Regole ferie: "ferie"/"non disponibile"→ferie:true
+${_holter ? 'holterSlots: "holter" generico senza numero→key=indice giorno(stringa)' : ''}
+${_canHc ? 'hcSlots: "holter cardiaco"/"HC"/"N holter"(con num)→key=indice(num),num:N' : ''}
+${_canHp ? 'hpSlots: "holter pressori"/"HP"/"ABPM"→key=indice(num),num:N' : ''}
+${_canSpiro ? 'spiroSlots: "spirometrie"/"spiro"→key=indice(num),num:N' : ''}
+${_canPls ? 'plsSlots: "polisonnografie"/"PLS"/"PSG"→key=indice(num),num:N' : ''}
+Se num assente→"val":"x". Ometti array vuoti e ferie:false.
 
-Analizza il messaggio e restituisci SOLO JSON valido (no markdown, no commenti).
+Es: "Disponibile lunedì mattina e mercoledì"→{"slots":[{"key":"0_0","type":"disponibile"},{"key":"2_0","type":"disponibile"},{"key":"2_1","type":"disponibile"}]}
 
-REGOLE TURNI (slots) — solo se il medico ha capacità "turni ambulatorio":
-- Ogni giorno ha 2 slot: mattina (slot 0) e pomeriggio (slot 1)
-- Se non specifica mattina/pomeriggio → entrambi (genera 2 entry: slot 0 e slot 1)
-- Tipo "disponibile" = turno normale (default)
-- Tipo "solo-ecg" = SOLO se il medico ha capacità ECG abilitata
-- "turno ecg", "disponibile per ecg", "solo ecg" → type: "solo-ecg" (solo se abilitato)
-- "Turno completo" o "Completa" = disponibile mattina + pomeriggio
-- I numeri (es. "il 5", "7/4") si riferiscono ai giorni della settimana corrente
-- Sabato (indice 5) va incluso solo se menzionato esplicitamente
-- Domenica (indice 6) raramente usata, includere solo se esplicita
+Messaggio:
+${msg}`;
 
-REGOLE FERIE:
-- "Ferie", "Non disponibile", "Indisponibile", "Nessuna disponibilità" → ferie: true
-- Se ferie specifiche per categoria (es. "ferie holter"), ferie: ["holter"] o ["hc","hp"] ecc.
-
-REGOLE HOLTER (holterSlots) — solo se il medico ha capacità "disponibilità holter":
-- "Holter" senza numero e senza "pressori"/"cardiaco" = disponibilità holter → holterSlots
-- Chiave = indice giorno (stringa)
-
-REGOLE CONSUNTIVO — solo per le tabelle abilitate per questo medico:
-- "Holter cardiaco" / "HC" / "N holter" (con numero) → hcSlots (solo se abilitato)
-- "Holter pressori" / "ABPM" / "HP" → hpSlots (solo se abilitato)
-- "Spirometrie" / "Spiro" → spiroSlots (solo se abilitato)
-- "Polisonnografie" / "PLS" / "PSG" → plsSlots (solo se abilitato)
-- Se c'è un numero → "num": N, altrimenti → "val": "x"
-- Chiave = indice giorno (numero)
-
-FORMATO RISPOSTA (JSON puro):
-{
-  "slots": [{"key": "GIORNO_SLOT", "type": "disponibile"|"solo-ecg"}],
-  "holterSlots": [{"key": "GIORNO"}],
-  "hcSlots": [{"key": GIORNO_NUM, "num": N}],
-  "hpSlots": [{"key": GIORNO_NUM, "num": N}],
-  "spiroSlots": [{"key": GIORNO_NUM, "num": N}],
-  "plsSlots": [{"key": GIORNO_NUM, "num": N}],
-  "ferie": false
-}
-Ometti array vuoti e campi non abilitati. Se ferie=false omettilo.
-
-ESEMPI:
-
-Messaggio: "Disponibile lunedì mattina e mercoledì tutto il giorno"
-(medico tipo completo, senza consuntivo)
-Risposta: {"slots":[{"key":"0_0","type":"disponibile"},{"key":"2_0","type":"disponibile"},{"key":"2_1","type":"disponibile"}]}
-
-Messaggio: "Turno ecg giovedì mattina, holter martedì"
-(medico tipo completo+ecg75, holter abilitato)
-Risposta: {"slots":[{"key":"3_0","type":"solo-ecg"}],"holterSlots":[{"key":"1"}]}
-
-Messaggio: "Disponibilità mercoledì mattina, per gli holter: martedì 10 holter, giovedì 10 holter"
-(medico tipo completo, SENZA holter/consuntivo abilitato)
-Risposta: {"slots":[{"key":"2_0","type":"disponibile"}]}
-
-Messaggio: "Disponibilità mercoledì mattina, martedì 10 holter cardiaci, giovedì 10 holter cardiaci"
-(medico con hcSlots abilitato)
-Risposta: {"slots":[{"key":"2_0","type":"disponibile"}],"hcSlots":[{"key":1,"num":10},{"key":3,"num":10}]}
-
-MESSAGGIO DA ANALIZZARE:
-"""
-${msg}
-"""`;
-
-  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${GROQ_API_KEY}`
-    },
-    body: JSON.stringify({
-      model: GROQ_MODEL,
-      messages: [{ role: 'user', content: prompt }],
-      temperature: 0.1,
-      max_tokens: 1024
-    })
-  });
-
-  if (!response.ok) {
-    const err = await response.text();
-    throw new Error(`Groq API error ${response.status}: ${err}`);
+  // ── Fetch con retry automatico (max 3 tentativi) ──
+  let _retries = 0;
+  async function _groqFetch() {
+    const resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${GROQ_API_KEY}` },
+      body: JSON.stringify({ model: GROQ_MODEL, messages: [{ role: 'user', content: prompt }], temperature: 0.1, max_tokens: 512 })
+    });
+    if (resp.status === 429 && _retries < 3) {
+      _retries++;
+      const wait = Math.min(10, parseFloat((await resp.text()).match(/try again in ([\d.]+)s/)?.[1] || '4'));
+      await new Promise(r => setTimeout(r, wait * 1000));
+      return _groqFetch();
+    }
+    if (!resp.ok) { const err = await resp.text(); throw new Error(`Groq API error ${resp.status}: ${err}`); }
+    return resp;
   }
+  const response = await _groqFetch();
 
   const data = await response.json();
   let text = data.choices[0].message.content;
-  // Strip markdown code fences
+  // Strip markdown code fences e testo extra
   text = text.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim();
+  // Estrai solo il JSON se c'è testo attorno
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) throw new Error('AI non ha restituito JSON valido: ' + text.substring(0, 100));
 
-  const parsed = JSON.parse(text);
+  let parsed;
+  try { parsed = JSON.parse(jsonMatch[0]); }
+  catch(e) { throw new Error('JSON non valido dalla AI: ' + text.substring(0, 100)); }
 
   // Normalizza al formato interno dell'app
   const result = {
