@@ -4544,11 +4544,11 @@ function renderRiepilogo() {
     // Calcola tutte le tabelle dove il medico è configurato
     const configuredTables = [];
     if (state.doctors.includes(doc)) configuredTables.push('Turno');
-    if ((state.holterDoctors || []).includes(doc)) configuredTables.push('Holter');
-    if ((state.hcDoctors || []).includes(doc)) configuredTables.push('HC');
-    if ((state.hpDoctors || []).includes(doc)) configuredTables.push('HP');
-    if ((state.spiroDoctors || []).includes(doc)) configuredTables.push('Spiro');
-    if ((state.plsDoctors || []).includes(doc)) configuredTables.push('Pls');
+    if (state.holterEnabled?.[doc]) configuredTables.push('Holter');
+    if (state.doctorExtra?.[doc]?.hcCons) configuredTables.push('HC');
+    if (state.doctorExtra?.[doc]?.hpCons) configuredTables.push('HP');
+    if (state.doctorExtra?.[doc]?.spiro) configuredTables.push('Spiro');
+    if (state.doctorExtra?.[doc]?.pls) configuredTables.push('Pls');
 
     // Se è in ferie in tutte le tabelle configurate → mostra solo FERIE senza badge
     const isFullFerie = configuredTables.length > 0 && configuredTables.every(t => labels.includes(t));
