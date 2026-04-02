@@ -3167,7 +3167,7 @@ async function _getFirebaseAIModel() {
   }, 'gemini-ai');
   const ai = getAI(aiApp, { backend: new GoogleAIBackend() });
   _firebaseAIModel = getGenerativeModel(ai, {
-    model: 'gemini-2.5-flash-lite',
+    model: 'gemini-2.0-flash',
     generationConfig: { temperature: 0.1, maxOutputTokens: 1024 }
   });
   return _firebaseAIModel;
