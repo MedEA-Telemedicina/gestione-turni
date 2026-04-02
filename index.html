@@ -736,6 +736,49 @@
     min-height: 16px;
   }
 
+
+  /* Modal popup senza disponibilità */
+  .no-avail-overlay {
+    position: fixed; inset: 0; z-index: 10000;
+    background: rgba(0,0,0,0.5); display: flex;
+    align-items: center; justify-content: center;
+    animation: fadeIn 0.2s;
+  }
+  .no-avail-modal {
+    background: var(--surface); border-radius: 16px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+    max-width: 480px; width: 94vw; max-height: 80vh;
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+  .no-avail-header {
+    padding: 16px 20px; border-bottom: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center;
+    background: var(--surface2);
+  }
+  .no-avail-header h3 { margin: 0; font-size: 15px; }
+  .no-avail-body {
+    padding: 12px 20px; overflow-y: auto; flex: 1;
+  }
+  .no-avail-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 0; border-bottom: 1px solid var(--border);
+    gap: 8px;
+  }
+  .no-avail-item:last-child { border-bottom: none; }
+  .no-avail-name { font-weight: 600; font-size: 13px; flex: 1; }
+  .no-avail-wa-btn {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: #25d366; color: #fff; border: none;
+    border-radius: 8px; padding: 6px 12px; font-size: 11px;
+    font-weight: 600; cursor: pointer; white-space: nowrap;
+    transition: all 0.2s;
+  }
+  .no-avail-wa-btn:hover { background: #128c7e; transform: scale(1.04); }
+  .no-avail-no-phone { font-size: 10px; color: var(--muted); }
+  .stat-pill.clickable { cursor: pointer; transition: all 0.2s; }
+  .stat-pill.clickable:hover { background: var(--accent); color: #fff; transform: scale(1.05); }
+  .stat-pill.clickable:hover strong { color: #fff; }
 </style>
 <!-- Google Identity Services -->
 <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -2061,22 +2104,61 @@ function toggleFerie(doc, val) {
 
 function renderStats() {
   const w = getWeekData();
-  let disp = 0, ecg = 0, conf = 0, ferie = 0;
-  Object.values(w).forEach(dd => {
-    if (dd.ferie) ferie++;
+  const _allTurniDocs = (state.doctors || []).filter(d => (state.doctorTypes[d] || 'completo') !== 'nessuno');
+  let docsWithAvail = new Set();
+  let docsWithConf = new Set();
+  let docsWithEcg = new Set();
+  let ferie = 0;
+  let ferieSet = new Set();
+  Object.entries(w).forEach(([name, dd]) => {
+    if (dd.ferie) { ferie++; ferieSet.add(name); }
     if (!dd.slots) return;
     Object.values(dd.slots).forEach(v => {
-      if (v === 'disponibile') disp++;
-      else if (v === 'solo-ecg') ecg++;
-      else if (v === 'confermato' || v === 'confermato-ecg') conf++;
+      if (v === 'disponibile' || v === 'solo-ecg') docsWithAvail.add(name);
+      if (v === 'solo-ecg') docsWithEcg.add(name);
+      if (v === 'confermato' || v === 'confermato-ecg') { docsWithConf.add(name); docsWithAvail.add(name); }
     });
   });
+  // Dottori senza nessuna disponibilità (né ferie) 
+  const noAvailDocs = _allTurniDocs.filter(d => !docsWithAvail.has(d) && !ferieSet.has(d)).sort((a,b) => a.localeCompare(b));
+  window._noAvailDocs = noAvailDocs;
+  const nNoAvail = noAvailDocs.length;
   document.getElementById('stat-row').innerHTML = `
-    <div class="stat-pill">📅 Disponibili: <strong>${disp}</strong></div>
-    <div class="stat-pill">📋 Solo ECG: <strong>${ecg}</strong></div>
-    <div class="stat-pill">✅ Confermati: <strong>${conf}</strong></div>
+    <div class="stat-pill">📅 Disponibili: <strong>${docsWithAvail.size}</strong></div>
+    <div class="stat-pill">📋 Solo ECG: <strong>${docsWithEcg.size}</strong></div>
+    <div class="stat-pill">✅ Confermati: <strong>${docsWithConf.size}</strong></div>
     <div class="stat-pill">🏖️ In ferie: <strong>${ferie}</strong></div>
+    <div class="stat-pill clickable" onclick="showNoAvailPopup()" title="Clicca per vedere la lista" style="border-color:#ef4444;color:#ef4444;">❓ Senza disponibilità: <strong style="color:#ef4444;">${nNoAvail}</strong></div>
   `;
+}
+
+function showNoAvailPopup() {
+  const docs = window._noAvailDocs || [];
+  if (docs.length === 0) {
+    showWarningBanner('Tutti i cardiologi hanno dato disponibilità! 🎉', '#059669');
+    return;
+  }
+  const waMsg = encodeURIComponent('Salve, ha novità per la disponibilità? Cortesemente entro le ore 12:00. Grazie');
+  let itemsHtml = docs.map(doc => {
+    const phone = state.doctorPhones?.[doc];
+    const waBtn = phone
+      ? `<a class="no-avail-wa-btn" href="https://wa.me/${phone.replace(/[^0-9+]/g,'')}?text=${waMsg}" target="_blank" rel="noopener">📲 WhatsApp</a>`
+      : `<span class="no-avail-no-phone">📱 No tel.</span>`;
+    return `<div class="no-avail-item"><span class="no-avail-name">${doc}</span>${waBtn}</div>`;
+  }).join('');
+  const overlay = document.createElement('div');
+  overlay.className = 'no-avail-overlay';
+  overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
+  overlay.innerHTML = `
+    <div class="no-avail-modal">
+      <div class="no-avail-header">
+        <h3>❓ Cardiologi senza disponibilità (${docs.length})</h3>
+        <button onclick="this.closest('.no-avail-overlay').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);">✕</button>
+      </div>
+      <div class="no-avail-body">${itemsHtml}</div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
 }
 
 // =============================================
