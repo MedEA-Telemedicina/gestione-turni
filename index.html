@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="it">
 <head>
@@ -3158,7 +3157,7 @@ let _pendingSource  = 'regex'; // 'regex' o 'ai'
 // =============================================
 const _p = ['gsk','_','Y54y','zuET','14kg','LNpC','8YsH','WGdy','b3FY','N3d5','65HT','dPHT','Brq2','w2Ur','VDCs'];
 const GROQ_API_KEY = _p.join('');
-const GROQ_MODEL = 'llama-3.1-8b-instant';
+const GROQ_MODEL = 'llama-3.3-70b-versatile';
 
 async function aiParseMessage(msg, docSel) {
   // ── Profilo medico ──
@@ -3249,6 +3248,59 @@ ${msg}`;
     plsSlots:    (parsed.plsSlots || []).map(s => ({ key: Number(s.key), ...(s.num != null ? { num: s.num } : { val: 'x' }) })),
     ferie:       parsed.ferie || false
   };
+
+  // ══════════════════════════════════════════
+  // POST-PROCESSING: valida e correggi output AI
+  // ══════════════════════════════════════════
+  const _msgLow = msg.toLowerCase().replace(/[''`´]/g, "'");
+
+  // 1) Rimuovi slots se il medico non fa turni ambulatorio
+  if (!_canTurni) result.slots = [];
+
+  // 2) Rimuovi solo-ecg se il medico non ha ECG abilitato
+  if (!_canEcg) result.slots = result.slots.map(s => ({ ...s, type: 'disponibile' }));
+
+  // 3) Rimuovi campi consuntivo non abilitati
+  if (!_holter) result.holterSlots = [];
+  if (!_canHc) result.hcSlots = [];
+  if (!_canHp) result.hpSlots = [];
+  if (!_canSpiro) result.spiroSlots = [];
+  if (!_canPls) result.plsSlots = [];
+
+  // 4) Correggi numeri consuntivo: estrai numeri dal messaggio e correggile val:"x" → num:N
+  const _consFields = [
+    { key: 'hcSlots', patterns: [/(\d+)\s*holter(?:\s+(?:ecg|cardiaci|cardiac[oi]))?/gi, /holter(?:\s+(?:ecg|cardiaci|cardiac[oi]))?\s*[:\-]?\s*(\d+)/gi] },
+    { key: 'hpSlots', patterns: [/(\d+)\s*(?:holter\s+pressor[ie]|abpm|hp)/gi, /(?:holter\s+pressor[ie]|abpm|hp)\s*[:\-]?\s*(\d+)/gi] },
+    { key: 'spiroSlots', patterns: [/(\d+)\s*(?:spirometr[ie]+|spiro)/gi, /(?:spirometr[ie]+|spiro)\s*[:\-]?\s*(\d+)/gi] },
+    { key: 'plsSlots', patterns: [/(\d+)\s*(?:polisonnograf[ie]+|pls|psg)/gi, /(?:polisonnograf[ie]+|pls|psg)\s*[:\-]?\s*(\d+)/gi] }
+  ];
+  _consFields.forEach(cf => {
+    if (result[cf.key].length === 0) return;
+    // Cerca tutti i numeri dal messaggio per questo tipo
+    const nums = [];
+    cf.patterns.forEach(pat => {
+      let m; while ((m = pat.exec(_msgLow)) !== null) nums.push(parseInt(m[1], 10));
+    });
+    // Se trovato almeno un numero e AI ha messo val:"x", correggi
+    if (nums.length > 0) {
+      const mainNum = nums[0]; // usa il primo numero trovato
+      result[cf.key] = result[cf.key].map(s => {
+        if (s.val === 'x') return { key: s.key, num: mainNum };
+        return s;
+      });
+    }
+  });
+
+  // 5) Fallback globale numeri: se c'è un solo numero nel messaggio e consuntivo ha val:"x"
+  const _globalNums = _msgLow.match(/\b(\d+)\b/g);
+  if (_globalNums && _globalNums.length === 1) {
+    const gNum = parseInt(_globalNums[0], 10);
+    if (gNum > 0 && gNum <= 50) { // range ragionevole per consuntivo
+      ['hcSlots','hpSlots','spiroSlots','plsSlots'].forEach(k => {
+        result[k] = result[k].map(s => s.val === 'x' ? { key: s.key, num: gNum } : s);
+      });
+    }
+  }
 
   return result;
 }
