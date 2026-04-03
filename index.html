@@ -4877,19 +4877,69 @@ function copyRiepilogoTable(tableId) {
 
   if (id === 'riepilogo-conf-table') {
     // ── Turni Definitivi — Conferme ──
-    // Clona la tabella mantenendo i colspan originali (colspan=2 GIORNO, colspan=8 MATTINA/POMERIGGIO).
-    // Garantisce 2 righe per giorno: riga1=giorno + celle dati (rowspan=2), riga2=data.
-    // Aggiunge &nbsp; alle celle vuote per evitare che Excel collassi le righe.
-    const clone = table.cloneNode(true);
-    clone.querySelectorAll('td, th').forEach(cell => {
-      if (!cell.textContent.trim() && !cell.innerHTML.trim()) {
-        cell.innerHTML = '\u00a0';
-      }
+    // Costruisce HTML pulito (testo puro, niente <span>/<br>) per Excel.
+    // Struttura: colonne con colspan originali, esattamente 2 righe per giorno
+    // (riga1 = giorno + dati rowspan=2, riga2 = data).
+    const plainText = (td) => {
+      const c = td.cloneNode(true);
+      c.querySelectorAll('br').forEach(br => br.replaceWith(document.createTextNode(' , ')));
+      return c.textContent.trim() || '\u00a0';
+    };
+
+    const thRow = table.querySelector('thead tr');
+    const bodyRows = table.querySelectorAll('tbody tr');
+
+    let h = '<table border="1" cellspacing="0" cellpadding="4" style="border-collapse:collapse;font-size:11px;">';
+    // Header
+    h += '<tr>';
+    thRow.querySelectorAll('th').forEach(th => {
+      h += '<th colspan="' + th.colSpan + '" style="font-weight:bold;text-align:center;background:#d6ecd2;border:1px solid #999;padding:4px;">' + th.textContent.trim() + '</th>';
     });
-    clone.style.position = 'fixed';
-    clone.style.left = '-9999px';
-    document.body.appendChild(clone);
-    target = clone;
+    h += '</tr>';
+
+    // Body — esattamente 2 righe per giorno
+    for (let i = 0; i < bodyRows.length; i += 2) {
+      const dayRow  = bodyRows[i];
+      const dateRow = bodyRows[i + 1];
+      if (!dateRow) break;
+
+      // Riga 1: nome giorno + celle dati con rowspan=2
+      h += '<tr>';
+      dayRow.querySelectorAll('td').forEach(td => {
+        h += '<td colspan="' + td.colSpan + '"' + (td.rowSpan > 1 ? ' rowspan="' + td.rowSpan + '"' : '') +
+             ' style="border:1px solid #999;padding:4px;vertical-align:middle;' +
+             (td.rowSpan > 1 ? '' : 'font-weight:bold;text-align:center;background:#f2f2f2;') + '">' +
+             plainText(td) + '</td>';
+      });
+      h += '</tr>';
+
+      // Riga 2: solo data
+      h += '<tr>';
+      dateRow.querySelectorAll('td').forEach(td => {
+        h += '<td colspan="' + td.colSpan + '" style="border:1px solid #999;padding:4px;text-align:center;background:#fafafa;">' +
+             plainText(td) + '</td>';
+      });
+      h += '</tr>';
+    }
+    h += '</table>';
+
+    // Clipboard API per controllo esplicito dell'HTML
+    const blob = new Blob([h], { type: 'text/html' });
+    navigator.clipboard.write([new ClipboardItem({ 'text/html': blob })]).then(() => {
+      showToast('\u2705 Tabella "Turni Definitivi" copiata! Incollala in Excel con Ctrl+V.');
+    }).catch(() => {
+      // Fallback: elemento offscreen
+      const div = document.createElement('div');
+      div.innerHTML = h;
+      div.style.cssText = 'position:fixed;left:-9999px;';
+      document.body.appendChild(div);
+      const r = document.createRange(); r.selectNode(div);
+      const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+      document.execCommand('copy'); s.removeAllRanges();
+      document.body.removeChild(div);
+      showToast('\u2705 Tabella "Turni Definitivi" copiata! Incollala in Excel con Ctrl+V.');
+    });
+    return;
 
   } else if (id === 'riepilogo-table') {
     // ── Turni Provvisori ──
