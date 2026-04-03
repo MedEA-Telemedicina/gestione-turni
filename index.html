@@ -475,9 +475,9 @@
     line-height: 1.4;
     vertical-align: middle;
   }
-  .conf-badge-blue { background: #2563eb; }
-  .conf-badge-purple { background: #d946ef; }
-  .conf-badge-indigo { background: #818cf8; }
+  .conf-badge-blue { background: rgba(37,99,235,0.45); }
+  .conf-badge-purple { background: rgba(217,70,239,0.4); }
+  .conf-badge-indigo { background: rgba(129,140,248,0.45); }
 
   .disp-table tr:hover td.name-cell {
     filter: brightness(0.88);
@@ -2321,7 +2321,7 @@ function showFeriePopup() {
       const bg = l==='Turno'?'#dc2626':l==='HC'?'#0e7490':l==='HP'?'#ea7c1e':l==='Holter'?'#7c3aed':l==='Spiro'?'#16a34a':l==='Pls'?'#7c3aed':'#dc2626';
       return '<span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;margin-left:4px;background:'+bg+';color:#fff;">'+l+'</span>';
     }).join('');
-    return '<div class="no-avail-item"><span class="no-avail-name" style="color:var(--danger);">'+doc+'</span>'+badges+'</div>';
+    return '<div class="no-avail-item" style="display:flex;justify-content:space-between;align-items:center;"><span class="no-avail-name" style="color:var(--danger);">'+doc+'</span><span style="display:flex;gap:4px;flex-shrink:0;">'+badges+'</span></div>';
   }).join('');
   overlay.innerHTML = `
     <div class="no-avail-modal" style="max-height:85vh;">
