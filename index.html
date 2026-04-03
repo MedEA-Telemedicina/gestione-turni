@@ -461,6 +461,24 @@
   .disp-table td.col-highlight { background: rgba(37,99,235,0.10) !important; }
   .disp-table th.col-highlight { background: rgba(37,99,235,0.18) !important; }
 
+  /* Inline confirmation badges in day headers */
+  .day-badge-left, .day-badge-right { vertical-align: middle; white-space: nowrap; }
+  .day-badge-left { margin-right: 2px; }
+  .day-badge-right { margin-left: 2px; }
+  .conf-badge {
+    display: inline-block;
+    padding: 1px 4px;
+    border-radius: 8px;
+    font-size: 8px;
+    font-weight: 700;
+    color: #fff;
+    line-height: 1.4;
+    vertical-align: middle;
+  }
+  .conf-badge-blue { background: #2563eb; }
+  .conf-badge-purple { background: #d946ef; }
+  .conf-badge-indigo { background: #818cf8; }
+
   .disp-table tr:hover td.name-cell {
     filter: brightness(0.88);
     box-shadow: inset 0 0 0 2px var(--accent), 0 0 8px rgba(37,99,235,0.25);
@@ -523,6 +541,8 @@
   }
   .wa-actions { display: flex; gap: 8px; flex-wrap: wrap; }
   .ai-dots { animation: aiDots 1.2s infinite; }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes slideUp { from { transform: translateY(30px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
   @keyframes aiDots {
     0%, 20% { content: '.'; }
     40% { content: '..'; }
@@ -883,7 +903,6 @@
     <button onclick="toggleDispTable()" id="toggle-disp-btn" title="Riduci/Espandi tabella" style="background:none;border:1px solid var(--border);border-radius:4px;cursor:pointer;color:var(--muted);font-size:15px;font-weight:700;line-height:1;padding:1px 8px;user-select:none;">−</button>
   </div>
 
-  <div id="turni-badges" style="display:flex;gap:0;margin-bottom:4px;padding-left:152px;"></div>
   <div class="disp-table-wrap" id="disp-table-wrap">
     <table class="disp-table" id="disp-table">
       <thead id="disp-head"></thead>
@@ -900,7 +919,6 @@
       </div>
       <button onclick="toggleHolterTableVis()" id="toggle-holter-btn" title="Riduci/Espandi" style="background:none;border:1px solid var(--border);border-radius:4px;cursor:pointer;color:var(--muted);font-size:15px;font-weight:700;line-height:1;padding:1px 8px;user-select:none;">−</button>
     </div>
-    <div id="holter-badges" style="display:flex;gap:0;margin-bottom:4px;padding-left:152px;"></div>
     <div id="holter-table-wrap" class="disp-table-wrap">
       <table class="disp-table" id="holter-table" style="--header-bg:#6366f1;">
         <thead id="holter-head"></thead>
@@ -1870,7 +1888,7 @@ function renderTable() {
   // Header
   let headHtml = '<tr><th rowspan="2" style="width:150px;min-width:150px;position:sticky;left:0;z-index:3;background:var(--surface2);">MEDICO</th>';
   DAYS.forEach((d, di) => {
-    headHtml += `<th colspan="2" class="day-header" data-day-idx="${di}" onclick="toggleDayHighlight(this, ${di}, 'disp-table')" style="width:74px;cursor:pointer;" title="Clicca per evidenziare">${d}</th>`;
+    headHtml += `<th colspan="2" class="day-header" data-day-idx="${di}" onclick="toggleDayHighlight(this, ${di}, 'disp-table')" style="width:74px;cursor:pointer;" title="Clicca per evidenziare"><span class="day-badge-left" id="badge-mat-${di}"></span>${d}<span class="day-badge-right" id="badge-pom-${di}"></span></th>`;
   });
   headHtml += '<th rowspan="2" style="width:54px;min-width:54px;white-space:nowrap;font-size:11px;" title="Disponibilità / Conferme">DISP.<br>CONF.</th>';
   headHtml += '<th rowspan="2" style="width:44px;min-width:44px;">FERIE</th></tr><tr>';
@@ -1960,31 +1978,36 @@ function renderTable() {
 
   body.innerHTML = bodyHtml;
 
-  // Badges conferme per giorno
-  const badgesEl = document.getElementById('turni-badges');
-  if (badgesEl) {
-    const w = getWeekData();
-    let bHtml = '';
-    DAYS.forEach((day, di) => {
-      let nConf = 0, nEcg = 0;
+  // Badges conferme per giorno - inline nei day headers
+  {
+    const _bw = getWeekData();
+    DAYS.forEach((_, di) => {
+      let nConfMat = 0, nEcgMat = 0, nConfPom = 0, nEcgPom = 0;
       for (const doc of (state.doctors || [])) {
-        const dd = w[doc];
+        const dd = _bw[doc];
         if (!dd || !dd.slots) continue;
-        SLOTS.forEach((_, si) => {
-          const v = dd.slots[`${di}_${si}`] || '';
-          if (v === 'confermato') nConf++;
-          if (v === 'confermato-ecg') nEcg++;
-        });
+        const matV = dd.slots[`${di}_0`] || '';
+        const pomV = dd.slots[`${di}_1`] || '';
+        if (matV === 'confermato') nConfMat++;
+        if (matV === 'confermato-ecg') nEcgMat++;
+        if (pomV === 'confermato') nConfPom++;
+        if (pomV === 'confermato-ecg') nEcgPom++;
       }
-      const hasBadge = nConf > 0 || nEcg > 0;
-      bHtml += `<div style="flex:0 0 74px;text-align:center;font-size:10px;line-height:1.3;">`;
-      if (hasBadge) {
-        if (nConf > 0) bHtml += `<span style="background:#2563eb;color:#fff;padding:1px 5px;border-radius:8px;font-weight:700;font-size:9px;" title="${nConf} conferme turno completo">${nConf}C</span> `;
-        if (nEcg > 0) bHtml += `<span style="background:#d946ef;color:#fff;padding:1px 5px;border-radius:8px;font-weight:700;font-size:9px;" title="${nEcg} conferme solo ECG">${nEcg}E</span>`;
+      const matEl = document.getElementById(`badge-mat-${di}`);
+      const pomEl = document.getElementById(`badge-pom-${di}`);
+      if (matEl) {
+        let h = '';
+        if (nConfMat > 0) h += `<span class="conf-badge conf-badge-blue" title="${nConfMat} conferme mattina">${nConfMat}C</span>`;
+        if (nEcgMat > 0) h += `<span class="conf-badge conf-badge-purple" title="${nEcgMat} ECG mattina">${nEcgMat}E</span>`;
+        matEl.innerHTML = h;
       }
-      bHtml += `</div>`;
+      if (pomEl) {
+        let h = '';
+        if (nConfPom > 0) h += `<span class="conf-badge conf-badge-blue" title="${nConfPom} conferme pomeriggio">${nConfPom}C</span>`;
+        if (nEcgPom > 0) h += `<span class="conf-badge conf-badge-purple" title="${nEcgPom} ECG pomeriggio">${nEcgPom}E</span>`;
+        pomEl.innerHTML = h;
+      }
     });
-    badgesEl.innerHTML = bHtml;
   }
 
   // Update rules warning badge
@@ -2374,7 +2397,7 @@ function renderHolterTable() {
   // Header
   let headHtml = '<tr><th rowspan="2" style="width:150px;min-width:150px;position:sticky;left:0;z-index:3;background:#f0f4ff;">MEDICO</th>';
   HOLTER_DAYS.forEach((d, di) => {
-    headHtml += `<th class="day-header" data-day-idx="${di}" onclick="toggleDayHighlight(this, ${di}, 'holter-table')" style="width:70px;min-width:70px;background:#6366f1;color:#fff;cursor:pointer;" title="Clicca per evidenziare">${d}</th>`;
+    headHtml += `<th class="day-header" data-day-idx="${di}" onclick="toggleDayHighlight(this, ${di}, 'holter-table')" style="width:70px;min-width:70px;background:#6366f1;color:#fff;cursor:pointer;" title="Clicca per evidenziare">${d}<span class="day-badge-right" id="holter-badge-${di}"></span></th>`;
   });
   headHtml += '<th rowspan="2" style="width:54px;min-width:54px;white-space:nowrap;font-size:11px;background:#f0f4ff;" title="Disponibilità / Conferme">DISP.<br>CONF.</th>';
   headHtml += '<th rowspan="2" style="width:44px;min-width:44px;background:#f0f4ff;">FERIE</th></tr>';
@@ -2436,22 +2459,20 @@ function renderHolterTable() {
   if (_hSec) { _hSec.style.opacity = (_hFv && docs.length === 0) ? '0.25' : ''; _hSec.style.pointerEvents = (_hFv && docs.length === 0) ? 'none' : ''; }
   body.innerHTML = bodyHtml;
 
-  // Holter badges conferme per giorno
-  const hBadgesEl = document.getElementById('holter-badges');
-  if (hBadgesEl) {
-    const holterW = state.holterWeeks[currentWeek] || {};
-    let bHtml = '';
-    HOLTER_DAYS.forEach((day, di) => {
+  // Holter badges conferme per giorno - inline nei day headers
+  {
+    const _hw = state.holterWeeks[currentWeek] || {};
+    HOLTER_DAYS.forEach((_, di) => {
       let nConf = 0;
       for (const doc of (state.doctors || []).filter(d => state.holterEnabled[d])) {
-        const dd = holterW[doc];
+        const dd = _hw[doc];
         if (dd && dd.slots && dd.slots[di] === 'confermato') nConf++;
       }
-      bHtml += `<div style="flex:0 0 70px;text-align:center;font-size:10px;">`;
-      if (nConf > 0) bHtml += `<span style="background:#6366f1;color:#fff;padding:1px 5px;border-radius:8px;font-weight:700;font-size:9px;" title="${nConf} conferme holter">${nConf}C</span>`;
-      bHtml += `</div>`;
+      const el = document.getElementById(`holter-badge-${di}`);
+      if (el) {
+        el.innerHTML = nConf > 0 ? `<span class="conf-badge conf-badge-indigo" title="${nConf} conferme holter">${nConf}C</span>` : '';
+      }
     });
-    hBadgesEl.innerHTML = bHtml;
   }
 }
 
@@ -5713,7 +5734,27 @@ function showRulesWarnings() {
   const badge = document.getElementById('rules-warning-badge');
   const warnings = badge && badge._warnings ? badge._warnings : [];
   if (warnings.length === 0) { showToast('Nessun avviso attivo ✅'); return; }
-  showWarningBanner(warnings);
+
+  // Show popup overlay instead of top banner
+  let overlay = document.getElementById('rules-popup-overlay');
+  if (overlay) overlay.remove();
+  overlay = document.createElement('div');
+  overlay.id = 'rules-popup-overlay';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.45);z-index:9999;display:flex;align-items:center;justify-content:center;animation:fadeIn 0.2s ease;';
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  const popup = document.createElement('div');
+  popup.style.cssText = 'background:var(--surface);border-radius:14px;padding:22px 26px;max-width:500px;width:90%;max-height:70vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.3);animation:slideUp 0.25s ease;';
+  popup.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+      <h3 style="margin:0;font-size:16px;color:var(--danger);font-weight:700;">⚠️ Avvisi e Conflitti</h3>
+      <button onclick="document.getElementById('rules-popup-overlay').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);padding:0 4px;">✕</button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      ${warnings.map(w => `<div style="padding:10px 14px;background:rgba(239,68,68,0.08);border-left:3px solid var(--danger);border-radius:6px;font-size:13px;color:var(--text);">⚠️ ${w}</div>`).join('')}
+    </div>
+  `;
+  overlay.appendChild(popup);
+  document.body.appendChild(overlay);
 }
 
 // =============================================
