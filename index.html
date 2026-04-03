@@ -4873,9 +4873,73 @@ function copyRiepilogoTable(tableId) {
   const table = document.getElementById(id);
   if (!table) return;
 
-  // Per Turni Provvisori: copia solo da GIORNO a HC (escludi HP, SPIRO, POLISONNO)
   let target = table;
-  if (id === 'riepilogo-table') {
+
+  if (id === 'riepilogo-conf-table') {
+    // ── Turni Definitivi — Conferme ──
+    // Costruisce una tabella pulita senza colspan per Excel:
+    // 7 colonne: GIORNO | MATTINA | POMERIGGIO | HC | HP | SPIRO | POLISONNO
+    // Per ogni giorno: 2 righe, colonna GIORNO = riga1 nome giorno / riga2 data,
+    // le altre colonne unificate con rowspan=2
+    const clean = document.createElement('table');
+    clean.style.borderCollapse = 'collapse';
+    clean.style.fontSize = '11px';
+
+    const thead = document.createElement('thead');
+    const hr = document.createElement('tr');
+    ['GIORNO', 'MATTINA', 'POMERIGGIO', 'HC', 'HP', 'SPIRO', 'POLISONNO'].forEach(h => {
+      const th = document.createElement('th');
+      th.textContent = h;
+      th.style.cssText = 'border:1px solid #bbb;padding:3px 6px;font-weight:700;font-size:10px;text-align:center;background:#d6ecd2;';
+      hr.appendChild(th);
+    });
+    thead.appendChild(hr);
+    clean.appendChild(thead);
+
+    const tbody = document.createElement('tbody');
+    const origRows = table.querySelectorAll('tbody tr');
+    for (let i = 0; i < origRows.length; i += 2) {
+      const dayTr = origRows[i];
+      const dateTr = origRows[i + 1];
+      if (!dateTr) break;
+      const dayCells = dayTr.querySelectorAll('td');
+      const dateCells = dateTr.querySelectorAll('td');
+
+      // Riga 1: nome giorno + celle dati con rowspan=2
+      const r1 = document.createElement('tr');
+      const dayTd = document.createElement('td');
+      dayTd.textContent = dayCells[0].textContent.trim();
+      dayTd.style.cssText = 'border:1px solid #bbb;padding:3px 6px;font-weight:700;font-size:10px;text-align:center;background:#f2f2f2;white-space:nowrap;';
+      r1.appendChild(dayTd);
+
+      // Celle 1-6: MATTINA, POMERIGGIO, HC, HP, SPIRO, POLISONNO (rowspan=2)
+      for (let c = 1; c < dayCells.length; c++) {
+        const td = document.createElement('td');
+        td.innerHTML = dayCells[c].innerHTML;
+        td.rowSpan = 2;
+        td.style.cssText = 'border:1px solid #bbb;padding:3px 6px;font-size:10px;vertical-align:middle;white-space:normal;word-break:break-word;';
+        r1.appendChild(td);
+      }
+      tbody.appendChild(r1);
+
+      // Riga 2: solo data (le altre celle coperte da rowspan)
+      const r2 = document.createElement('tr');
+      const dateTd = document.createElement('td');
+      dateTd.textContent = dateCells[0].textContent.trim();
+      dateTd.style.cssText = 'border:1px solid #bbb;padding:2px 6px;font-size:9px;text-align:center;background:#fafafa;white-space:nowrap;';
+      r2.appendChild(dateTd);
+      tbody.appendChild(r2);
+    }
+    clean.appendChild(tbody);
+
+    clean.style.position = 'fixed';
+    clean.style.left = '-9999px';
+    document.body.appendChild(clean);
+    target = clean;
+
+  } else if (id === 'riepilogo-table') {
+    // ── Turni Provvisori ──
+    // Copia solo da GIORNO a HC (escludi HP, SPIRO, POLISONNO)
     const clone = table.cloneNode(true);
     // Rimuovi le ultime 3 colonne dall'header
     clone.querySelectorAll('thead tr').forEach(tr => {
@@ -4887,9 +4951,6 @@ function copyRiepilogoTable(tableId) {
     // Rimuovi le ultime 3 celle dalla prima riga di ogni coppia giorno (quelle con rowspan)
     clone.querySelectorAll('tbody tr').forEach(tr => {
       const tds = tr.querySelectorAll('td');
-      // La prima riga di ogni giorno ha 6 td (giorno, matt, pom, hc, hp, spiro, polisonno)
-      // ma matt e pom hanno rowspan, quindi la riga ha: giorno + matt + pom + hc + hp + spiro + polisonno = 7 td nella prima riga
-      // La seconda riga ha solo: data (1 td)
       if (tds.length > 2) {
         for (let i = 0; i < 3 && tr.children.length > 2; i++) {
           tr.removeChild(tr.lastElementChild);
