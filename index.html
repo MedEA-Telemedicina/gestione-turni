@@ -1,3 +1,5 @@
+
+
 <!DOCTYPE html>
 <html lang="it">
 <head>
@@ -4654,13 +4656,34 @@ function renderRiepilogo() {
       slotConf[`${di}_${si}`] = [];
     });
   }
+  // Conta disponibilità per dottore (per evidenziare chi ne ha solo 1)
+  const docDispCount = {};  // { docName: { total: N, ecgOnly: bool } }
+  state.doctors.forEach(doc => {
+    const dd = w[doc];
+    if (!dd || !dd.slots || dd.ferie) return;
+    let total = 0, allEcg = true;
+    Object.entries(dd.slots).forEach(([key, val]) => {
+      if (!val) return;
+      total++;
+      if (val !== 'solo-ecg' && val !== 'confermato-ecg') allEcg = false;
+    });
+    if (total > 0) docDispCount[doc] = { total, ecgOnly: allEcg };
+  });
+
   state.doctors.forEach(doc => {
     const dd = w[doc];
     if (!dd || !dd.slots || dd.ferie) return;
     Object.entries(dd.slots).forEach(([key, val]) => {
       if (!val) return;
       const isEcg = val === 'solo-ecg' || val === 'confermato-ecg';
-      const label = doc + (isEcg ? ' (SOLO ECG)' : '');
+      let label = doc + (isEcg ? ' (SOLO ECG)' : '');
+      // Evidenzia chi ha 1 sola disponibilità: giallo=turno completo, fucsia=ecg
+      const info = docDispCount[doc];
+      if (info && info.total === 1) {
+        const color = info.ecgOnly ? '#d946ef' : '#ca8a04';
+        const bg = info.ecgOnly ? 'rgba(217,70,239,0.12)' : 'rgba(202,138,4,0.12)';
+        label = `<span style="color:${color};background:${bg};padding:0 3px;border-radius:3px;font-weight:700;">${label}</span>`;
+      }
       if (slotDisp[key]) slotDisp[key].push(label);
       if ((val === 'confermato' || val === 'confermato-ecg') && slotConf[key]) slotConf[key].push(label);
     });
