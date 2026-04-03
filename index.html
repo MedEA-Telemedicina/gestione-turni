@@ -4877,65 +4877,19 @@ function copyRiepilogoTable(tableId) {
 
   if (id === 'riepilogo-conf-table') {
     // ── Turni Definitivi — Conferme ──
-    // Costruisce una tabella pulita senza colspan per Excel:
-    // 7 colonne: GIORNO | MATTINA | POMERIGGIO | HC | HP | SPIRO | POLISONNO
-    // Per ogni giorno: 2 righe, colonna GIORNO = riga1 nome giorno / riga2 data,
-    // le altre colonne unificate con rowspan=2
-    const clean = document.createElement('table');
-    clean.style.borderCollapse = 'collapse';
-    clean.style.fontSize = '11px';
-
-    const thead = document.createElement('thead');
-    const hr = document.createElement('tr');
-    ['GIORNO', 'MATTINA', 'POMERIGGIO', 'HC', 'HP', 'SPIRO', 'POLISONNO'].forEach(h => {
-      const th = document.createElement('th');
-      th.textContent = h;
-      th.style.cssText = 'border:1px solid #bbb;padding:3px 6px;font-weight:700;font-size:10px;text-align:center;background:#d6ecd2;';
-      hr.appendChild(th);
-    });
-    thead.appendChild(hr);
-    clean.appendChild(thead);
-
-    const tbody = document.createElement('tbody');
-    const origRows = table.querySelectorAll('tbody tr');
-    for (let i = 0; i < origRows.length; i += 2) {
-      const dayTr = origRows[i];
-      const dateTr = origRows[i + 1];
-      if (!dateTr) break;
-      const dayCells = dayTr.querySelectorAll('td');
-      const dateCells = dateTr.querySelectorAll('td');
-
-      // Riga 1: nome giorno + celle dati con rowspan=2
-      const r1 = document.createElement('tr');
-      const dayTd = document.createElement('td');
-      dayTd.textContent = dayCells[0].textContent.trim();
-      dayTd.style.cssText = 'border:1px solid #bbb;padding:3px 6px;font-weight:700;font-size:10px;text-align:center;background:#f2f2f2;white-space:nowrap;';
-      r1.appendChild(dayTd);
-
-      // Celle 1-6: MATTINA, POMERIGGIO, HC, HP, SPIRO, POLISONNO (rowspan=2)
-      for (let c = 1; c < dayCells.length; c++) {
-        const td = document.createElement('td');
-        td.innerHTML = dayCells[c].innerHTML;
-        td.rowSpan = 2;
-        td.style.cssText = 'border:1px solid #bbb;padding:3px 6px;font-size:10px;vertical-align:middle;white-space:normal;word-break:break-word;';
-        r1.appendChild(td);
+    // Clona la tabella mantenendo i colspan originali (colspan=2 GIORNO, colspan=8 MATTINA/POMERIGGIO).
+    // Garantisce 2 righe per giorno: riga1=giorno + celle dati (rowspan=2), riga2=data.
+    // Aggiunge &nbsp; alle celle vuote per evitare che Excel collassi le righe.
+    const clone = table.cloneNode(true);
+    clone.querySelectorAll('td, th').forEach(cell => {
+      if (!cell.textContent.trim() && !cell.innerHTML.trim()) {
+        cell.innerHTML = '\u00a0';
       }
-      tbody.appendChild(r1);
-
-      // Riga 2: solo data (le altre celle coperte da rowspan)
-      const r2 = document.createElement('tr');
-      const dateTd = document.createElement('td');
-      dateTd.textContent = dateCells[0].textContent.trim();
-      dateTd.style.cssText = 'border:1px solid #bbb;padding:2px 6px;font-size:9px;text-align:center;background:#fafafa;white-space:nowrap;';
-      r2.appendChild(dateTd);
-      tbody.appendChild(r2);
-    }
-    clean.appendChild(tbody);
-
-    clean.style.position = 'fixed';
-    clean.style.left = '-9999px';
-    document.body.appendChild(clean);
-    target = clean;
+    });
+    clone.style.position = 'fixed';
+    clone.style.left = '-9999px';
+    document.body.appendChild(clone);
+    target = clone;
 
   } else if (id === 'riepilogo-table') {
     // ── Turni Provvisori ──
