@@ -821,6 +821,8 @@
   .stat-pill.clickable { cursor: pointer; transition: all 0.2s; }
   .stat-pill.clickable:hover { background: var(--accent); color: #fff; transform: scale(1.05); }
   .stat-pill.clickable:hover strong { color: #fff; }
+  .stat-pill.clickable.stat-pill-danger:hover { background: #ef4444; }
+  .stat-pill.clickable.stat-pill-warn:hover { background: #f59e0b; }
 </style>
 <!-- Google Identity Services -->
 <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -2155,8 +2157,8 @@ function renderStats() {
     <div class="stat-pill">📋 Solo ECG: <strong>${docsWithEcg.size}</strong></div>
     <div class="stat-pill">✅ Confermati: <strong>${docsWithConf.size}</strong></div>
     <div class="stat-pill clickable" onclick="showFeriePopup()" title="Clicca per vedere chi è in ferie" style="cursor:pointer;">🏖️ In ferie: <strong>${ferie}</strong></div>
-    <div class="stat-pill clickable" onclick="showNoAvailPopup()" title="Clicca per vedere la lista" style="border-color:#ef4444;color:#ef4444;">❓ Senza disponibilità: <strong style="color:#ef4444;">${nNoAvail}</strong></div>
-    <div class="stat-pill clickable" onclick="showNoConfPopup()" title="Clicca per vedere la lista" style="border-color:#f59e0b;color:#f59e0b;">⚠️ Senza conferme: <strong style="color:#f59e0b;">${nNoConf}</strong></div>
+    <div class="stat-pill clickable stat-pill-danger" onclick="showNoAvailPopup()" title="Clicca per vedere la lista">❓ Senza disponibilità: <strong>${nNoAvail}</strong></div>
+    <div class="stat-pill clickable stat-pill-warn" onclick="showNoConfPopup()" title="Clicca per vedere la lista">⚠️ Senza conferme: <strong>${nNoConf}</strong></div>
   `;
   // Update rules warning badge
   updateRulesWarningBadge();
