@@ -458,7 +458,20 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  .disp-table tr:hover td.name-cell { filter: brightness(0.93); }
+  .disp-table td.col-highlight { background: rgba(37,99,235,0.10) !important; }
+  .disp-table th.col-highlight { background: rgba(37,99,235,0.18) !important; }
+
+  .disp-table tr:hover td.name-cell {
+    filter: brightness(0.88);
+    box-shadow: inset 0 0 0 2px var(--accent), 0 0 8px rgba(37,99,235,0.25);
+    font-size: 13px;
+    z-index: 5;
+    position: sticky;
+    left: 0;
+  }
+  .disp-table tr:hover td {
+    background: rgba(37,99,235,0.04);
+  }
 
   .slot-btn {
     width: 100%;
@@ -865,10 +878,12 @@
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
     <div style="display:flex;align-items:center;gap:8px;">
       <span style="font-weight:700;font-size:15px;color:var(--accent);">Disponibilità Turni</span>
+      <span id="rules-warning-badge" style="cursor:pointer;display:none;margin-left:4px;" title="Clicca per vedere i conflitti" onclick="showRulesWarnings()">⚠️</span>
     </div>
     <button onclick="toggleDispTable()" id="toggle-disp-btn" title="Riduci/Espandi tabella" style="background:none;border:1px solid var(--border);border-radius:4px;cursor:pointer;color:var(--muted);font-size:15px;font-weight:700;line-height:1;padding:1px 8px;user-select:none;">−</button>
   </div>
 
+  <div id="turni-badges" style="display:flex;gap:0;margin-bottom:4px;padding-left:152px;"></div>
   <div class="disp-table-wrap" id="disp-table-wrap">
     <table class="disp-table" id="disp-table">
       <thead id="disp-head"></thead>
@@ -885,6 +900,7 @@
       </div>
       <button onclick="toggleHolterTableVis()" id="toggle-holter-btn" title="Riduci/Espandi" style="background:none;border:1px solid var(--border);border-radius:4px;cursor:pointer;color:var(--muted);font-size:15px;font-weight:700;line-height:1;padding:1px 8px;user-select:none;">−</button>
     </div>
+    <div id="holter-badges" style="display:flex;gap:0;margin-bottom:4px;padding-left:152px;"></div>
     <div id="holter-table-wrap" class="disp-table-wrap">
       <table class="disp-table" id="holter-table" style="--header-bg:#6366f1;">
         <thead id="holter-head"></thead>
@@ -1853,13 +1869,13 @@ function renderTable() {
 
   // Header
   let headHtml = '<tr><th rowspan="2" style="width:150px;min-width:150px;position:sticky;left:0;z-index:3;background:var(--surface2);">MEDICO</th>';
-  DAYS.forEach(d => {
-    headHtml += `<th colspan="2" class="day-header" style="width:74px;">${d}</th>`;
+  DAYS.forEach((d, di) => {
+    headHtml += `<th colspan="2" class="day-header" data-day-idx="${di}" onclick="toggleDayHighlight(this, ${di}, 'disp-table')" style="width:74px;cursor:pointer;" title="Clicca per evidenziare">${d}</th>`;
   });
   headHtml += '<th rowspan="2" style="width:54px;min-width:54px;white-space:nowrap;font-size:11px;" title="Disponibilità / Conferme">DISP.<br>CONF.</th>';
   headHtml += '<th rowspan="2" style="width:44px;min-width:44px;">FERIE</th></tr><tr>';
-  DAYS.forEach(() => {
-    headHtml += '<th style="width:37px;">MAT</th><th style="width:37px;">POM</th>';
+  DAYS.forEach((_, di) => {
+    headHtml += `<th data-day-idx="${di}" style="width:37px;">MAT</th><th data-day-idx="${di}" style="width:37px;">POM</th>`;
   });
   headHtml += '</tr>';
   head.innerHTML = headHtml;
@@ -1910,7 +1926,7 @@ function renderTable() {
         const val = dd.slots[key] || '';
         const cls = val;
         const lbl = SLOT_LABELS[val] || '—';
-        bodyHtml += `<td>
+        bodyHtml += `<td data-day-idx="${di}">
           <button class="slot-btn ${cls}" 
             onclick="cycleSlot('${doc.replace(/'/g,"\\'")}','${key}')" 
             title="${day} ${slot}: ${val||'vuoto'}">
@@ -1943,6 +1959,48 @@ function renderTable() {
   }
 
   body.innerHTML = bodyHtml;
+
+  // Badges conferme per giorno
+  const badgesEl = document.getElementById('turni-badges');
+  if (badgesEl) {
+    const w = getWeekData();
+    let bHtml = '';
+    DAYS.forEach((day, di) => {
+      let nConf = 0, nEcg = 0;
+      for (const doc of (state.doctors || [])) {
+        const dd = w[doc];
+        if (!dd || !dd.slots) continue;
+        SLOTS.forEach((_, si) => {
+          const v = dd.slots[`${di}_${si}`] || '';
+          if (v === 'confermato') nConf++;
+          if (v === 'confermato-ecg') nEcg++;
+        });
+      }
+      const hasBadge = nConf > 0 || nEcg > 0;
+      bHtml += `<div style="flex:0 0 74px;text-align:center;font-size:10px;line-height:1.3;">`;
+      if (hasBadge) {
+        if (nConf > 0) bHtml += `<span style="background:#2563eb;color:#fff;padding:1px 5px;border-radius:8px;font-weight:700;font-size:9px;" title="${nConf} conferme turno completo">${nConf}C</span> `;
+        if (nEcg > 0) bHtml += `<span style="background:#d946ef;color:#fff;padding:1px 5px;border-radius:8px;font-weight:700;font-size:9px;" title="${nEcg} conferme solo ECG">${nEcg}E</span>`;
+      }
+      bHtml += `</div>`;
+    });
+    badgesEl.innerHTML = bHtml;
+  }
+
+  // Update rules warning badge
+  updateRulesWarningBadge();
+}
+
+function toggleDayHighlight(thEl, dayIdx, tableId) {
+  const table = document.getElementById(tableId);
+  if (!table) return;
+  const isActive = thEl.classList.contains('col-highlight');
+  // Remove all highlights from this table
+  table.querySelectorAll('.col-highlight').forEach(el => el.classList.remove('col-highlight'));
+  if (!isActive) {
+    // Highlight all cells with this day index
+    table.querySelectorAll(`[data-day-idx="${dayIdx}"]`).forEach(el => el.classList.add('col-highlight'));
+  }
 }
 
 function filterTable() {
@@ -2077,6 +2135,8 @@ function renderStats() {
     <div class="stat-pill clickable" onclick="showNoAvailPopup()" title="Clicca per vedere la lista" style="border-color:#ef4444;color:#ef4444;">❓ Senza disponibilità: <strong style="color:#ef4444;">${nNoAvail}</strong></div>
     <div class="stat-pill clickable" onclick="showNoConfPopup()" title="Clicca per vedere la lista" style="border-color:#f59e0b;color:#f59e0b;">⚠️ Senza conferme: <strong style="color:#f59e0b;">${nNoConf}</strong></div>
   `;
+  // Update rules warning badge
+  updateRulesWarningBadge();
 }
 
 function showNoAvailPopup() {
@@ -2313,8 +2373,8 @@ function renderHolterTable() {
 
   // Header
   let headHtml = '<tr><th rowspan="2" style="width:150px;min-width:150px;position:sticky;left:0;z-index:3;background:#f0f4ff;">MEDICO</th>';
-  HOLTER_DAYS.forEach(d => {
-    headHtml += `<th class="day-header" style="width:70px;min-width:70px;background:#6366f1;color:#fff;">${d}</th>`;
+  HOLTER_DAYS.forEach((d, di) => {
+    headHtml += `<th class="day-header" data-day-idx="${di}" onclick="toggleDayHighlight(this, ${di}, 'holter-table')" style="width:70px;min-width:70px;background:#6366f1;color:#fff;cursor:pointer;" title="Clicca per evidenziare">${d}</th>`;
   });
   headHtml += '<th rowspan="2" style="width:54px;min-width:54px;white-space:nowrap;font-size:11px;background:#f0f4ff;" title="Disponibilità / Conferme">DISP.<br>CONF.</th>';
   headHtml += '<th rowspan="2" style="width:44px;min-width:44px;background:#f0f4ff;">FERIE</th></tr>';
@@ -2352,7 +2412,7 @@ function renderHolterTable() {
       const val = dd.slots[di] || '';
       const lbl = SLOT_LABELS_H[val] || '—';
       const cls = SLOT_CSS_H[val] || '';
-      bodyHtml += `<td><button class="slot-btn ${cls}" onclick="cycleHolterSlot('${doc.replace(/'/g,"\\'")}',${di})" title="${day}: ${val||'vuoto'}">${lbl}</button></td>`;
+      bodyHtml += `<td data-day-idx="${di}"><button class="slot-btn ${cls}" onclick="cycleHolterSlot('${doc.replace(/'/g,"\\'")}',${di})" title="${day}: ${val||'vuoto'}">${lbl}</button></td>`;
     });
     const dispColor = nDisp > 0 ? '#6366f1' : 'var(--muted)';
     const confColor = nConf > 0 ? 'var(--success)' : 'var(--muted)';
@@ -2375,6 +2435,24 @@ function renderHolterTable() {
   const _hSec = document.getElementById('holter-section');
   if (_hSec) { _hSec.style.opacity = (_hFv && docs.length === 0) ? '0.25' : ''; _hSec.style.pointerEvents = (_hFv && docs.length === 0) ? 'none' : ''; }
   body.innerHTML = bodyHtml;
+
+  // Holter badges conferme per giorno
+  const hBadgesEl = document.getElementById('holter-badges');
+  if (hBadgesEl) {
+    const holterW = state.holterWeeks[currentWeek] || {};
+    let bHtml = '';
+    HOLTER_DAYS.forEach((day, di) => {
+      let nConf = 0;
+      for (const doc of (state.doctors || []).filter(d => state.holterEnabled[d])) {
+        const dd = holterW[doc];
+        if (dd && dd.slots && dd.slots[di] === 'confermato') nConf++;
+      }
+      bHtml += `<div style="flex:0 0 70px;text-align:center;font-size:10px;">`;
+      if (nConf > 0) bHtml += `<span style="background:#6366f1;color:#fff;padding:1px 5px;border-radius:8px;font-weight:700;font-size:9px;" title="${nConf} conferme holter">${nConf}C</span>`;
+      bHtml += `</div>`;
+    });
+    hBadgesEl.innerHTML = bHtml;
+  }
 }
 
 function toggleHolterTableVis() {
@@ -4799,18 +4877,18 @@ function renderRiepilogo() {
 
   // Styles
   const brd = '1px solid #bbb';
-  const thS      = `border:${brd};padding:3px 6px;font-weight:700;font-size:10px;text-align:center;vertical-align:middle;`;
+  const thS      = `border:${brd};padding:3px 6px;font-weight:700;font-size:12px;text-align:center;vertical-align:middle;font-family:'Inter','Segoe UI',sans-serif;color:#000;`;
   const thDisp   = thS + `background:#dce6f1;`;
   const thConf   = thS + `background:#d6ecd2;`;
-  const tdDayS   = `border:${brd};padding:3px 6px;font-weight:700;font-size:10px;background:#f2f2f2;white-space:nowrap;vertical-align:middle;text-align:center;`;
-  const tdDateS  = `border:${brd};padding:2px 6px;font-size:9px;color:#555;text-align:center;vertical-align:middle;background:#fafafa;white-space:nowrap;`;
-  const tdContS  = `border:${brd};padding:3px 6px;font-size:10px;vertical-align:middle;min-width:280px;white-space:normal;word-wrap:break-word;word-break:break-word;line-height:1.4;`;
-  const tdSmS    = `border:${brd};padding:3px 4px;width:30px;min-width:30px;vertical-align:middle;text-align:center;font-size:10px;white-space:normal;word-break:break-word;line-height:1.4;`;
+  const tdDayS   = `border:${brd};padding:3px 6px;font-weight:700;font-size:12px;background:#f2f2f2;white-space:nowrap;vertical-align:middle;text-align:center;color:#000;font-family:'Inter','Segoe UI',sans-serif;`;
+  const tdDateS  = `border:${brd};padding:2px 6px;font-size:11px;color:#000;text-align:center;vertical-align:middle;background:#fafafa;white-space:nowrap;font-family:'Inter','Segoe UI',sans-serif;`;
+  const tdContS  = `border:${brd};padding:3px 6px;font-size:12px;vertical-align:middle;min-width:280px;white-space:normal;word-wrap:break-word;word-break:break-word;line-height:1.4;color:#000;font-family:'Inter','Segoe UI',sans-serif;`;
+  const tdSmS    = `border:${brd};padding:3px 4px;width:30px;min-width:30px;vertical-align:middle;text-align:center;font-size:12px;white-space:normal;word-break:break-word;line-height:1.4;color:#000;font-family:'Inter','Segoe UI',sans-serif;`;
 
   // Funzione per costruire una tabella (disp o conf)
   const buildTable = (id, slotMap, thStyle, holterMap, hpMap, spiroMap, plsMap) => {
     let t = `
-    <table id="${id}" style="border-collapse:collapse;font-size:11px;">
+    <table id="${id}" style="border-collapse:collapse;font-size:12px;">
       <thead>
         <tr>
           <th colspan="2" style="${thStyle}width:140px;">GIORNO</th>
@@ -4833,10 +4911,10 @@ function renderRiepilogo() {
         <td colspan="2" style="${tdDayS}width:140px;">${ALL_DAY_LABELS[di]}</td>
         <td colspan="8" rowspan="2" style="${tdContS}">${mattNames}</td>
         <td colspan="8" rowspan="2" style="${tdContS}">${pomNames}</td>
-        <td rowspan="2" style="${tdSmS};white-space:normal;word-break:break-word;min-width:260px;color:#7c3aed;">${holterNames}</td>
+        <td rowspan="2" style="${tdSmS};white-space:normal;word-break:break-word;min-width:260px;">${holterNames}</td>
         <td rowspan="2" style="${tdSmS};white-space:normal;word-break:break-word;min-width:260px;">${hpNames}</td>
-        <td rowspan="2" style="${tdSmS};white-space:normal;word-break:break-word;min-width:80px;color:#16a34a;">${fmt((spiroMap && spiroMap[di]) || [])}</td>
-        <td rowspan="2" style="${tdSmS};white-space:normal;word-break:break-word;min-width:80px;color:#7c3aed;">${fmt((plsMap && plsMap[di]) || [])}</td>
+        <td rowspan="2" style="${tdSmS};white-space:normal;word-break:break-word;min-width:80px;">${fmt((spiroMap && spiroMap[di]) || [])}</td>
+        <td rowspan="2" style="${tdSmS};white-space:normal;word-break:break-word;min-width:80px;">${fmt((plsMap && plsMap[di]) || [])}</td>
       </tr>
       <tr>
         <td colspan="2" style="${tdDateS}width:140px;">${formatDate(dayStr)}</td>
@@ -5594,6 +5672,48 @@ function getConflictWarnings(weekData, dayIndex) {
     }
   }
   return warnings;
+}
+
+// =============================================
+// RULES WARNING BADGE
+// =============================================
+function updateRulesWarningBadge() {
+  const badge = document.getElementById('rules-warning-badge');
+  if (!badge) return;
+  const warnings = [];
+  // Check custom rules
+  warnings.push(...checkAllCustomRules());
+  // Check all conflict violations for confirmed slots
+  const w = getWeekData();
+  const conflicts = state.doctorConflicts || [];
+  for (const pair of conflicts) {
+    const [docA, docB] = pair;
+    const ddA = w[docA], ddB = w[docB];
+    if (!ddA || !ddA.slots || !ddB || !ddB.slots) continue;
+    for (let di = 0; di < 7; di++) {
+      for (let si = 0; si < 2; si++) {
+        const key = `${di}_${si}`;
+        const vA = ddA.slots[key] || '', vB = ddB.slots[key] || '';
+        const confA = vA === 'confermato' || vA === 'confermato-ecg';
+        const confB = vB === 'confermato' || vB === 'confermato-ecg';
+        if (confA && confB) {
+          const dayNames = ['LUN','MAR','MER','GIO','VEN','SAB','DOM'];
+          const slotNames = ['Mattina','Pomeriggio'];
+          warnings.push(`${docA} e ${docB} in conflitto: ${dayNames[di]} ${slotNames[si]}`);
+        }
+      }
+    }
+  }
+  badge._warnings = warnings;
+  badge.style.display = warnings.length > 0 ? 'inline' : 'none';
+  badge.title = warnings.length > 0 ? `${warnings.length} avviso/i — Clicca per dettagli` : '';
+}
+
+function showRulesWarnings() {
+  const badge = document.getElementById('rules-warning-badge');
+  const warnings = badge && badge._warnings ? badge._warnings : [];
+  if (warnings.length === 0) { showToast('Nessun avviso attivo ✅'); return; }
+  showWarningBanner(warnings);
 }
 
 // =============================================
