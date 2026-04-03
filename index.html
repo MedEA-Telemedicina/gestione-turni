@@ -1,4 +1,5 @@
 
+
 <!DOCTYPE html>
 <html lang="it">
 <head>
@@ -766,7 +767,15 @@
     gap: 8px;
   }
   .no-avail-item:last-child { border-bottom: none; }
-  .no-avail-name { font-weight: 600; font-size: 13px; flex: 1; }
+  .no-avail-name { font-weight: 600; font-size: 13px; white-space: nowrap; flex-shrink: 0; min-width: 140px; }
+  .no-conf-item {
+    display: flex; flex-direction: column; padding: 8px 12px; border-bottom: 1px solid var(--border); gap: 4px;
+  }
+  .no-conf-item:last-child { border-bottom: none; }
+  .no-conf-item:nth-child(even) { background: rgba(0,0,0,0.02); }
+  .no-conf-row { display: flex; align-items: center; gap: 6px; }
+  .no-conf-name { font-weight: 700; font-size: 13px; white-space: nowrap; color: var(--text); min-width: 140px; }
+  .no-conf-badges { display: flex; flex-wrap: wrap; gap: 4px; }
   .no-avail-wa-btn {
     display: inline-flex; align-items: center; gap: 4px;
     background: #25d366; color: #fff; border: none;
@@ -1312,7 +1321,7 @@ function doLogin() {
       errEl.style.display = 'block';
       return;
     }
-    currentUser = { username: username, role: user.role || 'user', fullName: user.fullName || username, gender: user.gender || 'M' };
+    currentUser = { username: username, role: user.role || 'user', fullName: user.fullName || username, gender: user.gender || 'M', viewOnly: !!user.viewOnly };
     sessionStorage.setItem('loggedUser', JSON.stringify(currentUser));
     onLoginSuccess();
   }).catch(err => {
@@ -1322,6 +1331,7 @@ function doLogin() {
 }
 
 function onLoginSuccess() {
+  if (currentUser && currentUser.viewOnly && currentUser.role !== 'admin') { setTimeout(() => showWarningBanner('👁️ Accesso in modalità solo visualizzazione — non puoi apportare modifiche.', '#f59e0b'), 500); }
   const overlay = document.getElementById('login-overlay');
   if (overlay) overlay.style.display = 'none';
   const userInfo = document.getElementById('user-info');
@@ -1582,7 +1592,8 @@ function saveData(silent) {
 }
 
 // Auto-save silently after every slot change
-function autoSave() { saveData(true); }
+function autoSave() {
+  if (isViewOnly()) return; saveData(true); }
 
 // =============================================
 // CONSUNTIVO DYNAMIC HELPERS
@@ -2123,22 +2134,70 @@ function renderStats() {
   const noAvailDocs = _allTurniDocs.filter(d => !docsWithAvail.has(d) && !ferieSet.has(d)).sort((a,b) => a.localeCompare(b));
   window._noAvailDocs = noAvailDocs;
   const nNoAvail = noAvailDocs.length;
+  // Dottori con disponibilità ma senza conferme
+  const docsNoConf = _allTurniDocs.filter(d => {
+    if (ferieSet.has(d)) return false;
+    const dd = w[d];
+    if (!dd || !dd.slots) return false;
+    let hasAvail = false, hasConf = false;
+    Object.values(dd.slots).forEach(v => {
+      if (v === 'disponibile' || v === 'solo-ecg') hasAvail = true;
+      if (v === 'confermato' || v === 'confermato-ecg') hasConf = true;
+    });
+    return hasAvail && !hasConf;
+  }).sort((a,b) => a.localeCompare(b));
+  // Build detail map: doctor -> list of available slots (day + time)
+  const noConfDetail = {};
+  const _dayLabels = ['Lun','Mar','Mer','Gio','Ven','Sab'];
+  const _slotLabels = ['Matt.','Pom.'];
+  docsNoConf.forEach(doc => {
+    const dd = w[doc];
+    if (!dd || !dd.slots) { noConfDetail[doc] = []; return; }
+    const avail = [];
+    Object.entries(dd.slots).forEach(([key, val]) => {
+      if (val === 'disponibile' || val === 'solo-ecg') {
+        const parts = key.split('_');
+        const dayLbl = _dayLabels[parseInt(parts[0])] || '?';
+        const slotLbl = _slotLabels[parseInt(parts[1])] || '';
+        avail.push(dayLbl + ' ' + slotLbl + (val === 'solo-ecg' ? ' (ECG)' : ''));
+      }
+    });
+    noConfDetail[doc] = avail;
+  });
+  window._noConfDetail = noConfDetail;
+  window._noConfDocs = docsNoConf;
+  // Ferie data for popup
+  window._ferieDocsMap = {};
+  Object.entries(w).forEach(([name, dd]) => { if (dd.ferie) window._ferieDocsMap[name] = 'Turno'; });
+  const _holterWF = state.holterWeeks[currentWeek] || {};
+  Object.entries(_holterWF).forEach(([doc, dd]) => { if (dd && dd.ferie) { if (!window._ferieDocsMap[doc]) window._ferieDocsMap[doc] = ''; window._ferieDocsMap[doc] += (window._ferieDocsMap[doc] ? ', ' : '') + 'Holter'; } });
+  const _hcWFs = state.hcWeeks[currentWeek] || {};
+  Object.entries(_hcWFs).forEach(([doc, dd]) => { if (dd && dd.ferie) { if (!window._ferieDocsMap[doc]) window._ferieDocsMap[doc] = ''; window._ferieDocsMap[doc] += (window._ferieDocsMap[doc] ? ', ' : '') + 'HC'; } });
+  const _hpWFs = state.hpWeeks[currentWeek] || {};
+  Object.entries(_hpWFs).forEach(([doc, dd]) => { if (dd && dd.ferie) { if (!window._ferieDocsMap[doc]) window._ferieDocsMap[doc] = ''; window._ferieDocsMap[doc] += (window._ferieDocsMap[doc] ? ', ' : '') + 'HP'; } });
+  const _spWFs = state.spiroWeeks[currentWeek] || {};
+  Object.entries(_spWFs).forEach(([doc, dd]) => { if (dd && dd.ferie) { if (!window._ferieDocsMap[doc]) window._ferieDocsMap[doc] = ''; window._ferieDocsMap[doc] += (window._ferieDocsMap[doc] ? ', ' : '') + 'Spiro'; } });
+  const _plWFs = state.plsWeeks[currentWeek] || {};
+  Object.entries(_plWFs).forEach(([doc, dd]) => { if (dd && dd.ferie) { if (!window._ferieDocsMap[doc]) window._ferieDocsMap[doc] = ''; window._ferieDocsMap[doc] += (window._ferieDocsMap[doc] ? ', ' : '') + 'Pls'; } });
+  const nNoConf = docsNoConf.length;
   document.getElementById('stat-row').innerHTML = `
     <div class="stat-pill">📅 Disponibili: <strong>${docsWithAvail.size}</strong></div>
     <div class="stat-pill">📋 Solo ECG: <strong>${docsWithEcg.size}</strong></div>
     <div class="stat-pill">✅ Confermati: <strong>${docsWithConf.size}</strong></div>
-    <div class="stat-pill">🏖️ In ferie: <strong>${ferie}</strong></div>
+    <div class="stat-pill clickable" onclick="showFeriePopup()" title="Clicca per vedere chi è in ferie" style="cursor:pointer;">🏖️ In ferie: <strong>${ferie}</strong></div>
     <div class="stat-pill clickable" onclick="showNoAvailPopup()" title="Clicca per vedere la lista" style="border-color:#ef4444;color:#ef4444;">❓ Senza disponibilità: <strong style="color:#ef4444;">${nNoAvail}</strong></div>
+    <div class="stat-pill clickable" onclick="showNoConfPopup()" title="Clicca per vedere la lista" style="border-color:#f59e0b;color:#f59e0b;">⚠️ Senza conferme: <strong style="color:#f59e0b;">${nNoConf}</strong></div>
   `;
 }
 
 function showNoAvailPopup() {
   const waMsg = encodeURIComponent('Salve, ha novità per la disponibilità? Cortesemente entro le ore 14:00. Grazie');
+  const isAdm = currentUser && currentUser.role === 'admin';
   function buildWaBtn(doc) {
     const phone = state.doctorPhones?.[doc];
-    return phone
-      ? `<a class="no-avail-wa-btn" href="whatsapp://send?phone=${phone.replace(/[^0-9+]/g,'')}&text=${waMsg}" target="_blank" rel="noopener">📲 WhatsApp</a>`
-      : `<span class="no-avail-no-phone">📱 No tel.</span>`;
+    if (!phone) return `<span class="no-avail-no-phone">📱 No tel.</span>`;
+    const safeDoc = doc.replace(/'/g, "\\'");
+    return `<button class="no-avail-wa-btn wa-noavail-btn" data-doc="${doc}" data-week="${currentWeek}" onclick="sendNoAvailWa('${phone.replace(/[^0-9+]/g,'')}', '${safeDoc}', this)">📲 WhatsApp</button>`;
   }
   function buildSection(title, color, docs) {
     if (docs.length === 0) return `<div style="padding:8px 12px;font-size:13px;color:var(--muted);"><em>Tutti hanno dato disponibilità! 🎉</em></div>`;
@@ -2146,40 +2205,48 @@ function showNoAvailPopup() {
   }
   // --- Turni ---
   const turniDocs = window._noAvailDocs || [];
+  const seen = new Set(turniDocs);
   // --- Consuntivo HC ---
   const hcAll = getHcDoctorsList();
   const hcWeekData = state.hcWeeks[currentWeek] || {};
   const hcNoAvail = hcAll.filter(d => {
+    if (seen.has(d)) return false;
     const dd = hcWeekData[d];
     if (!dd) return true;
     if (dd.ferie) return false;
     const slots = Object.values(dd.slots || {}).filter(Boolean);
     return slots.length === 0;
   }).sort((a,b) => a.localeCompare(b));
+  hcNoAvail.forEach(d => seen.add(d));
   // --- Consuntivo HP ---
   const hpAll = getHpDoctorsList();
   const hpWeekData = state.hpWeeks[currentWeek] || {};
   const hpNoAvail = hpAll.filter(d => {
+    if (seen.has(d)) return false;
     const dd = hpWeekData[d];
     if (!dd) return true;
     if (dd.ferie) return false;
     const slots = Object.values(dd.slots || {}).filter(Boolean);
     return slots.length === 0;
   }).sort((a,b) => a.localeCompare(b));
+  hpNoAvail.forEach(d => seen.add(d));
   // --- Consuntivo Spirometrie ---
   const spAll = getSpiroDoctorsList();
   const spWeekData = state.spiroWeeks[currentWeek] || {};
   const spNoAvail = spAll.filter(d => {
+    if (seen.has(d)) return false;
     const dd = spWeekData[d];
     if (!dd) return true;
     if (dd.ferie) return false;
     const slots = Object.values(dd.slots || {}).filter(Boolean);
     return slots.length === 0;
   }).sort((a,b) => a.localeCompare(b));
+  spNoAvail.forEach(d => seen.add(d));
   // --- Consuntivo Polisonnografie ---
   const plAll = getPlsDoctorsList();
   const plWeekData = state.plsWeeks[currentWeek] || {};
   const plNoAvail = plAll.filter(d => {
+    if (seen.has(d)) return false;
     const dd = plWeekData[d];
     if (!dd) return true;
     if (dd.ferie) return false;
@@ -2191,6 +2258,7 @@ function showNoAvailPopup() {
     showWarningBanner('Tutti gli specialisti hanno dato disponibilità! 🎉', '#059669');
     return;
   }
+  const resetBtn = isAdm ? `<button onclick="resetNoAvailWaSent()" style="font-size:10px;padding:3px 10px;border-radius:6px;border:1.5px solid #f59e0b;background:#fffbeb;color:#b45309;cursor:pointer;font-weight:600;">🔄 Reset WhatsApp</button>` : '';
   const overlay = document.createElement('div');
   overlay.className = 'no-avail-overlay';
   overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
@@ -2198,7 +2266,10 @@ function showNoAvailPopup() {
     <div class="no-avail-modal" style="max-height:85vh;">
       <div class="no-avail-header">
         <h3>❓ Specialisti senza disponibilità</h3>
-        <button onclick="this.closest('.no-avail-overlay').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);">✕</button>
+        <div style="display:flex;align-items:center;gap:8px;">
+          ${resetBtn}
+          <button onclick="this.closest('.no-avail-overlay').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);">✕</button>
+        </div>
       </div>
       <div class="no-avail-body" style="max-height:70vh;overflow-y:auto;">
         <div style="margin-bottom:6px;padding:6px 10px;background:rgba(99,102,241,0.1);border-radius:8px;font-weight:700;color:#6366f1;font-size:13px;cursor:pointer;" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none'">
@@ -2225,6 +2296,71 @@ function showNoAvailPopup() {
           😴 Consuntivo Polisonnografie (${plNoAvail.length})
         </div>
         <div>${buildSection('PLS', '#7c3aed', plNoAvail)}</div>` : ''}
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  restoreNoAvailWaSent();
+}
+
+function showNoConfPopup() {
+  const docs = window._noConfDocs || [];
+  if (docs.length === 0) { showWarningBanner('Tutti i cardiologi con disponibilità hanno almeno una conferma! 🎉', '#059669'); return; }
+  const overlay = document.createElement('div');
+  overlay.className = 'no-avail-overlay';
+  overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
+  overlay.innerHTML = `
+    <div class="no-avail-modal" style="max-height:85vh;">
+      <div class="no-avail-header">
+        <h3>⚠️ Cardiologi senza conferme (turni)</h3>
+        <button onclick="this.closest('.no-avail-overlay').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);">✕</button>
+      </div>
+      <div class="no-avail-body" style="max-height:70vh;overflow-y:auto;">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:10px;">Medici con disponibilità ma senza nessuna conferma nei turni.</div>
+        <div style="display:flex;justify-content:flex-end;gap:16px;font-size:10px;color:var(--muted);margin-bottom:6px;padding-right:4px;">
+          <span>🟡 = Disponibile</span><span>🔵 = Solo ECG</span>
+        </div>
+        ${docs.map(doc => {
+          const detail = (window._noConfDetail || {})[doc] || [];
+          const badges = detail.map(s => {
+            const isEcg = s.includes('(ECG)');
+            const bg = isEcg ? '#dbeafe' : '#fef3c7';
+            const color = isEcg ? '#1e40af' : '#92400e';
+            const border = isEcg ? '#bfdbfe' : '#fde68a';
+            const label = s.replace(' (ECG)', '');
+            return '<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:5px;background:'+bg+';color:'+color+';border:1px solid '+border+';white-space:nowrap;">'+label+(isEcg?' <small>ECG</small>':'')+'</span>';
+          }).join('');
+          return '<div class="no-conf-item"><div class="no-conf-row"><span class="no-conf-name">'+doc+'</span><div class="no-conf-badges">'+badges+'</div></div></div>';
+        }).join('')}
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+}
+
+function showFeriePopup() {
+  const ferieMap = window._ferieDocsMap || {};
+  const docs = Object.keys(ferieMap).sort();
+  if (docs.length === 0) { showWarningBanner('Nessun cardiologo in ferie questa settimana! 🎉', '#059669'); return; }
+  const overlay = document.createElement('div');
+  overlay.className = 'no-avail-overlay';
+  overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
+  const itemsHtml = docs.map(doc => {
+    const labels = ferieMap[doc];
+    const badges = labels.split(', ').map(l => {
+      const bg = l==='Turno'?'#dc2626':l==='HC'?'#0e7490':l==='HP'?'#ea7c1e':l==='Holter'?'#7c3aed':l==='Spiro'?'#16a34a':l==='Pls'?'#7c3aed':'#dc2626';
+      return '<span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;margin-left:4px;background:'+bg+';color:#fff;">'+l+'</span>';
+    }).join('');
+    return '<div class="no-avail-item"><span class="no-avail-name" style="color:var(--danger);">'+doc+'</span>'+badges+'</div>';
+  }).join('');
+  overlay.innerHTML = `
+    <div class="no-avail-modal" style="max-height:85vh;">
+      <div class="no-avail-header">
+        <h3>🏖️ In Ferie Questa Settimana (${docs.length})</h3>
+        <button onclick="this.closest('.no-avail-overlay').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);">✕</button>
+      </div>
+      <div class="no-avail-body" style="max-height:70vh;overflow-y:auto;">
+        ${itemsHtml}
       </div>
     </div>
   `;
@@ -4816,98 +4952,6 @@ function renderRiepilogo() {
       ${buildTable('riepilogo-conf-table', slotConf, thConf, hcCombinedConf, hpConf, spiroData, plsData)}
     </div>`;
 
-  // Ferie map - raccoglie da TUTTE le tabelle con etichette
-  const ferieMap = {};
-  const addFerie = (doc, label) => {
-    if (!ferieMap[doc]) ferieMap[doc] = [];
-    if (!ferieMap[doc].includes(label)) ferieMap[doc].push(label);
-  };
-
-  // Tabella principale (Turno)
-  state.doctors.forEach(doc => {
-    const dd = w[doc];
-    if (dd && dd.ferie) addFerie(doc, 'Turno');
-  });
-
-  // Tabella Holter
-  const holterWF = state.holterWeeks[currentWeek] || {};
-  Object.entries(holterWF).forEach(([doc, dd]) => {
-    if (dd && dd.ferie) addFerie(doc, 'Holter');
-  });
-
-  // Tabella Consuntivo HC
-  const hcWF = state.hcWeeks[currentWeek] || {};
-  Object.entries(hcWF).forEach(([doc, dd]) => {
-    if (dd && dd.ferie) addFerie(doc, 'HC');
-  });
-
-  // Tabella Consuntivo HP
-  const hpWF = state.hpWeeks[currentWeek] || {};
-  Object.entries(hpWF).forEach(([doc, dd]) => {
-    if (dd && dd.ferie) addFerie(doc, 'HP');
-  });
-
-  // Tabella Spirometrie
-  const spiroWF = state.spiroWeeks[currentWeek] || {};
-  Object.entries(spiroWF).forEach(([doc, dd]) => {
-    if (dd && dd.ferie) addFerie(doc, 'Spiro');
-  });
-
-  // Tabella Polisonnografie
-  const plsWF = state.plsWeeks[currentWeek] || {};
-  Object.entries(plsWF).forEach(([doc, dd]) => {
-    if (dd && dd.ferie) addFerie(doc, 'Pls');
-  });
-
-  const ferieList = Object.keys(ferieMap).sort();
-
-  const renderFerieItem = (doc) => {
-    const labels = ferieMap[doc];
-
-    // Calcola tutte le tabelle dove il medico è configurato
-    const configuredTables = [];
-    if (state.doctors.includes(doc)) configuredTables.push('Turno');
-    if (state.holterEnabled?.[doc]) configuredTables.push('Holter');
-    if (state.doctorExtra?.[doc]?.hcCons) configuredTables.push('HC');
-    if (state.doctorExtra?.[doc]?.hpCons) configuredTables.push('HP');
-    if (state.doctorExtra?.[doc]?.spiro) configuredTables.push('Spiro');
-    if (state.doctorExtra?.[doc]?.pls) configuredTables.push('Pls');
-
-    // Se è in ferie in tutte le tabelle configurate → mostra solo FERIE senza badge
-    const isFullFerie = configuredTables.length > 0 && configuredTables.every(t => labels.includes(t));
-
-    if (isFullFerie) {
-      return `<div style="font-size:12px;font-weight:600;color:var(--danger);padding:4px 7px;background:rgba(220,38,38,0.07);border-radius:5px;display:flex;align-items:center;gap:4px;">
-        • ${doc}
-      </div>`;
-    }
-
-    // Mostra badge per ogni tabella specifica in ferie (incluso Turno)
-    const badges = labels.map(l =>
-      `<span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;margin-left:4px;background:${l==='Turno'?'#dc2626':l==='HC'?'#0e7490':l==='HP'?'#ea7c1e':l==='Holter'?'#7c3aed':l==='Spiro'?'#16a34a':l==='Pls'?'#7c3aed':'#dc2626'};color:#fff;">${l}</span>`
-    ).join('');
-    return `<div style="font-size:12px;font-weight:600;color:var(--danger);padding:4px 7px;background:rgba(220,38,38,0.07);border-radius:5px;display:flex;align-items:center;flex-wrap:wrap;gap:2px;">
-      • ${doc}${badges}
-    </div>`;
-  };
-
-  const ferieBoxHtml = ferieList.length > 0
-    ? `<div style="min-width:210px;max-width:260px;flex-shrink:0;background:#fff8f8;border:1.5px solid var(--danger);border-radius:10px;padding:14px 16px;align-self:flex-start;">
-        <div style="font-weight:700;font-size:13px;color:var(--danger);margin-bottom:10px;">🏖️ In Ferie Questa Settimana</div>
-        <div style="display:flex;flex-direction:column;gap:5px;">
-          ${ferieList.map(renderFerieItem).join('')}
-        </div>
-      </div>`
-    : `<div style="min-width:210px;max-width:260px;flex-shrink:0;background:#f9fafb;border:1.5px solid #e5e7eb;border-radius:10px;padding:14px 16px;align-self:flex-start;">
-        <div style="color:#9ca3af;font-size:12px;text-align:center;">🏖️<br>Nessun cardiologo<br>in ferie questa settimana</div>
-      </div>`;
-
-  // Layout: tabelle a sinistra, box ferie a destra in cima
-  html = `<div style="display:flex;gap:20px;align-items:flex-start;">
-    <div style="flex:1;min-width:0;">${html}</div>
-    ${ferieBoxHtml}
-  </div>`;
-
   content.innerHTML = html;
 }
 
@@ -5272,6 +5316,8 @@ function loadUsersList() {
         ${isBlocked ? '<span style="font-size:10px;padding:2px 8px;border-radius:4px;background:var(--danger);color:#fff;">bloccato</span>' : ''}
         <span style="font-size:10px;padding:2px 8px;border-radius:4px;background:${isAdmin?'var(--accent)':'var(--success)'};color:#fff;">${u.role}</span>
         ${!isAdmin ? `<button class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 6px;color:${isBlocked ? 'var(--success)' : 'var(--warning)'};" onclick="toggleBlockUser('${uname}', ${isBlocked})" title="${isBlocked ? 'Sblocca' : 'Blocca'}">${isBlocked ? '🔓' : '🔒'}</button>` : ''}
+        ${!isAdmin ? `<button class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 6px;color:${u.viewOnly ? '#f59e0b' : '#6b7280'};" onclick="toggleViewOnly('${uname}', ${!!u.viewOnly})" title="${u.viewOnly ? 'Rimuovi solo visualizzazione' : 'Imposta solo visualizzatore'}">👁️${u.viewOnly ? '✓' : ''}</button>` : ''}
+        ${u.viewOnly ? '<span style="font-size:9px;padding:1px 6px;border-radius:4px;background:#fef3c7;color:#92400e;font-weight:600;">solo visione</span>' : ''}
         <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 6px;" onclick="resetUserPassword('${uname}')">🔑</button>
         <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 6px;color:var(--danger);" onclick="deleteUser('${uname}')">✕</button>
       </div>`;
@@ -5305,6 +5351,17 @@ function toggleBlockUser(username, currentlyBlocked) {
     showToast(newVal ? '🔒 Utente ' + username + ' bloccato' : '🔓 Utente ' + username + ' sbloccato');
     loadUsersList();
     logAudit((newVal ? 'Bloccato' : 'Sbloccato') + ' utente: ' + username);
+  });
+}
+
+function toggleViewOnly(username, currentlyViewOnly) {
+  const action = currentlyViewOnly ? 'Rimuovere la modalità solo visualizzazione per' : 'Impostare come solo visualizzatore';
+  if (!confirm(action + ' ' + username + '?')) return;
+  const newVal = !currentlyViewOnly;
+  firebase.database().ref('cardio_users/' + fbKey(username) + '/viewOnly').set(newVal ? true : null).then(() => {
+    showToast(newVal ? '👁️ ' + username + ' è ora solo visualizzatore' : '✏️ ' + username + ' può di nuovo modificare');
+    loadUsersList();
+    logAudit((newVal ? 'Impostato viewOnly' : 'Rimosso viewOnly') + ': ' + username);
   });
 }
 
@@ -5717,6 +5774,84 @@ function markWaSentUI(btnElement) {
     btnElement.style.cursor = 'default';
     btnElement.style.opacity = '0.85';
   }
+}
+
+function sendNoAvailWa(phone, docName, btnEl) {
+  const waMsg = encodeURIComponent('Salve, ha novità per la disponibilità? Cortesemente entro le ore 14:00. Grazie');
+  const url = 'whatsapp://send?phone=' + phone + '&text=' + waMsg;
+  window.open(url, '_self');
+  if (btnEl) {
+    btnEl.innerHTML = '✅ Inviato!';
+    btnEl.style.background = '#16a34a';
+    btnEl.style.color = '#fff';
+    btnEl.disabled = true;
+    btnEl.style.cursor = 'default';
+    btnEl.style.opacity = '0.85';
+  }
+  if (docName && currentWeek) {
+    const safeDoc = docName.replace(/\./g, '%2E');
+    firebase.database().ref('cardio_wa_noavail_sent/' + currentWeek + '/' + safeDoc).set({
+      by: currentUser ? (currentUser.fullName || currentUser.username) : 'unknown',
+      at: new Date().toISOString()
+    });
+    logAudit('WhatsApp disponibilità inviato a: ' + docName);
+  }
+  showToast('📲 WhatsApp aperto!');
+}
+
+function restoreNoAvailWaSent() {
+  if (!currentWeek) return;
+  firebase.database().ref('cardio_wa_noavail_sent/' + currentWeek).once('value').then(snap => {
+    const sent = snap.val();
+    if (!sent) return;
+    document.querySelectorAll('.wa-noavail-btn').forEach(btn => {
+      const doc = btn.getAttribute('data-doc');
+      const week = btn.getAttribute('data-week');
+      if (week === currentWeek && doc) {
+        const safeDoc = doc.replace(/\./g, '%2E');
+        if (sent[safeDoc]) {
+          btn.innerHTML = '✅ Inviato!';
+          btn.style.background = '#16a34a';
+          btn.style.color = '#fff';
+          btn.disabled = true;
+          btn.style.cursor = 'default';
+          btn.style.opacity = '0.85';
+          const info = sent[safeDoc];
+          btn.title = 'Inviato da ' + (info.by || '?') + ' il ' + new Date(info.at).toLocaleString('it-IT');
+        }
+      }
+    });
+  });
+}
+
+function resetNoAvailWaSent() {
+  if (!currentWeek) return;
+  if (!confirm('Vuoi resettare lo stato WhatsApp del popup senza disponibilità?\n\nI pulsanti torneranno cliccabili.')) return;
+  firebase.database().ref('cardio_wa_noavail_sent/' + currentWeek).remove().then(() => {
+    document.querySelectorAll('.wa-noavail-btn').forEach(btn => {
+      btn.innerHTML = '📲 WhatsApp';
+      btn.style.background = '#25d366';
+      btn.style.color = '#fff';
+      btn.disabled = false;
+      btn.style.cursor = 'pointer';
+      btn.style.opacity = '1';
+      btn.title = '';
+    });
+    logAudit('Reset WA noavail per settimana ' + currentWeek);
+    showToast('✅ Stato WhatsApp resettato!');
+  });
+}
+
+function isViewOnly() {
+  return currentUser && currentUser.viewOnly && currentUser.role !== 'admin';
+}
+
+function guardViewOnly() {
+  if (isViewOnly()) {
+    showWarningBanner('⚠️ Il tuo account è in modalità solo visualizzazione. Non puoi apportare modifiche.', '#f59e0b');
+    return true;
+  }
+  return false;
 }
 
 function populateDoctorSelects() {
