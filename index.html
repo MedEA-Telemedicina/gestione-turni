@@ -1,3 +1,5 @@
+
+
 <!DOCTYPE html>
 <html lang="it">
 <head>
@@ -4870,13 +4872,44 @@ function copyRiepilogoTable(tableId) {
   const id = tableId || 'riepilogo-table';
   const table = document.getElementById(id);
   if (!table) return;
+
+  // Per Turni Provvisori: copia solo da GIORNO a HC (escludi HP, SPIRO, POLISONNO)
+  let target = table;
+  if (id === 'riepilogo-table') {
+    const clone = table.cloneNode(true);
+    // Rimuovi le ultime 3 colonne dall'header
+    clone.querySelectorAll('thead tr').forEach(tr => {
+      const ths = tr.querySelectorAll('th');
+      for (let i = 0; i < 3 && ths.length > 1; i++) {
+        tr.removeChild(tr.lastElementChild);
+      }
+    });
+    // Rimuovi le ultime 3 celle dalla prima riga di ogni coppia giorno (quelle con rowspan)
+    clone.querySelectorAll('tbody tr').forEach(tr => {
+      const tds = tr.querySelectorAll('td');
+      // La prima riga di ogni giorno ha 6 td (giorno, matt, pom, hc, hp, spiro, polisonno)
+      // ma matt e pom hanno rowspan, quindi la riga ha: giorno + matt + pom + hc + hp + spiro + polisonno = 7 td nella prima riga
+      // La seconda riga ha solo: data (1 td)
+      if (tds.length > 2) {
+        for (let i = 0; i < 3 && tr.children.length > 2; i++) {
+          tr.removeChild(tr.lastElementChild);
+        }
+      }
+    });
+    clone.style.position = 'fixed';
+    clone.style.left = '-9999px';
+    document.body.appendChild(clone);
+    target = clone;
+  }
+
   const range = document.createRange();
-  range.selectNode(table);
+  range.selectNode(target);
   const sel = window.getSelection();
   sel.removeAllRanges();
   sel.addRange(range);
   document.execCommand('copy');
   sel.removeAllRanges();
+  if (target !== table) document.body.removeChild(target);
   const label = id === 'riepilogo-conf-table' ? 'Turni Definitivi' : 'Turni Provvisori';
   showToast(`✅ Tabella "${label}" copiata! Incollala in Excel con Ctrl+V.`);
 }
