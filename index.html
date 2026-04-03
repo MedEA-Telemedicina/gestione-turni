@@ -463,8 +463,8 @@
 
   /* Inline confirmation badges in day headers */
   .day-badge-left, .day-badge-right { vertical-align: middle; white-space: nowrap; }
-  .day-badge-left { margin-right: 2px; }
-  .day-badge-right { margin-left: 2px; }
+  .day-badge-left { margin-right: 6px; }
+  .day-badge-right { margin-left: 6px; }
   .conf-badge {
     display: inline-block;
     padding: 1px 4px;
@@ -5657,6 +5657,8 @@ function checkAllCustomRules() {
   const opLabels = { min: 'almeno', max: 'massimo', exact: 'esattamente' };
   for (const r of rules) {
     const dd = w[r.doctor];
+    // Se il medico è in ferie, la regola non si applica
+    if (dd && dd.ferie) continue;
     const confCount = dd && dd.slots ? Object.values(dd.slots).filter(v => v === 'confermato' || v === 'confermato-ecg').length : 0;
     let violated = false;
     if (r.operator === 'min' && confCount < r.value) violated = true;
