@@ -4766,6 +4766,15 @@ function renderRiepilogo() {
     if (!names.length) return '';
     return names.join(' - ');
   };
+  // Format per colonne HC/HP: 4 nomi per riga
+  const fmtGroup = (names) => {
+    if (!names.length) return '';
+    const rows = [];
+    for (let i = 0; i < names.length; i += 4) {
+      rows.push(names.slice(i, i + 4).join(' - '));
+    }
+    return rows.join('<br>');
+  };
 
   // Styles
   const brd = '1px solid #bbb';
@@ -4797,14 +4806,14 @@ function renderRiepilogo() {
       const dayStr   = addDays(currentWeek, di);
       const mattNames = fmt(slotMap[`${di}_0`]);
       const pomNames  = fmt(slotMap[`${di}_1`]);
-      const holterNames  = fmt((holterMap && holterMap[di]) || []);
-      const hpNames      = fmt((hpMap && hpMap[di]) || []);
+      const holterNames  = fmtGroup((holterMap && holterMap[di]) || []);
+      const hpNames      = fmtGroup((hpMap && hpMap[di]) || []);
       t += `<tr>
         <td colspan="2" style="${tdDayS}width:140px;">${ALL_DAY_LABELS[di]}</td>
         <td colspan="8" rowspan="2" style="${tdContS}">${mattNames}</td>
         <td colspan="8" rowspan="2" style="${tdContS}">${pomNames}</td>
-        <td rowspan="2" style="${tdSmS};white-space:normal;word-break:break-word;min-width:80px;color:#7c3aed;">${holterNames}</td>
-        <td rowspan="2" style="${tdSmS};white-space:normal;word-break:break-word;min-width:80px;">${hpNames}</td>
+        <td rowspan="2" style="${tdSmS};white-space:normal;word-break:break-word;min-width:260px;color:#7c3aed;">${holterNames}</td>
+        <td rowspan="2" style="${tdSmS};white-space:normal;word-break:break-word;min-width:260px;">${hpNames}</td>
         <td rowspan="2" style="${tdSmS};white-space:normal;word-break:break-word;min-width:80px;color:#16a34a;">${fmt((spiroMap && spiroMap[di]) || [])}</td>
         <td rowspan="2" style="${tdSmS};white-space:normal;word-break:break-word;min-width:80px;color:#7c3aed;">${fmt((plsMap && plsMap[di]) || [])}</td>
       </tr>
