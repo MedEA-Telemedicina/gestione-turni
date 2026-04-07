@@ -2514,6 +2514,13 @@ function cycleHolterSlot(doc, dayIdx) {
   const dd = getHolterDoctorData(doc);
   const cur = dd.slots[dayIdx] || '';
   const next = cur === '' ? 'disponibile' : cur === 'disponibile' ? 'confermato' : '';
+  // If going from vuoto to disponibile and the doctor is on ferie for regular shifts, ask confirmation
+  if (cur === '' && next === 'disponibile') {
+    const mainData = getWeekData()[doc];
+    if (mainData && mainData.ferie) {
+      if (!confirm('⚠️ ' + doc + ' è in ferie per i turni. Confermare la disponibilità per Holter?')) return;
+    }
+  }
   if (next === '') delete dd.slots[dayIdx];
   else dd.slots[dayIdx] = next;
   const dayNames = ['LUN','MAR','MER','GIO','VEN','SAB','DOM'];
@@ -6703,10 +6710,10 @@ function listenOnlineUsers() {
           const isMe = currentUser && u.username === currentUser.username;
           const unreadN = (!isMe && _chatUnreadMap[u.username]) ? _chatUnreadMap[u.username] : 0;
           const unreadCountHtml = unreadN > 0 ? `<span style="background:#ef4444;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;line-height:16px;text-align:center;border-radius:8px;padding:0 4px;flex-shrink:0;">${unreadN}</span>` : '';
-          const chatBtn = isMe ? '' : `<button onclick="event.stopPropagation();openChat('${u.username.replace(/'/g,"\\'")}','${u.fullName.replace(/'/g,"\\'")}')" style="position:relative;background:none;border:none;cursor:pointer;font-size:14px;padding:0 2px;line-height:1;display:flex;align-items:center;gap:3px;" title="Chatta con ${u.fullName}">💬${unreadCountHtml}</button>`;
+          const chatBtn = isMe ? `<span style="width:28px;flex-shrink:0;"></span>` : `<button onclick="event.stopPropagation();openChat('${u.username.replace(/'/g,"\\'")}','${u.fullName.replace(/'/g,"\\'")}')" style="position:relative;background:none;border:none;cursor:pointer;font-size:14px;padding:0 2px;line-height:1;display:flex;align-items:center;justify-content:flex-end;gap:3px;width:28px;flex-shrink:0;" title="Chatta con ${u.fullName}">💬${unreadCountHtml}</button>`;
           return `<div style="display:flex;align-items:center;gap:6px;padding:3px 0;">
             <span style="width:6px;height:6px;border-radius:50%;background:#22c55e;flex-shrink:0;"></span>
-            <span style="flex:1;">${u.fullName}${adminBadge}</span>
+            <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${u.fullName}${adminBadge}</span>
             ${chatBtn}
           </div>`;
         }).join('');
@@ -7050,6 +7057,8 @@ function _listenChatRoomForNotifications(roomId) {
       if (dot) dot.style.display = 'block';
       // Update global unread badge on online indicator
       _updateOnlineUnreadBadge();
+      // Update minimized chat bar badges
+      _renderMinimizedBar();
       // Show discrete message bubble near online indicator
       showMsgBubble(msg.senderName || msg.sender, msg.sender, msg.text);
     }
