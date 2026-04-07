@@ -916,6 +916,29 @@
   .chat-min-pill:hover { background: var(--accent-hover, #2563eb); }
   .chat-min-pill .min-close { font-size: 13px; opacity: 0.7; margin-left: 4px; }
   .chat-min-pill .min-close:hover { opacity: 1; }
+
+  /* Remote cursor indicators (admin only) */
+  .remote-cursor {
+    position: fixed; pointer-events: none; z-index: 9998;
+    transition: left 0.15s ease-out, top 0.15s ease-out;
+  }
+  .remote-cursor-arrow {
+    width: 0; height: 0;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-bottom: 10px solid var(--cursor-color, #3b82f6);
+    transform: rotate(-30deg);
+    transform-origin: bottom left;
+  }
+  .remote-cursor-label {
+    margin-left: 10px; margin-top: -2px;
+    background: var(--cursor-color, #3b82f6); color: #fff;
+    font-size: 10px; font-weight: 600; padding: 2px 8px;
+    border-radius: 6px; white-space: nowrap;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    opacity: 0.85;
+  }
+
 </style>
 <!-- Google Identity Services -->
 <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -1233,6 +1256,15 @@
       <div style="margin-top:16px;">
         <button class="btn btn-primary btn-sm" onclick="adminOpenChatMonitor()">📋 Monitora Messaggi</button>
       </div>
+      <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);">
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:12px;font-weight:600;">
+          <input type="checkbox" id="cursor-tracking-toggle" onchange="toggleCursorVisibility(this.checked)" checked style="width:16px;height:16px;accent-color:var(--accent);">
+          🖱️ Mostra cursori utenti in tempo reale
+        </label>
+        <p style="font-size:11px;color:var(--muted);margin-top:4px;">Visualizza la posizione del mouse degli utenti collegati sulla pagina.</p>
+        <div id="cursor-color-assignments" style="margin-top:12px;display:flex;flex-direction:column;gap:6px;"></div>
+        <button class="btn btn-sm" style="margin-top:8px;background:var(--accent);color:#fff;border:none;" onclick="saveCursorColors()">💾 Salva Colori</button>
+      </div>
     </div>
 
     <!-- CONFLITTI MEDICI (admin-only) -->
@@ -1503,12 +1535,15 @@ function onLoginSuccess() {
   initPresence();
   listenOnlineUsers();
   _listenAllChatNotifications();
+  initCursorTracking();
+  loadCursorColorAssignments();
   setTimeout(_autoClearMondayChat, 3000);
 }
 
 function doLogout() {
   logAudit('Logout effettuato');
   removePresence();
+  stopCursorTracking();
   currentUser = null;
   sessionStorage.removeItem('loggedUser');
   showLoginScreen();
@@ -5807,11 +5842,23 @@ function getConflictWarnings(weekData, dayIndex) {
 function updateRulesWarningBadge() {
   const badge = document.getElementById('rules-warning-badge');
   if (!badge) return;
+  // Only show warnings if there is at least one confirmation in the whole table
+  const w = getWeekData();
+  let hasAnyConfirmation = false;
+  for (const doc of state.doctors) {
+    const dd = w[doc];
+    if (dd && dd.slots) {
+      for (const v of Object.values(dd.slots)) {
+        if (v === 'confermato' || v === 'confermato-ecg') { hasAnyConfirmation = true; break; }
+      }
+    }
+    if (hasAnyConfirmation) break;
+  }
+  if (!hasAnyConfirmation) { badge.style.display = 'none'; badge._warnings = []; return; }
   const warnings = [];
   // Check custom rules
   warnings.push(...checkAllCustomRules());
   // Check all conflict violations for confirmed slots
-  const w = getWeekData();
   const conflicts = state.doctorConflicts || [];
   for (const pair of conflicts) {
     const [docA, docB] = pair;
@@ -6769,7 +6816,12 @@ function openChat(username, fullName) {
   _chatListener.on('value', snap => {
     const msgs = snap.val() || {};
     const container = document.getElementById('chat-messages');
-    const sorted = Object.values(msgs).sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+    let sorted = Object.values(msgs).sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+    // For non-admin users, hide messages before the Monday visual-clear timestamp
+    if (currentUser.role !== 'admin') {
+      const clearSince = _getChatVisualClearSince();
+      if (clearSince > 0) sorted = sorted.filter(m => (m.timestamp || 0) >= clearSince);
+    }
     let html = '';
     let lastDateStr = '';
     sorted.forEach(m => {
@@ -6882,6 +6934,10 @@ function adminClearAllChats() {
 function adminOpenChatMonitor() {
   if (!currentUser || currentUser.role !== 'admin') return;
   const overlay = document.getElementById('chat-monitor-overlay');
+  // Reset to initial state every time
+  const select = document.getElementById('chat-monitor-room');
+  select.innerHTML = '<option value="">\u2014 Seleziona conversazione \u2014</option>';
+  document.getElementById('chat-monitor-messages').innerHTML = '<div style="color:var(--muted);font-size:12px;text-align:center;padding:40px;">Seleziona una conversazione per visualizzare i messaggi</div>';
   overlay.style.display = 'flex';
   // Load all chat rooms
   firebase.database().ref('cardio_chat').once('value', snap => {
@@ -7068,21 +7124,206 @@ db.ref('cardio_rules').on('value', snap => {
 });
 
 function _autoClearMondayChat() {
-  // Clear chat messages every Monday
+  // On Monday, set a visual-clear timestamp — messages are hidden from users but kept in Firebase for admin
   const now = new Date();
   if (now.getDay() !== 1) return; // Not Monday
-  const mondayKey = now.toISOString().slice(0, 10); // YYYY-MM-DD
-  const clearFlag = localStorage.getItem('chat_cleared_' + mondayKey);
-  if (clearFlag) return; // Already cleared today
-  // Only admin triggers the clear to avoid race conditions
-  if (!currentUser || currentUser.role !== 'admin') return;
-  firebase.database().ref('cardio_chat').remove().then(() => {
-    localStorage.setItem('chat_cleared_' + mondayKey, '1');
-    console.log('Chat auto-cleared on Monday', mondayKey);
-  });
+  const mondayKey = now.toISOString().slice(0, 10);
+  const clearFlag = localStorage.getItem('chat_visual_cleared_' + mondayKey);
+  if (clearFlag) return;
+  // Set the visual clear timestamp — user chats will hide messages before this
+  localStorage.setItem('chat_visual_clear_since', now.getTime().toString());
+  localStorage.setItem('chat_visual_cleared_' + mondayKey, '1');
+  console.log('Chat visually cleared on Monday (messages kept in Firebase)', mondayKey);
+}
+
+function _getChatVisualClearSince() {
+  const ts = localStorage.getItem('chat_visual_clear_since');
+  return ts ? parseInt(ts) : 0;
 }
 
 init();
+
+// ===== REMOTE CURSOR TRACKING =====
+const _cursorColors = ['#3b82f6','#ef4444','#10b981','#f59e0b','#8b5cf6','#ec4899','#06b6d4','#f97316'];
+let _cursorColorMap = {};
+let _cursorColorIdx = 0;
+let _cursorThrottleTimer = null;
+let _remoteCursorsListener = null;
+let _cursorBroadcastEnabled = false;
+
+function _getCursorColor(username) {
+  // Prefer admin-assigned color from Firebase
+  if (_adminCursorColors[username]) return _adminCursorColors[username];
+  if (!_cursorColorMap[username]) {
+    _cursorColorMap[username] = _cursorColors[_cursorColorIdx % _cursorColors.length];
+    _cursorColorIdx++;
+  }
+  return _cursorColorMap[username];
+}
+
+function initCursorTracking() {
+  if (!currentUser) return;
+  // Load admin-assigned cursor colors from Firebase
+  firebase.database().ref('cardio_cursor_colors').on('value', snap => {
+    _adminCursorColors = snap.val() || {};
+    // Update live cursor colors
+    const cc = document.getElementById('remote-cursors-container');
+    if (cc) cc.innerHTML = ''; // Force re-render with new colors
+  });
+  // Everyone broadcasts their cursor position
+  _cursorBroadcastEnabled = true;
+  document.addEventListener('mousemove', _onMouseMoveBroadcast);
+  // Clean up on tab close
+  const uid = fbKey(currentUser.username);
+  firebase.database().ref('cardio_cursors/' + uid).onDisconnect().remove();
+  
+  // Only admin listens and renders remote cursors
+  if (currentUser.role === 'admin') {
+    _startListeningCursors();
+  }
+}
+
+function _onMouseMoveBroadcast(e) {
+  if (!_cursorBroadcastEnabled || !currentUser) return;
+  if (_cursorThrottleTimer) return;
+  _cursorThrottleTimer = setTimeout(() => { _cursorThrottleTimer = null; }, 150);
+  
+  const uid = fbKey(currentUser.username);
+  firebase.database().ref('cardio_cursors/' + uid).set({
+    x: e.clientX,
+    y: e.clientY,
+    scrollX: window.scrollX,
+    scrollY: window.scrollY,
+    vpW: window.innerWidth,
+    vpH: window.innerHeight,
+    fullName: currentUser.fullName || currentUser.username,
+    timestamp: firebase.database.ServerValue.TIMESTAMP
+  });
+}
+
+function _startListeningCursors() {
+  const container = document.getElementById('remote-cursors-container');
+  if (!container) return;
+  const myUid = fbKey(currentUser.username);
+  
+  _remoteCursorsListener = firebase.database().ref('cardio_cursors');
+  _remoteCursorsListener.on('value', snap => {
+    const cursors = snap.val() || {};
+    // Remove stale cursor elements
+    container.querySelectorAll('.remote-cursor').forEach(el => {
+      if (!cursors[el.dataset.uid] || el.dataset.uid === myUid) el.remove();
+    });
+    
+    const now = Date.now();
+    Object.entries(cursors).forEach(([uid, data]) => {
+      if (uid === myUid) return; // Don't show own cursor
+      // Skip stale cursors (older than 30s)
+      if (data.timestamp && now - data.timestamp > 30000) {
+        firebase.database().ref('cardio_cursors/' + uid).remove();
+        return;
+      }
+      
+      const color = _getCursorColor(uid);
+      let el = container.querySelector('.remote-cursor[data-uid="' + uid + '"]');
+      if (!el) {
+        el = document.createElement('div');
+        el.className = 'remote-cursor';
+        el.dataset.uid = uid;
+        el.style.setProperty('--cursor-color', color);
+        el.innerHTML = '<div class="remote-cursor-arrow" style="border-bottom-color:' + color + '"></div>' +
+                       '<div class="remote-cursor-label" style="background:' + color + '">' + _escChatHtml(data.fullName || uid) + '</div>';
+        container.appendChild(el);
+      }
+      
+      // Map remote cursor position to local viewport
+      // The remote user's position is relative to their viewport
+      // We scale it proportionally if viewport sizes differ
+      let posX = data.x;
+      let posY = data.y;
+      
+      // Adjust for scroll difference
+      const scrollDiffX = data.scrollX - window.scrollX;
+      const scrollDiffY = data.scrollY - window.scrollY;
+      posX = posX - scrollDiffX;
+      posY = posY - scrollDiffY;
+      
+      // Clamp to viewport bounds with some margin
+      posX = Math.max(-10, Math.min(window.innerWidth + 10, posX));
+      posY = Math.max(-10, Math.min(window.innerHeight + 10, posY));
+      
+      el.style.left = posX + 'px';
+      el.style.top = posY + 'px';
+    });
+  });
+}
+
+function stopCursorTracking() {
+  _cursorBroadcastEnabled = false;
+  document.removeEventListener('mousemove', _onMouseMoveBroadcast);
+  if (_remoteCursorsListener) {
+    _remoteCursorsListener.off('value');
+    _remoteCursorsListener = null;
+  }
+  if (currentUser) {
+    const uid = fbKey(currentUser.username);
+    firebase.database().ref('cardio_cursors/' + uid).remove();
+  }
+  const container = document.getElementById('remote-cursors-container');
+  if (container) container.innerHTML = '';
+}
+function toggleCursorVisibility(show) {
+  const container = document.getElementById('remote-cursors-container');
+  if (container) container.style.display = show ? '' : 'none';
+}
+
+// Admin cursor color assignment
+const _defaultCursorColors = ['#3b82f6','#ef4444','#10b981','#f59e0b','#8b5cf6','#ec4899','#06b6d4','#f97316','#84cc16','#14b8a6','#e11d48','#7c3aed'];
+let _adminCursorColors = {}; // { username: color }
+
+function loadCursorColorAssignments() {
+  if (!currentUser || currentUser.role !== 'admin') return;
+  firebase.database().ref('cardio_cursor_colors').once('value', snap => {
+    _adminCursorColors = snap.val() || {};
+    _renderCursorColorUI();
+  });
+}
+
+function _renderCursorColorUI() {
+  const container = document.getElementById('cursor-color-assignments');
+  if (!container) return;
+  // Get all known users
+  const users = state.doctors.map(d => ({ username: d.username, fullName: d.fullName || d.username }));
+  let html = '<div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:4px;">🎨 Colori cursore per utente:</div>';
+  users.forEach(u => {
+    const currentColor = _adminCursorColors[fbKey(u.username)] || '#3b82f6';
+    html += '<div style="display:flex;align-items:center;gap:8px;">' +
+      '<span style="font-size:11px;flex:1;min-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + _escChatHtml(u.fullName) + '</span>' +
+      '<input type="color" value="' + currentColor + '" data-username="' + _escChatHtml(u.username) + '" style="width:32px;height:24px;border:none;padding:0;cursor:pointer;background:none;">' +
+      '</div>';
+  });
+  container.innerHTML = html;
+}
+
+function saveCursorColors() {
+  const container = document.getElementById('cursor-color-assignments');
+  if (!container) return;
+  const inputs = container.querySelectorAll('input[type="color"]');
+  const colors = {};
+  inputs.forEach(inp => {
+    colors[fbKey(inp.dataset.username)] = inp.value;
+  });
+  firebase.database().ref('cardio_cursor_colors').set(colors).then(() => {
+    _adminCursorColors = colors;
+    // Update local color map for live cursors
+    Object.entries(colors).forEach(([uid, color]) => { _cursorColorMap[uid] = color; });
+    // Re-render existing cursors with new colors
+    const cc = document.getElementById('remote-cursors-container');
+    if (cc) cc.innerHTML = ''; // Force re-render on next update
+    alert('✅ Colori cursore salvati!');
+  });
+}
+// ===== END REMOTE CURSOR TRACKING =====
+
 </script>
 <div id="chat-panel" class="chat-panel">
   <div class="chat-panel-header">
@@ -7115,5 +7356,6 @@ init();
     </div>
   </div>
 </div>
+<div id="remote-cursors-container"></div>
 </body>
 </html>
