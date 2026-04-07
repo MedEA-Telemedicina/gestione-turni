@@ -1041,7 +1041,13 @@
   .ai-select-wrap { position: relative; }
   .ai-select-dropdown { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text); font-size: 12px; cursor: pointer; appearance: none; -webkit-appearance: none; }
   .ai-select-dropdown:focus { outline: 2px solid #6366f1; border-color: #6366f1; }
-  .ai-selected-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+  .ai-selected-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; min-height: 32px; }
+  .ai-always-tag { display: inline-flex; align-items: center; gap: 4px; background: linear-gradient(135deg, rgba(124,58,237,.12), rgba(124,58,237,.06)); border: 1px solid rgba(124,58,237,.3); color: var(--text); padding: 5px 8px 5px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; white-space: nowrap; transition: all 0.25s ease; }
+  .ai-always-tag:hover { border-color: rgba(124,58,237,.5); box-shadow: 0 2px 8px rgba(124,58,237,.15); }
+  .ai-tag-remove { background: none; border: none; color: #7c3aed; cursor: pointer; font-size: 14px; font-weight: 700; padding: 0 2px; line-height: 1; opacity: .6; transition: all 0.15s; margin-left: 2px; }
+  .ai-tag-remove:hover { opacity: 1; color: #ef4444; transform: scale(1.2); }
+  .ai-no-tags { color: var(--muted); font-style: italic; font-size: 12px; padding: 4px 0; }
+  [data-theme="dark"] .ai-always-tag { color: #c4b5fd; background: linear-gradient(135deg, rgba(124,58,237,.2), rgba(124,58,237,.1)); }
   .ai-sel-tag { display: inline-flex; align-items: center; gap: 4px; background: rgba(124,58,237,.12); border: 1px solid rgba(124,58,237,.25); color: var(--text); padding: 3px 6px 3px 10px; border-radius: 16px; font-size: 11px; white-space: nowrap; }
   .ai-sel-tag .x { background: none; border: none; color: #7c3aed; cursor: pointer; font-size: 12px; padding: 0 2px; line-height: 1; opacity: .7; }
   .ai-sel-tag .x:hover { opacity: 1; color: #ef4444; }
@@ -1105,6 +1111,24 @@
     box-shadow: 0 -2px 12px rgba(0,0,0,0.15);
   }
   #viewonly-bar.active { display: block; }
+
+  /* Smooth tag animations */
+  @keyframes fadeInTag {
+    from { opacity: 0; transform: scale(0.85); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  @keyframes fadeOutTag {
+    from { opacity: 1; transform: scale(1); }
+    to { opacity: 0; transform: scale(0.85); }
+  }
+  .ai-sel-tag {
+    transition: all 0.2s ease;
+  }
+  .ai-no-tags {
+    font-size: 11px;
+    color: var(--muted);
+    font-style: italic;
+  }
 </style>
 <!-- Google Identity Services -->
 <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -1684,13 +1708,13 @@ function onLoginSuccess() {
   if (hdr && tabsEl) {
     tabsEl.style.top = hdr.offsetHeight + 'px';
   }
-  // Attiva presenza online
-  initPresence();
-  listenOnlineUsers();
-  _listenAllChatNotifications();
-  initCursorTracking();
-  loadCursorColorAssignments();
-  setTimeout(_autoClearMondayChat, 3000);
+  // Attiva presenza online (each wrapped so one failure doesn't break all)
+  try { initPresence(); } catch(e) { console.warn('initPresence:', e); }
+  try { listenOnlineUsers(); } catch(e) { console.warn('listenOnlineUsers:', e); }
+  try { _listenAllChatNotifications(); } catch(e) { console.warn('_listenAllChatNotifications:', e); }
+  try { initCursorTracking(); } catch(e) { console.warn('initCursorTracking:', e); }
+  try { loadCursorColorAssignments(); } catch(e) { console.warn('loadCursorColorAssignments:', e); }
+  try { setTimeout(_autoClearMondayChat, 3000); } catch(e) { console.warn('autoClearChat:', e); }
 }
 
 function doLogout() {
@@ -7007,14 +7031,16 @@ function _listenChatRoomForNotifications(roomId) {
 
 function init() {
   // Ensure viewonly overlay is hidden on fresh load
-  const _voOvInit = document.getElementById('viewonly-overlay');
-  const _voBarInit = document.getElementById('viewonly-bar');
-  if (_voOvInit) _voOvInit.classList.remove('active');
-  if (_voBarInit) _voBarInit.classList.remove('active');
+  try {
+    const _voOvInit = document.getElementById('viewonly-overlay');
+    const _voBarInit = document.getElementById('viewonly-bar');
+    if (_voOvInit) _voOvInit.classList.remove('active');
+    if (_voBarInit) _voBarInit.classList.remove('active');
+  } catch(e) { console.warn('viewonly reset:', e); }
   
-  initTheme();
-  ensureDefaultAdmin();
-  initAuth();
+  try { initTheme(); } catch(e) { console.warn('initTheme:', e); }
+  try { ensureDefaultAdmin(); } catch(e) { console.warn('ensureDefaultAdmin:', e); }
+  try { initAuth(); } catch(e) { console.warn('initAuth:', e); }
 
   // Inizializzazione con valori di default (Firebase li sovrascriverà subito)
   state.doctors = [...FULL_DOCTORS];
@@ -7028,18 +7054,18 @@ function init() {
   _wp.min = _aw[0];
   _wp.max = _aw[2];
   updateHeaderWeek();
-  renderTable();
-  renderHolterTable();
-  renderHcTable();
-  renderHpTable();
-  renderSpiroTable();
-  renderPlsTable();
-  renderStats();
-  populateDoctorSelects();
+  try { renderTable(); } catch(e) { console.warn('renderTable:', e); }
+  try { renderHolterTable(); } catch(e) { console.warn('renderHolterTable:', e); }
+  try { renderHcTable(); } catch(e) { console.warn('renderHcTable:', e); }
+  try { renderHpTable(); } catch(e) { console.warn('renderHpTable:', e); }
+  try { renderSpiroTable(); } catch(e) { console.warn('renderSpiroTable:', e); }
+  try { renderPlsTable(); } catch(e) { console.warn('renderPlsTable:', e); }
+  try { renderStats(); } catch(e) { console.warn('renderStats:', e); }
+  try { populateDoctorSelects(); } catch(e) { console.warn('populateDoctorSelects:', e); }
 
   // Load conflicts and custom rules from Firebase
-  loadConflicts();
-  loadCustomRules();
+  try { loadConflicts(); } catch(e) { console.warn('loadConflicts:', e); }
+  try { loadCustomRules(); } catch(e) { console.warn('loadCustomRules:', e); }
 
   // ── Listener real-time per sincronizzazione multi-utente ──
   db.ref('cardio_state').on('value', (snapshot) => {
@@ -7335,7 +7361,17 @@ function _doubleCheckSvg() {
 }
 
 
-init();
+// Global error handler for debugging
+window.onerror = function(msg, url, line, col, err) {
+  console.error('Global error:', msg, 'at line', line);
+  return false;
+};
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', function() { init(); });
+} else {
+  init();
+}
 
 // ===== REMOTE CURSOR TRACKING =====
 const _cursorColors = ['#3b82f6','#ef4444','#10b981','#f59e0b','#8b5cf6','#ec4899','#06b6d4','#f97316'];
@@ -7545,10 +7581,101 @@ function _aiSaveAlwaysConfirm() {
   firebase.database().ref('cardio_ai_config/alwaysConfirm').set(arr.length > 0 ? arr : null);
 }
 
-function _aiAddAlwaysFromSelect(selectEl) {
-  var doc = selectEl.value;
-  if (!doc) return;
-  toggleAIAlwaysConfirm(doc, true);
+function _aiAddFromDropdown() {
+  var sel = document.getElementById('ai-always-select');
+  if (!sel) return;
+  var doc = sel.value;
+  if (!doc) { showToast('\u26a0\ufe0f Seleziona un medico dal menu', 'warning'); return; }
+  
+  // Add to set and save to Firebase
+  _aiAlwaysConfirm.add(doc);
+  firebase.database().ref('cardio_ai_config/alwaysConfirm').set(Array.from(_aiAlwaysConfirm));
+  
+  // Instantly add tag to DOM
+  var container = document.getElementById('ai-always-tags');
+  if (container) {
+    // Remove "nessun medico" placeholder
+    var placeholder = container.querySelector('.ai-no-tags');
+    if (placeholder) placeholder.remove();
+    
+    // Create tag with animation
+    var tag = document.createElement('span');
+    tag.className = 'ai-always-tag';
+    tag.dataset.doc = doc;
+    tag.style.opacity = '0';
+    tag.style.transform = 'scale(0.8)';
+    tag.style.transition = 'opacity 0.25s ease, transform 0.25s ease';
+    
+    // Build inner HTML safely
+    var removeBtn = document.createElement('span');
+    removeBtn.className = 'ai-tag-remove';
+    removeBtn.title = 'Rimuovi';
+    removeBtn.textContent = '\u2715';
+    removeBtn.onclick = function() { _aiRemoveAlwaysDoc(doc); };
+    tag.textContent = '\ud83d\udc51 ' + doc + ' ';
+    tag.appendChild(removeBtn);
+    container.appendChild(tag);
+    
+    requestAnimationFrame(function() {
+      requestAnimationFrame(function() {
+        tag.style.opacity = '1';
+        tag.style.transform = 'scale(1)';
+      });
+    });
+  }
+  
+  // Remove from dropdown and reset
+  var opts = sel.options;
+  for (var i = 0; i < opts.length; i++) { if (opts[i].value === doc) { opts[i].remove(); break; } }
+  sel.value = '';
+  
+  showToast('\ud83d\udc51 ' + doc + ' aggiunto ai confermati sempre');
+}
+
+function _aiRemoveAlwaysDoc(doc) {
+  _aiAlwaysConfirm.delete(doc);
+  firebase.database().ref('cardio_ai_config/alwaysConfirm').set(
+    _aiAlwaysConfirm.size > 0 ? Array.from(_aiAlwaysConfirm) : null
+  );
+  
+  // Animate tag removal
+  var container = document.getElementById('ai-always-tags');
+  if (container) {
+    var tags = container.querySelectorAll('.ai-always-tag');
+    tags.forEach(function(tag) {
+      if (tag.dataset.doc === doc) {
+        tag.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
+        tag.style.opacity = '0';
+        tag.style.transform = 'scale(0.8)';
+        setTimeout(function() {
+          tag.remove();
+          _aiCheckEmptyTags();
+        }, 220);
+      }
+    });
+  }
+  
+  // Re-add to dropdown
+  var sel = document.getElementById('ai-always-select');
+  if (sel) {
+    var opt = document.createElement('option');
+    opt.value = doc;
+    opt.textContent = doc;
+    sel.appendChild(opt);
+    // Sort options alphabetically (skip first "Seleziona..." option)
+    var optArr = Array.from(sel.options).slice(1).sort(function(a,b) { return a.textContent.localeCompare(b.textContent); });
+    while (sel.options.length > 1) sel.remove(1);
+    optArr.forEach(function(o) { sel.appendChild(o); });
+  }
+  
+  showToast('✕ ' + doc + ' rimosso dai confermati sempre');
+}
+
+function _aiCheckEmptyTags() {
+  var tagsEl = document.getElementById('ai-always-tags');
+  if (tagsEl && tagsEl.querySelectorAll('.ai-always-tag').length === 0) {
+    tagsEl.innerHTML = '<span class="ai-no-tags">Nessun medico selezionato</span>';
+  }
 }
 
 function toggleAIAlwaysConfirm(doc, checked) {
@@ -7630,25 +7757,31 @@ function _aiRenderInner() {
   if (availDocs.length === 0) {
     h += '<p style="color:var(--muted);font-size:12px;">Nessun medico con disponibilità questa settimana.</p>';
   } else {
-    // Selected tags
+    // Selected tags (dynamic container)
     h += '<div class="ai-selected-tags" id="ai-always-tags">';
+    var hasTags = false;
     _aiAlwaysConfirm.forEach(function(doc) {
       if (availDocs.includes(doc)) {
+        hasTags = true;
         var safeDoc = doc.replace(/'/g, "\\'");
-        h += '<span class="ai-sel-tag">👑 ' + doc + ' <button class="x" onclick="toggleAIAlwaysConfirm(\'' + safeDoc + '\', false)" title="Rimuovi">✕</button></span>';
+        h += '<span class="ai-always-tag" data-doc="' + doc.replace(/"/g, '&quot;') + '">👑 ' + doc + ' <span class="ai-tag-remove" onclick="_aiRemoveAlwaysDoc(\'' + safeDoc + '\')" title="Rimuovi">✕</span></span>';
       }
     });
+    if (!hasTags) h += '<span class="ai-no-tags">Nessun medico selezionato</span>';
     h += '</div>';
-    // Dropdown to add
+    // Dropdown + button to add
     var notSelected = availDocs.filter(function(d) { return !_aiAlwaysConfirm.has(d); });
-    h += '<div class="ai-select-wrap" style="margin-top:8px;">';
-    h += '<select class="ai-select-dropdown" id="ai-always-select" onchange="_aiAddAlwaysFromSelect(this)">';
-    h += '<option value="">+ Aggiungi medico...</option>';
+    h += '<div style="display:flex;gap:8px;align-items:center;margin-top:8px;max-width:400px;">';
+    h += '<select class="ai-select-dropdown" id="ai-always-select" style="flex:1;">';
+    h += '<option value="">Seleziona medico...</option>';
     notSelected.forEach(function(doc) {
       h += '<option value="' + doc.replace(/"/g, '&quot;') + '">' + doc + '</option>';
     });
     h += '</select>';
+    h += '<button class="btn btn-primary btn-sm" onclick="_aiAddFromDropdown()" style="padding:8px 16px;font-size:12px;font-weight:700;white-space:nowrap;">+ Aggiungi</button>';
     h += '</div>';
+    // Store availDocs for dynamic use
+    window._aiCurrentAvailDocs = availDocs;
   }
   h += '</div>';
 
