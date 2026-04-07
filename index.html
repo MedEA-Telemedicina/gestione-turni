@@ -1234,6 +1234,14 @@
         <button class="btn btn-success btn-sm" onclick="addUser()">+ Aggiungi</button>
       </div>
       <div id="users-list" style="display:flex;flex-direction:column;gap:0;max-height:300px;overflow-y:auto;"></div>
+      <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);">
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:12px;font-weight:600;">
+          <input type="checkbox" id="cursor-tracking-toggle" onchange="toggleCursorVisibility(this.checked)" checked style="width:16px;height:16px;accent-color:var(--accent);">
+          🖱️ Mostra cursori utenti in tempo reale
+        </label>
+        <p style="font-size:11px;color:var(--muted);margin-top:4px;">Visualizza la posizione del mouse degli utenti collegati sulla pagina. Il colore di ciascun cursore è selezionabile dalla riga utente qui sopra.</p>
+        <button class="btn btn-sm" style="margin-top:8px;background:var(--accent);color:#fff;border:none;" onclick="saveCursorColors()">💾 Salva Colori Cursore</button>
+      </div>
     </div>
 
     <!-- PREFERENZE -->
@@ -1261,15 +1269,7 @@
       <div style="margin-top:16px;">
         <button class="btn btn-primary btn-sm" onclick="adminOpenChatMonitor()">📋 Monitora Messaggi</button>
       </div>
-      <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);">
-        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:12px;font-weight:600;">
-          <input type="checkbox" id="cursor-tracking-toggle" onchange="toggleCursorVisibility(this.checked)" checked style="width:16px;height:16px;accent-color:var(--accent);">
-          🖱️ Mostra cursori utenti in tempo reale
-        </label>
-        <p style="font-size:11px;color:var(--muted);margin-top:4px;">Visualizza la posizione del mouse degli utenti collegati sulla pagina.</p>
-        <div id="cursor-color-assignments" style="margin-top:12px;display:flex;flex-direction:column;gap:6px;"></div>
-        <button class="btn btn-sm" style="margin-top:8px;background:var(--accent);color:#fff;border:none;" onclick="saveCursorColors()">💾 Salva Colori</button>
-      </div>
+
     </div>
 
     <!-- CONFLITTI MEDICI (admin-only) -->
@@ -5572,8 +5572,10 @@ function loadUsersList() {
       const gender = u.gender || 'M';
       const genderIcon = gender === 'F' ? '♀' : '♂';
       const genderColor = gender === 'F' ? '#ec4899' : '#3b82f6';
+      const cursorColor = _adminCursorColors[fbName] || '#3b82f6';
       return `
       <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-bottom:1px solid var(--border);font-size:12px;${isBlocked ? 'opacity:0.5;' : ''}">
+        <input type="color" value="${cursorColor}" data-username="${uname}" class="user-cursor-color" title="Colore cursore" style="width:24px;height:24px;border:2px solid var(--border);border-radius:6px;padding:0;cursor:pointer;background:none;flex-shrink:0;">
         <button class="btn btn-ghost btn-sm" style="font-size:12px;padding:2px 4px;color:${genderColor};min-width:22px;" onclick="toggleUserGender('${uname}', '${gender}')" title="Cambia sesso (${gender})">${genderIcon}</button>
         <span style="font-weight:700;min-width:100px;">${uname}</span>
         <span style="color:var(--muted);flex:1;">${u.fullName || ''}</span>
@@ -7313,25 +7315,13 @@ function loadCursorColorAssignments() {
 }
 
 function _renderCursorColorUI() {
-  const container = document.getElementById('cursor-color-assignments');
-  if (!container) return;
-  // Get all known users
-  const users = state.doctors.map(d => ({ username: d.username, fullName: d.fullName || d.username }));
-  let html = '<div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:4px;">🎨 Colori cursore per utente:</div>';
-  users.forEach(u => {
-    const currentColor = _adminCursorColors[fbKey(u.username)] || '#3b82f6';
-    html += '<div style="display:flex;align-items:center;gap:8px;">' +
-      '<span style="font-size:11px;flex:1;min-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + _escChatHtml(u.fullName) + '</span>' +
-      '<input type="color" value="' + currentColor + '" data-username="' + _escChatHtml(u.username) + '" style="width:32px;height:24px;border:none;padding:0;cursor:pointer;background:none;">' +
-      '</div>';
-  });
-  container.innerHTML = html;
+  // Colors are now shown inline in the users list — refresh it
+  loadUsersList();
 }
 
 function saveCursorColors() {
-  const container = document.getElementById('cursor-color-assignments');
-  if (!container) return;
-  const inputs = container.querySelectorAll('input[type="color"]');
+  const inputs = document.querySelectorAll('#users-list .user-cursor-color');
+  if (!inputs.length) return;
   const colors = {};
   inputs.forEach(inp => {
     colors[fbKey(inp.dataset.username)] = inp.value;
