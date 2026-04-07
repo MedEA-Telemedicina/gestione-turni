@@ -2514,13 +2514,7 @@ function cycleHolterSlot(doc, dayIdx) {
   const dd = getHolterDoctorData(doc);
   const cur = dd.slots[dayIdx] || '';
   const next = cur === '' ? 'disponibile' : cur === 'disponibile' ? 'confermato' : '';
-  // If going from vuoto to disponibile and the doctor is on ferie for regular shifts, ask confirmation
-  if (cur === '' && next === 'disponibile') {
-    const mainData = getWeekData()[doc];
-    if (mainData && mainData.ferie) {
-      if (!confirm('⚠️ ' + doc + ' è in ferie per i turni. Confermare la disponibilità per Holter?')) return;
-    }
-  }
+
   if (next === '') delete dd.slots[dayIdx];
   else dd.slots[dayIdx] = next;
   const dayNames = ['LUN','MAR','MER','GIO','VEN','SAB','DOM'];
@@ -4482,21 +4476,27 @@ function renderConferma() {
 
   state.doctors.forEach(doc => {
     const dd = w[doc];
-    if (dd && dd.ferie) return; // skip ferie
+    const hw = state.holterWeeks[currentWeek];
+    const hdoc = hw && hw[doc];
 
-    // ── Turni normali: tutti e solo confermati ──
-    const allMainSlots = dd && dd.slots
+    const mainFerie = !!(dd && dd.ferie);
+    const holterFerie = !!(hdoc && hdoc.ferie);
+
+    // Se in ferie per entrambi (turni E Holter) → non compare per niente
+    if (mainFerie && holterFerie) return;
+
+    // Se solo holter ferie e nessun dato turni → skip
+    if (holterFerie && !dd) return;
+
+    // ── Turni normali: solo se NON in ferie turni ──
+    const allMainSlots = (!mainFerie && dd && dd.slots)
       ? Object.entries(dd.slots).filter(([k,v]) => v && v !== '')
       : [];
     const confSlots    = allMainSlots.filter(([k,v]) => v === 'confermato' || v === 'confermato-ecg');
     const dispSlots    = allMainSlots.filter(([k,v]) => v === 'disponibile' || v === 'solo-ecg');
 
-    // ── Holter: tutti e solo confermati ──
-    const hw = state.holterWeeks[currentWeek];
-    const hdoc = hw && hw[doc];
-    // Skip if holter doctor is on holter ferie
-    if (hdoc && hdoc.ferie && !dd) return; // pure holter doctor on ferie
-    const allHolterSlots = hdoc && hdoc.slots
+    // ── Holter: solo se NON in ferie Holter ──
+    const allHolterSlots = (!holterFerie && hdoc && hdoc.slots)
       ? Object.entries(hdoc.slots).filter(([k,v]) => v && v !== '')
       : [];
     const holterConfSlots = allHolterSlots.filter(([k,v]) => v === 'confermato');
@@ -4508,9 +4508,12 @@ function renderConferma() {
     // Skip doctors with no activity at all
     if (!hasAnyAvail && !hasAnyConf) return;
 
+    // Determina se c'è un avviso ferie (in ferie solo per uno dei due)
+    const ferieWarning = mainFerie ? 'turni' : (holterFerie ? 'Holter' : null);
+
     // Doctor gave availability but received NO confirmation → negative message
     if (hasAnyAvail && !hasAnyConf) {
-      items.push({ doc, noConf: true, msg: 'Salve, purtroppo per la prossima settimana non Le riusciamo a confermare alcun turno.\nCi aggiorniamo la settimana prossima per le nuove disponibilità.\nGrazie!' });
+      items.push({ doc, noConf: true, ferieWarning, msg: 'Salve, purtroppo per la prossima settimana non Le riusciamo a confermare alcun turno.\nCi aggiorniamo la settimana prossima per le nuove disponibilità.\nGrazie!' });
       return;
     }
 
@@ -4536,7 +4539,7 @@ function renderConferma() {
     }
     msg += '\nGrazie';
 
-    items.push({ doc, msg });
+    items.push({ doc, msg, ferieWarning });
   });
 
   const confItems   = items.filter(i => !i.noConf);
@@ -4554,15 +4557,19 @@ function renderConferma() {
 
   if (confItems.length > 0) {
     html += `<div style="font-size:12px;font-weight:700;color:#16a34a;margin-bottom:6px;padding:4px 0;border-bottom:2px solid #16a34a;">✅ Cardiologi con turni confermati (${confItems.length})</div>`;
-    html += confItems.map(({ doc, msg }) => {
+    html += confItems.map(({ doc, msg, ferieWarning }) => {
       const idx = items.indexOf(items.find(i => i.doc === doc && !i.noConf));
       const phone = state.doctorPhones[doc];
       const safeDoc = doc.replace(/'/g, "\\'");
       const waBtn = phone
         ? `<button class="copy-btn wa-send-btn" data-doc="${doc}" data-week="${currentWeek}" style="background:#25d366;color:#fff;border-color:#25d366;transition:all .2s;" onclick="sendWhatsApp('${phone}', window._confMsgs[${idx}], this, '${safeDoc}')">📲 WhatsApp</button>`
         : `<span style="font-size:10px;color:var(--muted);">📱 No tel.</span>`;
+      const ferieBadge = ferieWarning
+        ? `<div style="background:rgba(220,38,38,0.1);color:var(--danger);padding:4px 8px;border-radius:6px;font-size:11px;font-weight:600;margin-bottom:4px;">⚠️ In ferie per i ${ferieWarning}</div>`
+        : '';
       return `<div class="conf-item">
         <div class="name">${doc}</div>
+        ${ferieBadge}
         <div class="msg">${msg.replace(/\n/g,'<br>')}</div>
         <div style="display:flex;gap:6px;align-items:center;">
           <button class="copy-btn" onclick="copyText(window._confMsgs[${idx}])">Copia</button>
@@ -4574,15 +4581,19 @@ function renderConferma() {
 
   if (noConfItems.length > 0) {
     html += `<div style="font-size:12px;font-weight:700;color:#dc2626;margin:18px 0 6px;padding:4px 0;border-bottom:2px solid #dc2626;">⛔ Cardiologi senza conferme (${noConfItems.length})</div>`;
-    html += noConfItems.map(({ doc, msg }) => {
+    html += noConfItems.map(({ doc, msg, ferieWarning }) => {
       const idx = items.indexOf(items.find(i => i.doc === doc && i.noConf));
       const phone = state.doctorPhones[doc];
       const safeDoc = doc.replace(/'/g, "\\'");
       const waBtn = phone
         ? `<button class="copy-btn wa-send-btn" data-doc="${doc}" data-week="${currentWeek}" style="background:#25d366;color:#fff;border-color:#25d366;transition:all .2s;" onclick="sendWhatsApp('${phone}', window._confMsgs[${idx}], this, '${safeDoc}')">📲 WhatsApp</button>`
         : `<span style="font-size:10px;color:var(--muted);">📱 No tel.</span>`;
+      const ferieBadge = ferieWarning
+        ? `<div style="background:rgba(220,38,38,0.1);color:var(--danger);padding:4px 8px;border-radius:6px;font-size:11px;font-weight:600;margin-bottom:4px;">⚠️ In ferie per i ${ferieWarning}</div>`
+        : '';
       return `<div class="conf-item" style="border-left:3px solid #dc2626;">
         <div class="name" style="color:#dc2626;">${doc}</div>
+        ${ferieBadge}
         <div class="msg" style="color:#666;">${msg.replace(/\n/g,'<br>')}</div>
         <div style="display:flex;gap:6px;align-items:center;">
           <button class="copy-btn" onclick="copyText(window._confMsgs[${idx}])">Copia</button>
