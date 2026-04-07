@@ -823,6 +823,61 @@
   .stat-pill.clickable:hover strong { color: #fff; }
   .stat-pill.clickable.stat-pill-danger:hover { background: #ef4444; }
   .stat-pill.clickable.stat-pill-warn:hover { background: #f59e0b; }
+
+  /* Online notification banner */
+  .online-notify-banner {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
+    padding: 10px 20px; text-align: center; font-size: 13px; font-weight: 600;
+    color: #fff; animation: bannerSlideDown 0.3s ease-out;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+  }
+  .online-notify-banner.dismiss {
+    animation: bannerSlideUp 0.3s ease-in forwards;
+  }
+  @keyframes bannerSlideDown { from { transform: translateY(-100%); } to { transform: translateY(0); } }
+  @keyframes bannerSlideUp { from { transform: translateY(0); } to { transform: translateY(-100%); } }
+
+  /* Chat panel */
+  .chat-panel {
+    display: none; position: fixed; bottom: 20px; right: 20px; width: 350px; height: 450px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.2); z-index: 500; flex-direction: column; overflow: hidden;
+  }
+  .chat-panel.open { display: flex; }
+  .chat-panel-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 16px; background: var(--accent); color: #fff; font-size: 13px; font-weight: 700;
+    flex-shrink: 0;
+  }
+  .chat-panel-header button {
+    background: none; border: none; color: #fff; font-size: 18px; cursor: pointer; line-height: 1; padding: 0;
+  }
+  .chat-messages {
+    flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 6px;
+  }
+  .chat-msg { max-width: 80%; padding: 8px 12px; border-radius: 12px; font-size: 12px; line-height: 1.4; word-wrap: break-word; }
+  .chat-msg-self { align-self: flex-end; background: var(--accent); color: #fff; border-bottom-right-radius: 4px; }
+  .chat-msg-other { align-self: flex-start; background: var(--surface2, #e5e7eb); color: var(--text); border-bottom-left-radius: 4px; }
+  .chat-msg-time { font-size: 9px; opacity: 0.6; margin-top: 2px; }
+  .chat-input-area {
+    display: flex; align-items: center; gap: 6px; padding: 10px 12px;
+    border-top: 1px solid var(--border); flex-shrink: 0;
+  }
+  .chat-input-area input {
+    flex: 1; padding: 8px 12px; border: 1px solid var(--border); border-radius: 20px;
+    font-size: 12px; background: var(--surface); color: var(--text); outline: none;
+  }
+  .chat-input-area input:focus { border-color: var(--accent); }
+  .chat-input-area button {
+    background: var(--accent); color: #fff; border: none; border-radius: 50%;
+    width: 32px; height: 32px; font-size: 14px; cursor: pointer; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .chat-unread-dot {
+    position: absolute; top: -4px; right: -4px; width: 10px; height: 10px;
+    background: #ef4444; border-radius: 50%; border: 2px solid var(--surface);
+    display: none;
+  }
 </style>
 <!-- Google Identity Services -->
 <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -1398,6 +1453,7 @@ function onLoginSuccess() {
   // Attiva presenza online
   initPresence();
   listenOnlineUsers();
+  _listenAllChatNotifications();
 }
 
 function doLogout() {
@@ -4340,7 +4396,7 @@ function renderConferma() {
     const holterConfSlots = allHolterSlots.filter(([k,v]) => v === 'confermato');
     const holterDispSlots = allHolterSlots.filter(([k,v]) => v === 'disponibile');
 
-    const hasAnyAvail = dispSlots.length > 0 || holterDispSlots.length > 0;
+    const hasAnyAvail = allMainSlots.length > 0 || allHolterSlots.length > 0;
     const hasAnyConf  = confSlots.length > 0  || holterConfSlots.length > 0;
 
     // Skip doctors with no activity at all
@@ -4888,14 +4944,10 @@ function renderRiepilogo() {
     if (!names.length) return '';
     return names.join(' - ');
   };
-  // Format per colonne HC/HP: 4 nomi per riga
+  // Format per colonne HC/HP/Spiro/Pls: tutti uniti con " - " e trattino finale
   const fmtGroup = (names) => {
     if (!names.length) return '';
-    const rows = [];
-    for (let i = 0; i < names.length; i += 4) {
-      rows.push(names.slice(i, i + 4).join(' - '));
-    }
-    return rows.join('<br>');
+    return names.join(' - ') + ' -';
   };
 
   // Styles
@@ -4936,8 +4988,8 @@ function renderRiepilogo() {
         <td colspan="8" rowspan="2" style="${tdContS}">${pomNames}</td>
         <td rowspan="2" style="${tdSmS};white-space:normal;word-break:break-word;min-width:260px;">${holterNames}</td>
         <td rowspan="2" style="${tdSmS};white-space:normal;word-break:break-word;min-width:260px;">${hpNames}</td>
-        <td rowspan="2" style="${tdSmS};white-space:normal;word-break:break-word;min-width:80px;">${fmt((spiroMap && spiroMap[di]) || [])}</td>
-        <td rowspan="2" style="${tdSmS};white-space:normal;word-break:break-word;min-width:80px;">${fmt((plsMap && plsMap[di]) || [])}</td>
+        <td rowspan="2" style="${tdSmS};white-space:normal;word-break:break-word;min-width:80px;">${fmtGroup((spiroMap && spiroMap[di]) || [])}</td>
+        <td rowspan="2" style="${tdSmS};white-space:normal;word-break:break-word;min-width:80px;">${fmtGroup((plsMap && plsMap[di]) || [])}</td>
       </tr>
       <tr>
         <td colspan="2" style="${tdDateS}width:140px;">${formatDate(dayStr)}</td>
@@ -6464,6 +6516,10 @@ function removePresence() {
   }
 }
 
+let _prevOnlineUsernames = new Set();
+let _prevOnlineFullNames = {};
+let _onlineFirstLoad = true;
+
 function listenOnlineUsers() {
   firebase.database().ref('cardio_presence').on('value', snap => {
     const users = snap.val() || {};
@@ -6483,6 +6539,30 @@ function listenOnlineUsers() {
         fullName: data.fullName || fbKeyDecode(uid),
         role: data.role || 'user'
       }));
+
+    // Detect online/offline changes and show banners
+    const currentOnlineUsernames = new Set(onlineList.map(u => u.username));
+    const currentOnlineFullNames = {};
+    onlineList.forEach(u => { currentOnlineFullNames[u.username] = u.fullName; });
+
+    if (!_onlineFirstLoad) {
+      // New users that came online
+      for (const uname of currentOnlineUsernames) {
+        if (!_prevOnlineUsernames.has(uname) && currentUser && uname !== currentUser.username) {
+          showOnlineNotifyBanner('🟢 ' + (currentOnlineFullNames[uname] || uname) + ' è online', '#22c55e');
+        }
+      }
+      // Users that went offline
+      for (const uname of _prevOnlineUsernames) {
+        if (!currentOnlineUsernames.has(uname) && currentUser && uname !== currentUser.username) {
+          showOnlineNotifyBanner('⚫ ' + (_prevOnlineFullNames[uname] || uname) + ' si è disconnesso', '#6b7280');
+        }
+      }
+    }
+    _onlineFirstLoad = false;
+    _prevOnlineUsernames = currentOnlineUsernames;
+    _prevOnlineFullNames = currentOnlineFullNames;
+
     // Update counter
     const countEl = document.getElementById('online-count');
     if (countEl) {
@@ -6497,9 +6577,12 @@ function listenOnlineUsers() {
       } else {
         listEl.innerHTML = onlineList.map(u => {
           const adminBadge = u.role === 'admin' ? ' ⭐' : '';
+          const isMe = currentUser && u.username === currentUser.username;
+          const chatBtn = isMe ? '' : `<button onclick="event.stopPropagation();openChat('${u.username.replace(/'/g,"\\'")}','${u.fullName.replace(/'/g,"\\'")}')" style="position:relative;background:none;border:none;cursor:pointer;font-size:14px;padding:0 2px;line-height:1;" title="Chatta con ${u.fullName}">💬<span class="chat-unread-dot" id="unread-${fbKey(u.username)}"></span></button>`;
           return `<div style="display:flex;align-items:center;gap:6px;padding:3px 0;">
             <span style="width:6px;height:6px;border-radius:50%;background:#22c55e;flex-shrink:0;"></span>
-            <span>${u.fullName}${adminBadge}</span>
+            <span style="flex:1;">${u.fullName}${adminBadge}</span>
+            ${chatBtn}
           </div>`;
         }).join('');
       }
@@ -6537,6 +6620,136 @@ document.addEventListener('visibilitychange', () => {
     _presenceRef.update({ lastSeen: firebase.database.ServerValue.TIMESTAMP });
   }
 });
+
+// ─── Online Notification Banner ───
+function showOnlineNotifyBanner(text, bgColor) {
+  const banner = document.createElement('div');
+  banner.className = 'online-notify-banner';
+  banner.style.background = bgColor;
+  banner.textContent = text;
+  document.body.appendChild(banner);
+  setTimeout(() => {
+    banner.classList.add('dismiss');
+    banner.addEventListener('animationend', () => banner.remove());
+  }, 4000);
+}
+
+// ─── Chat System ───
+let _chatListener = null;
+let _chatRoomId = null;
+let _chatPartnerUsername = null;
+let _chatUnreadMap = {}; // { username: count }
+
+function getChatRoomId(user1, user2) {
+  const sorted = [user1, user2].sort();
+  return fbKey(sorted[0] + '_vs_' + sorted[1]);
+}
+
+function openChat(username, fullName) {
+  if (!currentUser) return;
+  _chatPartnerUsername = username;
+  _chatRoomId = getChatRoomId(currentUser.username, username);
+
+  // Update header
+  document.getElementById('chat-panel-title').textContent = '💬 ' + fullName;
+  // Clear messages
+  document.getElementById('chat-messages').innerHTML = '';
+  // Show panel
+  document.getElementById('chat-panel').classList.add('open');
+  // Clear unread for this user
+  _chatUnreadMap[username] = 0;
+  const dot = document.getElementById('unread-' + fbKey(username));
+  if (dot) dot.style.display = 'none';
+
+  // Remove old listener
+  if (_chatListener) {
+    _chatListener.off();
+    _chatListener = null;
+  }
+
+  // Listen for messages
+  _chatListener = firebase.database().ref('cardio_chat/' + _chatRoomId + '/messages').orderByChild('timestamp').limitToLast(100);
+  _chatListener.on('value', snap => {
+    const msgs = snap.val() || {};
+    const container = document.getElementById('chat-messages');
+    container.innerHTML = Object.values(msgs).sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0)).map(m => {
+      const isSelf = m.sender === currentUser.username;
+      const timeStr = m.timestamp ? new Date(m.timestamp).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : '';
+      return `<div class="chat-msg ${isSelf ? 'chat-msg-self' : 'chat-msg-other'}">
+        ${!isSelf ? '<div style="font-size:10px;font-weight:600;opacity:0.7;margin-bottom:2px;">' + (m.senderName || m.sender) + '</div>' : ''}
+        <div>${_escChatHtml(m.text)}</div>
+        <div class="chat-msg-time">${timeStr}</div>
+      </div>`;
+    }).join('');
+    container.scrollTop = container.scrollHeight;
+  });
+
+  // Focus input
+  setTimeout(() => document.getElementById('chat-input').focus(), 100);
+}
+
+function closeChat() {
+  document.getElementById('chat-panel').classList.remove('open');
+  if (_chatListener) {
+    _chatListener.off();
+    _chatListener = null;
+  }
+  _chatRoomId = null;
+  _chatPartnerUsername = null;
+}
+
+function sendChatMessage() {
+  const input = document.getElementById('chat-input');
+  const text = (input.value || '').trim();
+  if (!text || !_chatRoomId || !currentUser) return;
+  input.value = '';
+  firebase.database().ref('cardio_chat/' + _chatRoomId + '/messages').push({
+    sender: currentUser.username,
+    senderName: currentUser.fullName || currentUser.username,
+    text: text,
+    timestamp: firebase.database.ServerValue.TIMESTAMP
+  });
+}
+
+function _escChatHtml(str) {
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+// Listen for incoming chat messages (for unread notifications)
+function _listenAllChatNotifications() {
+  if (!currentUser) return;
+  // We listen to the entire cardio_chat node for new child additions
+  // But to be efficient, we listen for child_added on specific rooms when we know them
+  // Instead, we handle unread via the presence-based approach:
+  // When a message comes in and chat panel is not open for that user, show unread dot
+  firebase.database().ref('cardio_chat').on('child_added', snap => {
+    const roomId = snap.key;
+    // Decode to check if this room involves current user
+    _listenChatRoomForNotifications(roomId);
+  });
+}
+
+const _chatRoomListeners = new Set();
+function _listenChatRoomForNotifications(roomId) {
+  if (_chatRoomListeners.has(roomId)) return;
+  _chatRoomListeners.add(roomId);
+  let firstLoad = true;
+  firebase.database().ref('cardio_chat/' + roomId + '/messages').orderByChild('timestamp').limitToLast(1).on('child_added', snap => {
+    if (firstLoad) { firstLoad = false; return; }
+    const msg = snap.val();
+    if (!msg || !currentUser || msg.sender === currentUser.username) return;
+    // If the chat panel is not open for this sender, show unread dot
+    if (_chatPartnerUsername !== msg.sender || !document.getElementById('chat-panel').classList.contains('open')) {
+      _chatUnreadMap[msg.sender] = (_chatUnreadMap[msg.sender] || 0) + 1;
+      const dot = document.getElementById('unread-' + fbKey(msg.sender));
+      if (dot) dot.style.display = 'block';
+      // Also show a banner
+      showOnlineNotifyBanner('💬 ' + (msg.senderName || msg.sender) + ': ' + msg.text.substring(0, 50), '#3b82f6');
+    }
+  });
+}
 
 function init() {
   initTheme();
@@ -6633,5 +6846,16 @@ db.ref('cardio_rules').on('value', snap => {
 
 init();
 </script>
+<div id="chat-panel" class="chat-panel">
+  <div class="chat-panel-header">
+    <span id="chat-panel-title">Chat</span>
+    <button onclick="closeChat()" title="Chiudi">✕</button>
+  </div>
+  <div id="chat-messages" class="chat-messages"></div>
+  <div class="chat-input-area">
+    <input id="chat-input" type="text" placeholder="Scrivi un messaggio..." autocomplete="off" onkeydown="if(event.key==='Enter')sendChatMessage()">
+    <button onclick="sendChatMessage()" title="Invia">➤</button>
+  </div>
+</div>
 </body>
 </html>
