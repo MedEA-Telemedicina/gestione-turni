@@ -4509,7 +4509,7 @@ function renderConferma() {
     if (!hasAnyAvail && !hasAnyConf) return;
 
     // Determina se c'è un avviso ferie (in ferie solo per uno dei due)
-    const ferieWarning = mainFerie ? 'turni' : (holterFerie ? 'Holter' : null);
+    const ferieWarning = mainFerie ? 'turno' : (holterFerie ? 'holter' : null);
 
     // Doctor gave availability but received NO confirmation → negative message
     if (hasAnyAvail && !hasAnyConf) {
@@ -4565,7 +4565,7 @@ function renderConferma() {
         ? `<button class="copy-btn wa-send-btn" data-doc="${doc}" data-week="${currentWeek}" style="background:#25d366;color:#fff;border-color:#25d366;transition:all .2s;" onclick="sendWhatsApp('${phone}', window._confMsgs[${idx}], this, '${safeDoc}')">📲 WhatsApp</button>`
         : `<span style="font-size:10px;color:var(--muted);">📱 No tel.</span>`;
       const ferieBadge = ferieWarning
-        ? `<div style="background:rgba(220,38,38,0.1);color:var(--danger);padding:4px 8px;border-radius:6px;font-size:11px;font-weight:600;margin-bottom:4px;">⚠️ In ferie per i ${ferieWarning}</div>`
+        ? `<div style="background:rgba(220,38,38,0.1);color:var(--danger);padding:4px 8px;border-radius:6px;font-size:11px;font-weight:600;margin-bottom:4px;">⚠️ In ferie per ${ferieWarning}</div>`
         : '';
       return `<div class="conf-item">
         <div class="name">${doc}</div>
@@ -4589,7 +4589,7 @@ function renderConferma() {
         ? `<button class="copy-btn wa-send-btn" data-doc="${doc}" data-week="${currentWeek}" style="background:#25d366;color:#fff;border-color:#25d366;transition:all .2s;" onclick="sendWhatsApp('${phone}', window._confMsgs[${idx}], this, '${safeDoc}')">📲 WhatsApp</button>`
         : `<span style="font-size:10px;color:var(--muted);">📱 No tel.</span>`;
       const ferieBadge = ferieWarning
-        ? `<div style="background:rgba(220,38,38,0.1);color:var(--danger);padding:4px 8px;border-radius:6px;font-size:11px;font-weight:600;margin-bottom:4px;">⚠️ In ferie per i ${ferieWarning}</div>`
+        ? `<div style="background:rgba(220,38,38,0.1);color:var(--danger);padding:4px 8px;border-radius:6px;font-size:11px;font-weight:600;margin-bottom:4px;">⚠️ In ferie per ${ferieWarning}</div>`
         : '';
       return `<div class="conf-item" style="border-left:3px solid #dc2626;">
         <div class="name" style="color:#dc2626;">${doc}</div>
