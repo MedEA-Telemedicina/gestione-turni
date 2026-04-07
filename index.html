@@ -1931,6 +1931,11 @@ function showWarningBanner(messages) {
 let _currentActiveTab = 'disponibilita';
 function switchTab(id) {
   _currentActiveTab = id;
+  // Re-filter remote cursors when admin changes section
+  if (typeof currentUser !== 'undefined' && currentUser && currentUser.role === 'admin') {
+    const _cc = document.getElementById('remote-cursors-container');
+    if (_cc) _cc.innerHTML = ''; // Force re-render from Firebase listener with new section filter
+  }
   // Stacca il listener real-time dello storico quando si esce dal tab
   if (id !== 'storico' && _auditListener) {
     firebase.database().ref('cardio_audit').off('value', _auditListener);
@@ -7244,8 +7249,8 @@ function _startListeningCursors() {
         firebase.database().ref('cardio_cursors/' + uid).remove();
         return;
       }
-      // Only show cursors of users in the Disponibilità section
-      if (data.activeTab && data.activeTab !== 'disponibilita') {
+      // Only show cursors of users in the same section as the admin
+      if (data.activeTab !== (_currentActiveTab || 'disponibilita')) {
         const existing = container.querySelector('.remote-cursor[data-uid="' + uid + '"]');
         if (existing) existing.remove();
         return;
