@@ -1076,6 +1076,35 @@
   [data-theme="dark"] .ai-nums-grid td:first-child { background: var(--surface2); }
   [data-theme="dark"] .ai-draft-tbl .dcell { background: var(--surface2); }
 
+
+  /* ViewOnly overlay - blocks all interactions except header */
+  #viewonly-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    z-index: 99;
+    background: transparent;
+    cursor: not-allowed;
+  }
+  #viewonly-overlay.active { display: block; }
+  /* Header must be above the overlay so logout works */
+  /* viewonly: header stays above overlay */
+  /* Warning bar for viewOnly */
+  #viewonly-bar {
+    display: none;
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    z-index: 100;
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    color: #fff;
+    text-align: center;
+    padding: 8px 16px;
+    font-size: 12px;
+    font-weight: 600;
+    font-family: var(--font-display);
+    box-shadow: 0 -2px 12px rgba(0,0,0,0.15);
+  }
+  #viewonly-bar.active { display: block; }
 </style>
 <!-- Google Identity Services -->
 <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -1084,6 +1113,9 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 </head>
 <body>
+
+<div id="viewonly-overlay"></div>
+<div id="viewonly-bar">👁️ Modalità solo visualizzazione — non puoi apportare modifiche</div>
 
 <header>
   <h1 style="display:flex;flex-direction:column;align-items:flex-start;"><img src="data:image/png;base64,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" style="height:28px;width:auto;display:inline-block;margin-bottom:4px;" alt="Medea Logo"><span style="font-size:0.72rem;font-weight:400;color:#2563eb;font-family:'Syne',sans-serif;">Disponibilità medici</span></h1>
@@ -1120,7 +1152,7 @@
   <button class="tab-btn" onclick="switchTab('riepilogo')">📊 Riepilogo Disponibilità</button>
   <button class="tab-btn" onclick="switchTab('calendar')"><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect x='10' y='20' width='80' height='72' rx='8' fill='%23fff' stroke='%234285F4' stroke-width='4'/%3E%3Crect x='10' y='20' width='80' height='20' rx='8' fill='%234285F4'/%3E%3Crect x='10' y='32' width='80' height='8' fill='%234285F4'/%3E%3Crect x='10' y='84' width='16' height='8' rx='4' fill='%230B8043'/%3E%3Crect x='74' y='84' width='16' height='8' rx='4' fill='%23EA4335'/%3E%3Crect x='74' y='20' width='16' height='8' rx='4' fill='%23FBBC04'/%3E%3Crect x='25' y='8' width='6' height='22' rx='3' fill='%234285F4'/%3E%3Crect x='69' y='8' width='6' height='22' rx='3' fill='%234285F4'/%3E%3Ctext x='50' y='76' text-anchor='middle' font-family='Arial,sans-serif' font-size='40' font-weight='bold' fill='%234285F4'%3E31%3C/text%3E%3C/svg%3E" style="width:1em;height:1em;vertical-align:middle"> Calendar</button>  <button class="tab-btn admin-only" onclick="switchTab('storico')">📝 Storico Modifiche</button>
   <button class="tab-btn admin-only" onclick="switchTab('impostazioni')">⚙️ Impostazioni</button>
-  <button class="tab-btn admin-only" onclick="switchTab('test')">🧪 Test Parser</button>
+
   <button class="tab-btn admin-only" onclick="switchTab('turniai')">🤖 Turni AI</button>
 </div>
 
@@ -1442,41 +1474,6 @@
   </div>
 </div>
 
-<!-- ===== TAB 6: TEST PARSER ===== -->
-<div class="tab-content admin-only" id="tab-test">
-  <div style="max-width:900px;">
-    <div class="card">
-      <div class="card-title">🧪 Test Parser Messaggi WhatsApp</div>
-      <p style="color:var(--muted);font-size:12px;margin-bottom:14px;">
-        Inserisci un messaggio per vedere come viene interpretato, senza modificare nessun dato.
-        La settimana di riferimento è quella selezionata nel tab Disponibilità.
-      </p>
-      <textarea class="wa-input" id="test-input" style="min-height:90px;" 
-        placeholder="Incolla qui il messaggio da testare..."></textarea>
-      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;align-items:center;">
-        <button class="btn btn-primary btn-sm" onclick="runParserTest()">▶ Testa</button>
-        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('test-input').value='';document.getElementById('test-output').innerHTML=''">✕ Cancella</button>
-      </div>
-      <div id="test-output" style="margin-top:14px;"></div>
-    </div>
-
-    <div class="card">
-      <div class="card-title">Casi di Test Predefiniti</div>
-      <p style="color:var(--muted);font-size:12px;margin-bottom:14px;">
-        Clicca su un caso per testarlo. La settimana usata è quella corrente 
-        (<span id="test-week-lbl" style="color:var(--accent)"></span>).
-      </p>
-      <div id="test-cases-list"></div>
-    </div>
-
-    <div class="card">
-      <div class="card-title">📊 Risultati Suite Completa</div>
-      <button class="btn btn-primary btn-sm" onclick="runAllTests()">▶ Esegui tutti i test</button>
-      <div id="test-suite-output" style="margin-top:14px;"></div>
-    </div>
-  </div>
-</div>
-
 <!-- ===== TAB: TURNI AI ===== -->
 <div class="tab-content admin-only" id="tab-turniai">
   <div style="margin-bottom:16px;">
@@ -1653,7 +1650,13 @@ function doLogin() {
 }
 
 function onLoginSuccess() {
-  if (currentUser && currentUser.viewOnly && currentUser.role !== 'admin') { setTimeout(() => showWarningBanner('👁️ Accesso in modalità solo visualizzazione — non puoi apportare modifiche.', '#f59e0b'), 500); }
+  if (currentUser && currentUser.viewOnly && currentUser.role !== 'admin') {
+    // Activate viewOnly overlay - blocks all clicks except header
+    const _voOverlay = document.getElementById('viewonly-overlay');
+    const _voBar = document.getElementById('viewonly-bar');
+    if (_voOverlay) _voOverlay.classList.add('active');
+    if (_voBar) _voBar.classList.add('active');
+  }
   const overlay = document.getElementById('login-overlay');
   if (overlay) overlay.style.display = 'none';
   const userInfo = document.getElementById('user-info');
@@ -1691,16 +1694,102 @@ function onLoginSuccess() {
 }
 
 function doLogout() {
-  logAudit('Logout effettuato');
-  removePresence();
-  stopCursorTracking();
+  try { logAudit('Logout effettuato'); } catch(e) {}
+  
+  // 1. Remove online presence
+  try { removePresence(); } catch(e) {}
+  
+  // 2. Stop cursor tracking
+  try { stopCursorTracking(); } catch(e) {}
+  
+  // 3. Detach cardio_presence listener
+  try { firebase.database().ref('cardio_presence').off(); } catch(e) {}
+  
+  // 4. Detach all chat room listeners
+  try {
+    if (typeof _chatRoomListeners !== 'undefined') {
+      _chatRoomListeners.forEach(roomId => {
+        try { firebase.database().ref('cardio_chat/' + roomId + '/messages').off(); } catch(e) {}
+      });
+      _chatRoomListeners.clear();
+    }
+    firebase.database().ref('cardio_chat').off();
+  } catch(e) {}
+  
+  // 5. Detach chat panel listeners
+  try {
+    if (typeof _chatListener !== 'undefined' && _chatListener) { _chatListener.off(); }
+    if (typeof _chatReadByListener !== 'undefined' && _chatReadByListener) { _chatReadByListener.off(); }
+  } catch(e) {}
+  
+  // 6. Detach state/conflicts/rules real-time listeners
+  try { firebase.database().ref('cardio_state').off(); } catch(e) {}
+  try { firebase.database().ref('cardio_conflicts').off(); } catch(e) {}
+  try { firebase.database().ref('cardio_rules').off(); } catch(e) {}
+  
+  // 7. Detach cursor color listener
+  try { firebase.database().ref('cardio_cursor_colors').off(); } catch(e) {}
+  
+  // 8. Detach audit listener
+  try {
+    if (typeof _auditListener !== 'undefined' && _auditListener) {
+      firebase.database().ref('cardio_audit').off('value', _auditListener);
+      _auditListener = null;
+    }
+  } catch(e) {}
+  
+  // 9. Close any open chat panels
+  try {
+    const chatPanel = document.getElementById('chat-panel');
+    if (chatPanel) chatPanel.classList.remove('open');
+    const chatHub = document.getElementById('chat-hub-panel');
+    if (chatHub) chatHub.style.display = 'none';
+  } catch(e) {}
+  
+  // 10. Remove viewOnly overlay
+  try {
+    const voOverlay = document.getElementById('viewonly-overlay');
+    const voBar = document.getElementById('viewonly-bar');
+    if (voOverlay) voOverlay.classList.remove('active');
+    if (voBar) voBar.classList.remove('active');
+  } catch(e) {}
+  
+  // 11. Remove warning banners
+  try {
+    const wb = document.getElementById('warning-banner');
+    if (wb) wb.remove();
+  } catch(e) {}
+  
+  // 12. Reset minimized chats
+  try {
+    if (typeof _minimizedChats !== 'undefined') {
+      for (const k in _minimizedChats) delete _minimizedChats[k];
+    }
+    if (typeof _chatUnreadMap !== 'undefined') {
+      for (const k in _chatUnreadMap) delete _chatUnreadMap[k];
+    }
+    const minBar = document.getElementById('minimized-chats-bar');
+    if (minBar) minBar.innerHTML = '';
+  } catch(e) {}
+  
+  // 13. Reset remote cursors display
+  try {
+    const cc = document.getElementById('remote-cursors-container');
+    if (cc) cc.innerHTML = '';
+  } catch(e) {}
+  
+  // 14. Clear user state
   currentUser = null;
   sessionStorage.removeItem('loggedUser');
-  showLoginScreen();
+  
+  // 15. Hide UI elements
   const userInfo = document.getElementById('user-info');
   if (userInfo) userInfo.style.display = 'none';
   const um = document.getElementById('user-menu');
   if (um) um.style.display = 'none';
+  
+  // 16. Show login screen
+  showLoginScreen();
 }
 
 function toggleUserMenu() {
@@ -2087,7 +2176,7 @@ function switchTab(id) {
     _auditListener = null;
   }
   document.querySelectorAll('.tab-btn').forEach((b, i) => {
-    b.classList.toggle('active', ['disponibilita','whatsapp','conferma','riepilogo','calendar','storico','impostazioni','test','turniai'][i] === id);
+    b.classList.toggle('active', ['disponibilita','whatsapp','conferma','riepilogo','calendar','storico','impostazioni','turniai'][i] === id);
   });
   document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
   document.getElementById('tab-' + id).classList.add('active');
@@ -2097,7 +2186,6 @@ function switchTab(id) {
   if (id === 'whatsapp') renderWaHistory();
   if (id === 'storico') loadAuditLog();
   if (id === 'impostazioni') { renderSettings(); loadUsersList(); loadConflicts(); populateConflictSelects(); loadCustomRules(); populateRuleSelects(); }
-  if (id === 'test') initTestTab();
   if (id === 'turniai') renderTurniAI();
 }
 
@@ -6428,326 +6516,6 @@ function copyTextFallback(text) {
 }
 
 // =============================================
-// TEST PARSER
-// =============================================
-
-// Each test case: { msg, expected: [{di, si, type}], desc }
-// di=day index 0-5, si=slot 0=mat 1=pom, type='disponibile'|'solo-ecg'|ferie:true
-function getTestCases() {
-  const dm = buildDateMap(currentWeek);
-  // Get dates for this week
-  const dates = {};
-  Object.entries(dm).forEach(([day, idx]) => { dates[idx] = parseInt(day); });
-  const d0 = dates[0], d1 = dates[1], d2 = dates[2], d3 = dates[3], d4 = dates[4], d5 = dates[5];
-
-  return [
-    {
-      desc: 'Date numeriche — pomeriggio e mattina',
-      msg: `Buongiorno, sono disponibile il ${d0} pomeriggio e il ${d1} mattina`,
-      expected: [
-        { di:0, si:1, type:'disponibile' },
-        { di:1, si:0, type:'disponibile' },
-      ]
-    },
-    {
-      desc: 'Giorni per nome — mix mattina/pomeriggio senza virgole',
-      msg: 'Buongiorno, lunedì mattina martedì mattina mercoledì mattina e pomeriggio,\nGrazie.',
-      expected: [
-        { di:0, si:0, type:'disponibile' },
-        { di:1, si:0, type:'disponibile' },
-        { di:2, si:0, type:'disponibile' },
-        { di:2, si:1, type:'disponibile' },
-      ]
-    },
-    {
-      desc: 'Tutti i giorni mattina e pomeriggio',
-      msg: 'Tutti i gg mattina e sera',
-      expected: [0,1,2,3,4,5].flatMap(di => [
-        { di, si:0, type:'disponibile' },
-        { di, si:1, type:'disponibile' },
-      ])
-    },
-    {
-      desc: 'Tutti i giorni con ECG su giovedì e venerdì',
-      msg: 'Tutti i gg\nMattina e sera\nGiovedì e venerdì eventualmente solo ecg\nAlmeno tre turni per favore',
-      expected: [
-        { di:0, si:0, type:'disponibile' }, { di:0, si:1, type:'disponibile' },
-        { di:1, si:0, type:'disponibile' }, { di:1, si:1, type:'disponibile' },
-        { di:2, si:0, type:'disponibile' }, { di:2, si:1, type:'disponibile' },
-        { di:3, si:0, type:'solo-ecg'   }, { di:3, si:1, type:'solo-ecg'   },
-        { di:4, si:0, type:'solo-ecg'   }, { di:4, si:1, type:'solo-ecg'   },
-        { di:5, si:0, type:'disponibile' }, { di:5, si:1, type:'disponibile' },
-      ]
-    },
-    {
-      desc: 'Disponibile con virgole, giorni misti',
-      msg: 'Disponibile lunedì pomeriggio, martedì, mercoledì, giovedì e venerdì mattina',
-      expected: [
-        { di:0, si:1, type:'disponibile' },
-        { di:1, si:0, type:'disponibile' }, { di:1, si:1, type:'disponibile' },
-        { di:2, si:0, type:'disponibile' }, { di:2, si:1, type:'disponibile' },
-        { di:3, si:0, type:'disponibile' }, { di:3, si:1, type:'disponibile' },
-        { di:4, si:0, type:'disponibile' },
-      ]
-    },
-    {
-      desc: 'Solo ECG esplicito con giorno e slot',
-      msg: `Buongiorno, sono disponibile il ${d0} ECG pomeriggio`,
-      expected: [
-        { di:0, si:1, type:'solo-ecg' },
-      ]
-    },
-    {
-      desc: 'Ferie',
-      msg: 'Sono in ferie questa settimana, grazie',
-      ferie: true,
-      expected: []
-    },
-    {
-      desc: 'Sabato mattina e pomeriggio',
-      msg: 'Sabato mattina e pomeriggio',
-      expected: [
-        { di:5, si:0, type:'disponibile' },
-        { di:5, si:1, type:'disponibile' },
-      ]
-    },
-    {
-      desc: 'Messaggio reale: lunedì mattina martedì mattina mercoledì mattina e pomeriggio con newline',
-      msg: 'Buongiorno, lunedì mattina martedì mattina  mercoledì mattina e pomeriggio , \nGrazie.',
-      expected: [
-        { di:0, si:0, type:'disponibile' },
-        { di:1, si:0, type:'disponibile' },
-        { di:2, si:0, type:'disponibile' },
-        { di:2, si:1, type:'disponibile' },
-      ]
-    },
-    {
-      desc: 'Solo ECG su più giorni: martedì e sabato mattina e pomeriggio',
-      msg: 'mar e sab matt e pom',
-      expected: [
-        { di:1, si:0, type:'disponibile' },
-        { di:1, si:1, type:'disponibile' },
-        { di:5, si:0, type:'disponibile' },
-        { di:5, si:1, type:'disponibile' },
-      ]
-    },
-    {
-      desc: 'Messaggio con data numerica e giorno scritto',
-      msg: `Disponibile mercoledì ${d2} pomeriggio per turno classico`,
-      expected: [
-        { di:2, si:1, type:'disponibile' },
-      ]
-    },
-    {
-      desc: 'Solo ECG globale su giorni elencati',
-      msg: 'Salve! Allora: lunedì martedì mercoledì giovedì e sabato mattina. Solo ECG: lunedì martedì mercoledì giovedì e sabato pomeriggio.',
-      expected: [
-        { di:0, si:0, type:'disponibile' },
-        { di:1, si:0, type:'disponibile' },
-        { di:2, si:0, type:'disponibile' },
-        { di:3, si:0, type:'disponibile' },
-        { di:5, si:0, type:'disponibile' },
-        { di:0, si:1, type:'solo-ecg' },
-        { di:1, si:1, type:'solo-ecg' },
-        { di:2, si:1, type:'solo-ecg' },
-        { di:3, si:1, type:'solo-ecg' },
-        { di:5, si:1, type:'solo-ecg' },
-      ]
-    },
-    {
-      desc: 'Messaggio con Holter — turni normali + holter + Domenica Holter',
-      msg: 'Lunedì matt normale o Holter\nLunedì pome normale o solo ecg o Holter\nMartedì matt normale o Holter\nDomenica Holter',
-      holter: true,
-      expected: [
-        { di:0, si:0, type:'disponibile' },
-        { di:0, si:1, type:'disponibile' },
-        { di:1, si:0, type:'disponibile' },
-      ],
-      expectedHolter: [0, 1, 6]
-    },
-    {
-      desc: 'Messaggio con date numeriche: 25, 26, 27 mattina',
-      msg: `${dates[2]} ${dates[3] !== undefined ? dates[3] : d3} ${dates[4] !== undefined ? dates[4] : d4} mattina`,
-      expected: [
-        { di:2, si:0, type:'disponibile' },
-        { di:3, si:0, type:'disponibile' },
-        { di:4, si:0, type:'disponibile' },
-      ]
-    },
-  ];
-}
-
-function slotKey(di, si) { return `${di}_${si}`; }
-
-function renderTestResult(msg, expected, ferie) {
-  const result = interpretMessage(msg);
-  const DNAMES = ['Lun','Mar','Mer','Gio','Ven','Sab'];
-  const SNAMES = ['Mat','Pom'];
-  const TYPE_SHORT = { 'disponibile': 'X', 'solo-ecg': 'Y' };
-
-  // Build expected map
-  const expMap = {};
-  if (!ferie) {
-    expected.forEach(e => { expMap[slotKey(e.di, e.si)] = e.type; });
-  }
-
-  // Build got map
-  const gotMap = {};
-  result.slots.forEach(s => { gotMap[s.key] = s.type; });
-
-  // Compare
-  const allKeys = new Set([...Object.keys(expMap), ...Object.keys(gotMap)]);
-  const rows = [];
-  let pass = true;
-
-  // Check ferie
-  if (ferie) {
-    const ok = result.ferie === true;
-    if (!ok) pass = false;
-    rows.push({ label: 'FERIE', expected: '✓', got: result.ferie ? '✓' : '✗', ok });
-  }
-
-  [...allKeys].sort().forEach(k => {
-    const [di, si] = k.split('_').map(Number);
-    const exp = expMap[k] || '—';
-    const got = gotMap[k] || '—';
-    const ok = exp === got;
-    if (!ok) pass = false;
-    rows.push({
-      label: `${DNAMES[di]} ${SNAMES[si]}`,
-      expected: exp === '—' ? '—' : TYPE_SHORT[exp] || exp,
-      got: got === '—' ? '—' : TYPE_SHORT[got] || got,
-      ok
-    });
-  });
-
-  // Check holter slots if test case has expectedHolter
-  const tc = getTestCases().find(t => t.expected === expected);  // not reliable, use passed arg
-  // Holter rows
-  const holterRows = [];
-  if (arguments[3] && arguments[3].length >= 0) {  // expectedHolter array passed
-    const HNAMES_SHORT = ['Lun','Mar','Mer','Gio','Ven','Sab','Dom'];
-    const gotHolterKeys = new Set((result.holterSlots || []).map(s => parseInt(s.key, 10)));
-    const expHolterSet = new Set(arguments[3]);
-    const allHolterDays = new Set([...gotHolterKeys, ...expHolterSet]);
-    allHolterDays.forEach(di => {
-      const expH = expHolterSet.has(di) ? 'X' : '—';
-      const gotH = gotHolterKeys.has(di) ? 'X' : '—';
-      const okH = expH === gotH;
-      if (!okH) pass = false;
-      holterRows.push({ label: `💓 ${HNAMES_SHORT[di]}`, expected: expH, got: gotH, ok: okH });
-    });
-  }
-
-  const statusColor = pass ? 'var(--success)' : 'var(--danger)';
-  const statusIcon  = pass ? '✅ PASS' : '❌ FAIL';
-
-  let html = `<div style="margin-bottom:4px;font-size:12px;color:${statusColor};font-weight:700;">${statusIcon}</div>`;
-  if (rows.length === 0 && holterRows.length === 0 && !ferie) {
-    html += `<div style="color:var(--danger);font-size:11px;">Nessuno slot trovato (e nessuno atteso)</div>`;
-  }
-
-  html += '<table style="border-collapse:collapse;font-size:11px;width:auto;">';
-  html += '<tr><th style="padding:3px 10px 3px 0;color:var(--muted);text-align:left;">Slot</th><th style="padding:3px 10px;color:var(--muted);">Atteso</th><th style="padding:3px 10px;color:var(--muted);">Ottenuto</th><th style="padding:3px 0;color:var(--muted);">Esito</th></tr>';
-  [...rows, ...holterRows].forEach(r => {
-    const rowColor = r.ok ? 'var(--text)' : 'var(--danger)';
-    html += `<tr style="color:${rowColor};">
-      <td style="padding:2px 10px 2px 0;">${r.label}</td>
-      <td style="padding:2px 10px;text-align:center;">${r.expected}</td>
-      <td style="padding:2px 10px;text-align:center;">${r.got}</td>
-      <td style="padding:2px 0;text-align:center;">${r.ok ? '✓' : '✗'}</td>
-    </tr>`;
-  });
-  html += '</table>';
-
-  return { html, pass };
-}
-
-function runParserTest() {
-  const msg = document.getElementById('test-input').value.trim();
-  if (!msg) return;
-  const result = interpretMessage(msg);
-  const DNAMES = ['Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato'];
-  const SNAMES = ['Mattina','Pomeriggio'];
-
-  const HNAMES = ['Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato','Domenica'];
-  const hSlots = result.holterSlots || [];
-  let html = '';
-  if (result.ferie) {
-    html = `<div class="badge badge-ferie" style="font-size:12px;padding:6px 14px;">🏖️ FERIE rilevato</div>`;
-  } else if (result.slots.length === 0 && hSlots.length === 0) {
-    html = `<div style="color:var(--danger);font-size:12px;">⚠️ Nessuno slot riconosciuto.<br>
-      <span style="color:var(--muted);">Prova a includere nomi dei giorni (es: lunedì, martedì) o date numeriche con mattina/pomeriggio.</span></div>`;
-  } else {
-    if (result.slots.length > 0) {
-      html += '<div style="margin-bottom:4px;font-size:11px;color:var(--muted);">Slot turni riconosciuti:</div><div class="wa-parse-badge" style="margin-bottom:10px;">';
-      result.slots.forEach(s => {
-        const [di,si] = s.key.split('_').map(Number);
-        const cls = s.type === 'disponibile' ? 'badge-mat' : 'badge-ecg';
-        html += `<span class="badge ${cls}">${DNAMES[di]} ${SNAMES[si]} (${s.type === 'disponibile' ? 'X' : 'Y'})</span>`;
-      });
-      html += '</div>';
-    }
-    if (hSlots.length > 0) {
-      html += '<div style="margin-bottom:4px;font-size:11px;color:#6366f1;font-weight:600;">💓 Slot Holter riconosciuti:</div><div class="wa-parse-badge">';
-      hSlots.forEach(s => {
-        const di = parseInt(s.key, 10);
-        html += `<span class="badge" style="background:#6366f1;color:#fff;">${HNAMES[di]} (X)</span>`;
-      });
-      html += '</div>';
-    }
-  }
-  document.getElementById('test-output').innerHTML = html;
-}
-
-function initTestTab() {
-  const endStr = addDays(currentWeek, 5);
-  document.getElementById('test-week-lbl').textContent =
-    formatDate(currentWeek) + ' – ' + formatDate(endStr);
-
-  // Render predefined test cases
-  const cases = getTestCases();
-  const list = document.getElementById('test-cases-list');
-  list.innerHTML = cases.map((tc, i) => `
-    <div style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px;background:var(--surface2);">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:6px;">
-        <span style="font-size:12px;color:var(--accent2);font-weight:600;">#${i+1} — ${tc.desc}</span>
-        <button class="btn btn-ghost btn-sm" onclick="loadTestCase(${i})">▶ Testa</button>
-      </div>
-      <div style="font-size:11px;color:var(--muted);font-style:italic;white-space:pre-wrap;">"${tc.msg}"</div>
-      <div id="tc-result-${i}" style="margin-top:8px;"></div>
-    </div>
-  `).join('');
-}
-
-function loadTestCase(i) {
-  const tc = getTestCases()[i];
-  document.getElementById('test-input').value = tc.msg;
-  const { html, pass } = renderTestResult(tc.msg, tc.expected, tc.ferie, tc.expectedHolter || []);
-  document.getElementById(`tc-result-${i}`).innerHTML = html;
-  document.getElementById('test-output').innerHTML = `<div style="font-size:11px;color:var(--muted);margin-bottom:6px;">Test #${i+1}: ${tc.desc}</div>` + html;
-}
-
-function runAllTests() {
-  const cases = getTestCases();
-  let passed = 0, failed = 0;
-  let html = '';
-  cases.forEach((tc, i) => {
-    const { html: h, pass } = renderTestResult(tc.msg, tc.expected, tc.ferie, tc.expectedHolter || []);
-    if (pass) passed++; else failed++;
-    html += `<div style="margin-bottom:12px;padding:10px 12px;border:1px solid ${pass ? 'var(--success)' : 'var(--danger)'};border-radius:8px;background:var(--surface2);">
-      <div style="font-size:12px;font-weight:600;color:${pass ? 'var(--success)' : 'var(--danger)'};margin-bottom:6px;">#${i+1} — ${tc.desc}</div>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:6px;white-space:pre-wrap;font-style:italic;">"${tc.msg}"</div>
-      ${h}
-    </div>`;
-  });
-  const summaryColor = failed === 0 ? 'var(--success)' : 'var(--danger)';
-  document.getElementById('test-suite-output').innerHTML =
-    `<div style="font-size:14px;font-weight:700;color:${summaryColor};margin-bottom:14px;">
-      ${passed}/${cases.length} test superati ${failed > 0 ? `— ${failed} falliti` : '✅'}
-    </div>` + html;
-}
-// =============================================
 // ONLINE PRESENCE
 // =============================================
 let _presenceRef = null;
@@ -7238,6 +7006,12 @@ function _listenChatRoomForNotifications(roomId) {
 }
 
 function init() {
+  // Ensure viewonly overlay is hidden on fresh load
+  const _voOvInit = document.getElementById('viewonly-overlay');
+  const _voBarInit = document.getElementById('viewonly-bar');
+  if (_voOvInit) _voOvInit.classList.remove('active');
+  if (_voBarInit) _voBarInit.classList.remove('active');
+  
   initTheme();
   ensureDefaultAdmin();
   initAuth();
