@@ -5565,17 +5565,19 @@ function loadUsersList() {
     const el = document.getElementById('users-list');
     if (!el) return;
     const entries = Object.entries(users).sort((a,b) => a[0].localeCompare(b[0]));
-    el.innerHTML = entries.map(([fbName, u]) => {
+    el.innerHTML = entries.map(([fbName, u], idx) => {
       const uname = fbKeyDecode(fbName);
       const isBlocked = !!u.blocked;
       const isAdmin = u.role === 'admin';
       const gender = u.gender || 'M';
       const genderIcon = gender === 'F' ? '♀' : '♂';
       const genderColor = gender === 'F' ? '#ec4899' : '#3b82f6';
-      const cursorColor = _adminCursorColors[fbName] || '#3b82f6';
+      const _defColors = ['#3b82f6','#ef4444','#10b981','#f59e0b','#8b5cf6','#ec4899','#06b6d4','#f97316','#84cc16','#14b8a6','#e11d48','#7c3aed'];
+      const cursorColor = _adminCursorColors[fbName] || _defColors[idx % _defColors.length];
+      const colorPickerHtml = isAdmin ? '<div style="width:24px;height:24px;flex-shrink:0;"></div>' : `<input type="color" value="${cursorColor}" data-username="${uname}" class="user-cursor-color" title="Colore cursore" style="width:24px;height:24px;border:2px solid var(--border);border-radius:6px;padding:0;cursor:pointer;background:none;flex-shrink:0;">`;
       return `
       <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-bottom:1px solid var(--border);font-size:12px;${isBlocked ? 'opacity:0.5;' : ''}">
-        <input type="color" value="${cursorColor}" data-username="${uname}" class="user-cursor-color" title="Colore cursore" style="width:24px;height:24px;border:2px solid var(--border);border-radius:6px;padding:0;cursor:pointer;background:none;flex-shrink:0;">
+        ${colorPickerHtml}
         <button class="btn btn-ghost btn-sm" style="font-size:12px;padding:2px 4px;color:${genderColor};min-width:22px;" onclick="toggleUserGender('${uname}', '${gender}')" title="Cambia sesso (${gender})">${genderIcon}</button>
         <span style="font-weight:700;min-width:100px;">${uname}</span>
         <span style="color:var(--muted);flex:1;">${u.fullName || ''}</span>
