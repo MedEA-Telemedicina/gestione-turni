@@ -854,14 +854,7 @@
     border-bottom: 5px solid var(--accent);
   }
 
-  /* Unread badge on online indicator */
-  .online-unread-badge {
-    display: none; position: absolute; top: -6px; right: -10px;
-    background: #ef4444; color: #fff; font-size: 9px; font-weight: 700;
-    min-width: 16px; height: 16px; line-height: 16px; text-align: center;
-    border-radius: 8px; padding: 0 4px; border: 2px solid var(--surface);
-    animation: toastFadeIn 0.2s ease-out;
-  }
+  /* Online unread badge removed */
 
   /* Chat panel */
   .chat-panel {
@@ -1041,17 +1034,28 @@
   .ai-nums-grid td { padding: 4px 6px; text-align: center; border: 1px solid var(--border); }
   .ai-nums-grid td:first-child { font-weight: 700; background: var(--surface); }
   .ai-nums-grid input[type="number"] { width: 50px; padding: 4px 6px; text-align: center; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); font-size: 12px; }
-  .ai-docs-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 4px; max-height: 220px; overflow-y: auto; padding: 4px; }
+  .ai-docs-list { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; }
   .ai-doc-chk { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 6px; font-size: 12px; cursor: pointer; }
   .ai-doc-chk:hover { background: rgba(99,102,241,0.08); }
   .ai-doc-chk input { accent-color: #6366f1; }
+  .ai-select-wrap { position: relative; }
+  .ai-select-dropdown { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text); font-size: 12px; cursor: pointer; appearance: none; -webkit-appearance: none; }
+  .ai-select-dropdown:focus { outline: 2px solid #6366f1; border-color: #6366f1; }
+  .ai-selected-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+  .ai-sel-tag { display: inline-flex; align-items: center; gap: 4px; background: rgba(124,58,237,.12); border: 1px solid rgba(124,58,237,.25); color: var(--text); padding: 3px 6px 3px 10px; border-radius: 16px; font-size: 11px; white-space: nowrap; }
+  .ai-sel-tag .x { background: none; border: none; color: #7c3aed; cursor: pointer; font-size: 12px; padding: 0 2px; line-height: 1; opacity: .7; }
+  .ai-sel-tag .x:hover { opacity: 1; color: #ef4444; }
+  [data-theme="dark"] .ai-sel-tag { color: #c4b5fd; }
   .ai-gen-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 14px 24px; font-size: 15px; font-weight: 700; background: linear-gradient(135deg, #6366f1, #2563eb); color: #fff; border: none; border-radius: 12px; cursor: pointer; transition: all .2s; box-shadow: 0 4px 14px rgba(99,102,241,.3); }
   .ai-gen-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(99,102,241,.4); }
   .ai-gen-btn:active { transform: translateY(0); }
-  .ai-draft-tbl { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
+  .ai-draft-tbl { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; table-layout: fixed; }
   .ai-draft-tbl th { padding: 8px 10px; background: linear-gradient(135deg, #6366f1, #2563eb); color: #fff; font-weight: 700; text-align: center; border: 1px solid #4f46e5; }
-  .ai-draft-tbl td { padding: 6px 8px; border: 1px solid var(--border); vertical-align: top; }
+  .ai-draft-tbl th:first-child { width: 90px; }
+  .ai-draft-tbl th:last-child { width: 140px; }
+  .ai-draft-tbl td { padding: 6px 8px; border: 1px solid var(--border); vertical-align: top; overflow: hidden; }
   .ai-draft-tbl .dcell { font-weight: 700; background: var(--surface); text-align: center; white-space: nowrap; min-width: 60px; }
+  .ai-draft-tbl .slot-cell { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 2px; }
   .ai-tag { display: inline-flex; align-items: center; gap: 3px; border-radius: 6px; padding: 2px 4px 2px 8px; margin: 2px; font-size: 11px; white-space: nowrap; background: rgba(37,99,235,.1); border: 1px solid rgba(37,99,235,.2); color: var(--text); }
   .ai-tag.ecg { background: rgba(217,119,6,.1); border-color: rgba(217,119,6,.25); }
   .ai-tag.crown { background: rgba(124,58,237,.1); border-color: rgba(124,58,237,.25); }
@@ -1091,7 +1095,6 @@
     <div id="online-indicator" style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);cursor:pointer;position:relative;" onclick="toggleOnlinePanel()" title="Utenti online">
       <span style="width:8px;height:8px;border-radius:50%;background:#22c55e;display:inline-block;animation:pulse-online 2s infinite;"></span>
       <span id="online-count">0 online</span>
-      <span class="online-unread-badge" id="online-unread-badge">0</span>
       <div id="online-panel" style="display:none;position:absolute;top:100%;right:0;margin-top:8px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 14px;min-width:180px;box-shadow:0 6px 24px rgba(0,0,0,0.15);z-index:200;">
         <div style="font-size:10px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">👥 Utenti Online</div>
         <div id="online-users-list" style="font-size:12px;color:var(--text);"></div>
@@ -6862,13 +6865,9 @@ function listenOnlineUsers() {
         listEl.innerHTML = onlineList.map(u => {
           const adminBadge = u.role === 'admin' ? ' ⭐' : '';
           const isMe = currentUser && u.username === currentUser.username;
-          const unreadN = (!isMe && _chatUnreadMap[u.username]) ? _chatUnreadMap[u.username] : 0;
-          const unreadCountHtml = unreadN > 0 ? `<span style="background:#ef4444;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;line-height:16px;text-align:center;border-radius:8px;padding:0 4px;flex-shrink:0;">${unreadN}</span>` : '';
-          const chatBtn = isMe ? `<span style="width:28px;flex-shrink:0;"></span>` : `<button onclick="event.stopPropagation();openChat('${u.username.replace(/'/g,"\\'")}','${u.fullName.replace(/'/g,"\\'")}')" style="position:relative;background:none;border:none;cursor:pointer;font-size:14px;padding:0 2px;line-height:1;display:flex;align-items:center;justify-content:flex-end;gap:3px;width:28px;flex-shrink:0;" title="Chatta con ${u.fullName}">💬${unreadCountHtml}</button>`;
           return `<div style="display:flex;align-items:center;gap:6px;padding:3px 0;">
             <span style="width:6px;height:6px;border-radius:50%;background:#22c55e;flex-shrink:0;"></span>
             <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${u.fullName}${adminBadge}</span>
-            ${chatBtn}
           </div>`;
         }).join('');
       }
@@ -6949,16 +6948,7 @@ function showMsgBubble(senderName, senderUsername, text) {
 
 // ─── Update unread badge on online indicator ───
 function _updateOnlineUnreadBadge() {
-  const total = Object.values(_chatUnreadMap).reduce((s, n) => s + n, 0);
-  const badge = document.getElementById('online-unread-badge');
-  if (badge) {
-    if (total > 0) {
-      badge.textContent = total > 99 ? '99+' : total;
-      badge.style.display = 'block';
-    } else {
-      badge.style.display = 'none';
-    }
-  }
+  // Badge removed from online indicator — only update chat hub badge
   _updateChatHubBadge();
 }
 
@@ -7444,22 +7434,49 @@ function loadChatHubConversations() {
 
       let html = '';
 
-      if (conversations.length > 0) {
+      // ── ONLINE USERS AT THE TOP (including those with existing conversations) ──
+      // Merge: all online users, whether they have a conversation or not
+      const allOnlineForHub = onlineUsers.slice().sort((a, b) => a.fullName.localeCompare(b.fullName));
+      if (allOnlineForHub.length > 0) {
+        html += '<div class="chat-hub-section-title">\u{1f7e2} Utenti Online</div>';
+        allOnlineForHub.forEach(u => {
+          const initial = (u.fullName || u.username).charAt(0).toUpperCase();
+          const adminBadge = u.role === 'admin' ? ' \u2b50' : '';
+          // Check if there's an existing conversation with unread count
+          const conv = conversations.find(c => c.partner === u.username);
+          const unreadN = conv ? conv.unread : (_chatUnreadMap[u.username] || 0);
+          const unreadHtml = unreadN > 0 ? '<span class="chat-hub-item-unread">' + unreadN + '</span>' : '';
+          const preview = conv && conv.lastMsg ? _escChatHtml((conv.lastMsg.text || '').substring(0, 40)) : '<span style="color:#22c55e;">Online — clicca per chattare</span>';
+
+          html += '<div class="chat-hub-item" onclick="openChatFromHub(\'' + u.username.replace(/'/g, "\\'") + '\',\'' + u.fullName.replace(/'/g, "\\'") + '\')">';
+          html += '<div class="chat-hub-item-avatar" style="background:#22c55e;">' + _escChatHtml(initial) + '</div>';
+          html += '<div class="chat-hub-item-info">';
+          html += '<div class="chat-hub-item-name"><span class="chat-hub-online-dot"></span>' + _escChatHtml(u.fullName) + adminBadge + '</div>';
+          html += '<div class="chat-hub-item-preview">' + preview + '</div>';
+          html += '</div>';
+          if (unreadHtml) {
+            html += '<div class="chat-hub-item-meta">' + unreadHtml + '</div>';
+          }
+          html += '</div>';
+        });
+      }
+
+      // ── OLD CONVERSATIONS (offline users only, sorted by last message) ──
+      const offlineConvs = conversations.filter(c => !onlineUsers.some(u => u.username === c.partner));
+      if (offlineConvs.length > 0) {
         html += '<div class="chat-hub-section-title">\u{1f4ac} Conversazioni</div>';
-        conversations.forEach(c => {
+        offlineConvs.forEach(c => {
           const initial = (c.partnerName || c.partner).charAt(0).toUpperCase();
           const preview = c.lastMsg ? _escChatHtml((c.lastMsg.text || '').substring(0, 50)) : '<em>Nessun messaggio</em>';
           const timeStr = c.lastMsg && c.lastMsg.timestamp ? new Date(c.lastMsg.timestamp).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : '';
           const dateLabel = c.lastMsg && c.lastMsg.timestamp ? _chatHubDateLabel(c.lastMsg.timestamp) : '';
-          const isOnline = onlineUsers.some(u => u.username === c.partner);
           const unreadHtml = c.unread > 0 ? '<span class="chat-hub-item-unread">' + c.unread + '</span>' : '';
           const displayName = _escChatHtml(c.partnerName || c.partner);
-          const onlineDot = isOnline ? '<span class="chat-hub-online-dot"></span>' : '';
 
           html += '<div class="chat-hub-item" onclick="openChatFromHub(\'' + c.partner.replace(/'/g, "\\'") + '\',\'' + (c.partnerName || c.partner).replace(/'/g, "\\'") + '\')">';
           html += '<div class="chat-hub-item-avatar">' + _escChatHtml(initial) + '</div>';
           html += '<div class="chat-hub-item-info">';
-          html += '<div class="chat-hub-item-name">' + onlineDot + displayName + '</div>';
+          html += '<div class="chat-hub-item-name">' + displayName + '</div>';
           html += '<div class="chat-hub-item-preview">' + preview + '</div>';
           html += '</div>';
           html += '<div class="chat-hub-item-meta">';
@@ -7470,23 +7487,8 @@ function loadChatHubConversations() {
         });
       }
 
-      if (newChatUsers.length > 0) {
-        html += '<div class="chat-hub-section-title">\u{1f7e2} Online \u2014 Nuova chat</div>';
-        newChatUsers.forEach(u => {
-          const initial = (u.fullName || u.username).charAt(0).toUpperCase();
-          const adminBadge = u.role === 'admin' ? ' \u2b50' : '';
-          html += '<div class="chat-hub-item" onclick="openChatFromHub(\'' + u.username.replace(/'/g, "\\'") + '\',\'' + u.fullName.replace(/'/g, "\\'") + '\')">';
-          html += '<div class="chat-hub-item-avatar" style="background:#22c55e;">' + _escChatHtml(initial) + '</div>';
-          html += '<div class="chat-hub-item-info">';
-          html += '<div class="chat-hub-item-name"><span class="chat-hub-online-dot"></span>' + _escChatHtml(u.fullName) + adminBadge + '</div>';
-          html += '<div class="chat-hub-item-preview" style="color:#22c55e;">Online</div>';
-          html += '</div>';
-          html += '</div>';
-        });
-      }
-
       if (!html) {
-        html = '<div class="chat-hub-empty">Nessuna conversazione. Gli utenti online appariranno qui.</div>';
+        html = '<div class="chat-hub-empty">Nessun utente online e nessuna conversazione.</div>';
       }
       listEl.innerHTML = html;
     });
@@ -7769,6 +7771,12 @@ function _aiSaveAlwaysConfirm() {
   firebase.database().ref('cardio_ai_config/alwaysConfirm').set(arr.length > 0 ? arr : null);
 }
 
+function _aiAddAlwaysFromSelect(selectEl) {
+  var doc = selectEl.value;
+  if (!doc) return;
+  toggleAIAlwaysConfirm(doc, true);
+}
+
 function toggleAIAlwaysConfirm(doc, checked) {
   if (checked) _aiAlwaysConfirm.add(doc); else _aiAlwaysConfirm.delete(doc);
   _aiSaveAlwaysConfirm();
@@ -7776,33 +7784,34 @@ function toggleAIAlwaysConfirm(doc, checked) {
 
 // ── Helper: count confirmed per slot from a given week ──
 function _aiCountPrevWeek() {
-  const prevWeek = addDays(currentWeek, -7);
-  const pw = state.weeks[prevWeek] || {};
-  const ph = state.holterWeeks[prevWeek] || {};
-  const counts = {};
-
-  for (let di = 0; di < 6; di++) {
-    for (let si = 0; si < 2; si++) {
-      const key = di + '_' + si;
-      let tot = 0, ecg = 0;
-      (state.doctors || []).forEach(function(doc) {
-        const dd = pw[doc];
-        if (!dd || !dd.slots || dd.ferie) return;
-        const v = dd.slots[key] || '';
-        if (v === 'confermato') tot++;
-        if (v === 'confermato-ecg') { tot++; ecg++; }
-      });
-      counts[key] = { total: tot, ecg: ecg };
+  var prev = addDays(currentWeek, -7);
+  var pd = state.weeks[prev] || {};
+  var ph = state.holterWeeks[prev] || {};
+  var counts = {};
+  (state.doctors || []).forEach(function(doc) {
+    var dd = pd[doc];
+    if (!dd || dd.ferie) return;
+    var sl = dd.slots || {};
+    for (var di = 0; di < 6; di++) {
+      for (var si = 0; si < 2; si++) {
+        var k = di + '_' + si;
+        var v = sl[k] || '';
+        if (!counts[k]) counts[k] = { completo: 0, ecg: 0 };
+        if (v === 'confermato') counts[k].completo++;
+        else if (v === 'confermato-ecg') counts[k].ecg++;
+      }
     }
-    // Holter
-    let hc = 0;
-    (state.doctors || []).filter(function(d) { return state.holterEnabled[d]; }).forEach(function(doc) {
-      const hd = ph[doc];
-      if (!hd || !hd.slots || hd.ferie) return;
-      if (hd.slots[di] === 'confermato') hc++;
-    });
-    counts['h_' + di] = hc;
-  }
+  });
+  // Holter
+  (state.doctors || []).filter(function(d) { return state.holterEnabled[d]; }).forEach(function(doc) {
+    var hd = ph[doc];
+    if (!hd || hd.ferie) return;
+    for (var di = 0; di < 6; di++) {
+      if ((hd.slots || {})[di] === 'confermato') {
+        counts['h_' + di] = (counts['h_' + di] || 0) + 1;
+      }
+    }
+  });
   return counts;
 }
 
@@ -7840,19 +7849,31 @@ function _aiRenderInner() {
 
   var h = '<div class="ai-config">';
 
-  // ── Card 1: Always Confirm ──
+  // ── Card 1: Always Confirm (dropdown + tags) ──
   h += '<div class="ai-card">';
   h += '<h4 style="color:#7c3aed;">👑 Medici da Confermare Sempre</h4>';
-  h += '<p style="font-size:11px;color:var(--muted);margin-bottom:8px;">Questi medici verranno assegnati automaticamente a <strong>tutti</strong> i turni per cui si sono resi disponibili.</p>';
+  h += '<p style="font-size:11px;color:var(--muted);margin-bottom:8px;">Seleziona dal menù i medici da assegnare automaticamente a <strong>tutti</strong> i turni per cui si sono resi disponibili.</p>';
   if (availDocs.length === 0) {
     h += '<p style="color:var(--muted);font-size:12px;">Nessun medico con disponibilità questa settimana.</p>';
   } else {
-    h += '<div class="ai-docs-list">';
-    availDocs.forEach(function(doc) {
-      var ck = _aiAlwaysConfirm.has(doc) ? ' checked' : '';
-      var safeDoc = doc.replace(/'/g, "\\'");
-      h += '<label class="ai-doc-chk"><input type="checkbox"' + ck + ' onchange="toggleAIAlwaysConfirm(\'' + safeDoc + '\', this.checked)"> ' + doc + '</label>';
+    // Selected tags
+    h += '<div class="ai-selected-tags" id="ai-always-tags">';
+    _aiAlwaysConfirm.forEach(function(doc) {
+      if (availDocs.includes(doc)) {
+        var safeDoc = doc.replace(/'/g, "\\'");
+        h += '<span class="ai-sel-tag">👑 ' + doc + ' <button class="x" onclick="toggleAIAlwaysConfirm(\'' + safeDoc + '\', false)" title="Rimuovi">✕</button></span>';
+      }
     });
+    h += '</div>';
+    // Dropdown to add
+    var notSelected = availDocs.filter(function(d) { return !_aiAlwaysConfirm.has(d); });
+    h += '<div class="ai-select-wrap" style="margin-top:8px;">';
+    h += '<select class="ai-select-dropdown" id="ai-always-select" onchange="_aiAddAlwaysFromSelect(this)">';
+    h += '<option value="">+ Aggiungi medico...</option>';
+    notSelected.forEach(function(doc) {
+      h += '<option value="' + doc.replace(/"/g, '&quot;') + '">' + doc + '</option>';
+    });
+    h += '</select>';
     h += '</div>';
   }
   h += '</div>';
@@ -7867,16 +7888,16 @@ function _aiRenderInner() {
   h += '<div style="overflow-x:auto;">';
   h += '<table class="ai-nums-grid"><thead>';
   h += '<tr><th rowspan="2">Giorno</th><th colspan="2" style="background:#2563eb;color:#fff;">MATTINA</th><th colspan="2" style="background:#059669;color:#fff;">POMERIGGIO</th><th rowspan="2" style="background:#6366f1;color:#fff;">Holter</th></tr>';
-  h += '<tr><th>Totale</th><th>di cui ECG</th><th>Totale</th><th>di cui ECG</th></tr>';
+  h += '<tr><th>Completo</th><th>ECG</th><th>Completo</th><th>ECG</th></tr>';
   h += '</thead><tbody>';
   for (var di = 0; di < 6; di++) {
-    var mc = counts[di + '_0'] || { total: 0, ecg: 0 };
-    var pc = counts[di + '_1'] || { total: 0, ecg: 0 };
+    var mc = counts[di + '_0'] || { completo: 0, ecg: 0 };
+    var pc = counts[di + '_1'] || { completo: 0, ecg: 0 };
     var hc = counts['h_' + di] || 0;
     h += '<tr><td>' + DAYSL[di] + '</td>';
-    h += '<td><input type="number" id="ai-mt-' + di + '" min="0" max="20" value="' + mc.total + '"></td>';
+    h += '<td><input type="number" id="ai-mc-' + di + '" min="0" max="20" value="' + mc.completo + '"></td>';
     h += '<td><input type="number" id="ai-me-' + di + '" min="0" max="20" value="' + mc.ecg + '"></td>';
-    h += '<td><input type="number" id="ai-pt-' + di + '" min="0" max="20" value="' + pc.total + '"></td>';
+    h += '<td><input type="number" id="ai-pc-' + di + '" min="0" max="20" value="' + pc.completo + '"></td>';
     h += '<td><input type="number" id="ai-pe-' + di + '" min="0" max="20" value="' + pc.ecg + '"></td>';
     h += '<td><input type="number" id="ai-ho-' + di + '" min="0" max="10" value="' + hc + '"></td>';
     h += '</tr>';
@@ -7900,13 +7921,13 @@ function _aiRenderInner() {
 function _aiLoadFromPrevWeek() {
   var counts = _aiCountPrevWeek();
   for (var di = 0; di < 6; di++) {
-    var mc = counts[di + '_0'] || { total: 0, ecg: 0 };
-    var pc = counts[di + '_1'] || { total: 0, ecg: 0 };
+    var mc = counts[di + '_0'] || { completo: 0, ecg: 0 };
+    var pc = counts[di + '_1'] || { completo: 0, ecg: 0 };
     var hc = counts['h_' + di] || 0;
     var el;
-    el = document.getElementById('ai-mt-' + di); if (el) el.value = mc.total;
+    el = document.getElementById('ai-mc-' + di); if (el) el.value = mc.completo;
     el = document.getElementById('ai-me-' + di); if (el) el.value = mc.ecg;
-    el = document.getElementById('ai-pt-' + di); if (el) el.value = pc.total;
+    el = document.getElementById('ai-pc-' + di); if (el) el.value = pc.completo;
     el = document.getElementById('ai-pe-' + di); if (el) el.value = pc.ecg;
     el = document.getElementById('ai-ho-' + di); if (el) el.value = hc;
   }
@@ -7940,11 +7961,10 @@ function generateAIDraft() {
   for (var di = 0; di < 6; di++) {
     for (var si = 0; si < 2; si++) {
       var key = di + '_' + si;
-      var prefix = si === 0 ? 'mt' : 'pt';
+      var compPrefix = si === 0 ? 'mc' : 'pc';
       var ecgPrefix = si === 0 ? 'me' : 'pe';
-      var targetTotal = parseInt((document.getElementById('ai-' + prefix + '-' + di) || {}).value) || 0;
+      var targetCompleto = parseInt((document.getElementById('ai-' + compPrefix + '-' + di) || {}).value) || 0;
       var targetEcg = parseInt((document.getElementById('ai-' + ecgPrefix + '-' + di) || {}).value) || 0;
-      var targetCompleto = Math.max(0, targetTotal - targetEcg);
 
       // Available doctors for this slot
       var availCompleto = [];
@@ -8124,7 +8144,7 @@ function _aiRenderSlotCell(di, si) {
   var items = _aiDraft.slots[key] || [];
   var skipped = _aiDraft.skipped[key] || { completo: [], ecg: [] };
   var hasSkipped = skipped.completo.length > 0 || skipped.ecg.length > 0;
-  var h = '';
+  var h = '<div class="slot-cell">';
 
   items.forEach(function(item, idx) {
     var cls = 'ai-tag';
@@ -8146,13 +8166,14 @@ function _aiRenderSlotCell(di, si) {
     h += '<span style="color:var(--muted);font-size:11px;">—</span>';
   }
 
+  h += '</div>';
   return h;
 }
 
 function _aiRenderHolterCell(di) {
   var items = _aiDraft.holter[di] || [];
   var skipped = _aiDraft.holterSkipped[di] || [];
-  var h = '';
+  var h = '<div class="slot-cell">';
 
   items.forEach(function(doc, idx) {
     var cls = 'ai-tag';
@@ -8170,6 +8191,7 @@ function _aiRenderHolterCell(di) {
   if (items.length === 0 && skipped.length === 0) {
     h += '<span style="color:var(--muted);font-size:11px;">—</span>';
   }
+  h += '</div>';
   return h;
 }
 
