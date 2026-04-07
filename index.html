@@ -825,17 +825,43 @@
   .stat-pill.clickable.stat-pill-warn:hover { background: #f59e0b; }
 
   /* Online notification banner */
-  .online-notify-banner {
-    position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
-    padding: 10px 20px; text-align: center; font-size: 13px; font-weight: 600;
-    color: #fff; animation: bannerSlideDown 0.3s ease-out;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+  /* Small discrete toast near online indicator */
+  .online-toast {
+    position: absolute; top: calc(100% + 8px); right: 0; z-index: 300;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 6px 12px; font-size: 11px; font-weight: 600; color: var(--text);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.12); white-space: nowrap;
+    animation: toastFadeIn 0.3s ease-out;
+    pointer-events: none;
   }
-  .online-notify-banner.dismiss {
-    animation: bannerSlideUp 0.3s ease-in forwards;
+  .online-toast.dismiss { animation: toastFadeOut 0.3s ease-in forwards; }
+  @keyframes toastFadeIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes toastFadeOut { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-6px); } }
+
+  /* Chat message bubble near online indicator */
+  .msg-bubble {
+    position: absolute; top: calc(100% + 8px); right: 0; z-index: 310;
+    background: var(--accent); color: #fff; border-radius: 12px;
+    padding: 6px 12px; font-size: 11px; font-weight: 600;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.18); white-space: nowrap; max-width: 260px;
+    overflow: hidden; text-overflow: ellipsis; cursor: pointer;
+    animation: toastFadeIn 0.3s ease-out;
   }
-  @keyframes bannerSlideDown { from { transform: translateY(-100%); } to { transform: translateY(0); } }
-  @keyframes bannerSlideUp { from { transform: translateY(0); } to { transform: translateY(-100%); } }
+  .msg-bubble.dismiss { animation: toastFadeOut 0.3s ease-in forwards; }
+  .msg-bubble::before {
+    content: ''; position: absolute; top: -5px; right: 14px;
+    border-left: 5px solid transparent; border-right: 5px solid transparent;
+    border-bottom: 5px solid var(--accent);
+  }
+
+  /* Unread badge on online indicator */
+  .online-unread-badge {
+    display: none; position: absolute; top: -6px; right: -10px;
+    background: #ef4444; color: #fff; font-size: 9px; font-weight: 700;
+    min-width: 16px; height: 16px; line-height: 16px; text-align: center;
+    border-radius: 8px; padding: 0 4px; border: 2px solid var(--surface);
+    animation: toastFadeIn 0.2s ease-out;
+  }
 
   /* Chat panel */
   .chat-panel {
@@ -897,6 +923,7 @@
     <div id="online-indicator" style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);cursor:pointer;position:relative;" onclick="toggleOnlinePanel()" title="Utenti online">
       <span style="width:8px;height:8px;border-radius:50%;background:#22c55e;display:inline-block;animation:pulse-online 2s infinite;"></span>
       <span id="online-count">0 online</span>
+      <span class="online-unread-badge" id="online-unread-badge">0</span>
       <div id="online-panel" style="display:none;position:absolute;top:100%;right:0;margin-top:8px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 14px;min-width:180px;box-shadow:0 6px 24px rgba(0,0,0,0.15);z-index:200;">
         <div style="font-size:10px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">👥 Utenti Online</div>
         <div id="online-users-list" style="font-size:12px;color:var(--text);"></div>
@@ -6549,13 +6576,13 @@ function listenOnlineUsers() {
       // New users that came online
       for (const uname of currentOnlineUsernames) {
         if (!_prevOnlineUsernames.has(uname) && currentUser && uname !== currentUser.username) {
-          showOnlineNotifyBanner('🟢 ' + (currentOnlineFullNames[uname] || uname) + ' è online', '#22c55e');
+          showOnlineToast('🟢 ' + (currentOnlineFullNames[uname] || uname) + ' è online');
         }
       }
       // Users that went offline
       for (const uname of _prevOnlineUsernames) {
         if (!currentOnlineUsernames.has(uname) && currentUser && uname !== currentUser.username) {
-          showOnlineNotifyBanner('⚫ ' + (_prevOnlineFullNames[uname] || uname) + ' si è disconnesso', '#6b7280');
+          showOnlineToast('⚫ ' + (_prevOnlineFullNames[uname] || uname) + ' si è disconnesso');
         }
       }
     }
@@ -6578,7 +6605,9 @@ function listenOnlineUsers() {
         listEl.innerHTML = onlineList.map(u => {
           const adminBadge = u.role === 'admin' ? ' ⭐' : '';
           const isMe = currentUser && u.username === currentUser.username;
-          const chatBtn = isMe ? '' : `<button onclick="event.stopPropagation();openChat('${u.username.replace(/'/g,"\\'")}','${u.fullName.replace(/'/g,"\\'")}')" style="position:relative;background:none;border:none;cursor:pointer;font-size:14px;padding:0 2px;line-height:1;" title="Chatta con ${u.fullName}">💬<span class="chat-unread-dot" id="unread-${fbKey(u.username)}"></span></button>`;
+          const unreadN = (!isMe && _chatUnreadMap[u.username]) ? _chatUnreadMap[u.username] : 0;
+          const unreadCountHtml = unreadN > 0 ? `<span style="background:#ef4444;color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;line-height:16px;text-align:center;border-radius:8px;padding:0 4px;flex-shrink:0;">${unreadN}</span>` : '';
+          const chatBtn = isMe ? '' : `<button onclick="event.stopPropagation();openChat('${u.username.replace(/'/g,"\\'")}','${u.fullName.replace(/'/g,"\\'")}')" style="position:relative;background:none;border:none;cursor:pointer;font-size:14px;padding:0 2px;line-height:1;display:flex;align-items:center;gap:3px;" title="Chatta con ${u.fullName}">💬${unreadCountHtml}</button>`;
           return `<div style="display:flex;align-items:center;gap:6px;padding:3px 0;">
             <span style="width:6px;height:6px;border-radius:50%;background:#22c55e;flex-shrink:0;"></span>
             <span style="flex:1;">${u.fullName}${adminBadge}</span>
@@ -6621,17 +6650,57 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
-// ─── Online Notification Banner ───
-function showOnlineNotifyBanner(text, bgColor) {
-  const banner = document.createElement('div');
-  banner.className = 'online-notify-banner';
-  banner.style.background = bgColor;
-  banner.textContent = text;
-  document.body.appendChild(banner);
+// ─── Discrete Online Toast ───
+function showOnlineToast(text) {
+  const indicator = document.getElementById('online-indicator');
+  if (!indicator) return;
+  // Remove existing toasts
+  indicator.querySelectorAll('.online-toast').forEach(t => t.remove());
+  const toast = document.createElement('div');
+  toast.className = 'online-toast';
+  toast.textContent = text;
+  indicator.appendChild(toast);
   setTimeout(() => {
-    banner.classList.add('dismiss');
-    banner.addEventListener('animationend', () => banner.remove());
-  }, 4000);
+    toast.classList.add('dismiss');
+    toast.addEventListener('animationend', () => toast.remove());
+  }, 3000);
+}
+
+// ─── Chat Message Bubble near online indicator ───
+let _msgBubbleTimeout = null;
+function showMsgBubble(senderName, senderUsername, text) {
+  const indicator = document.getElementById('online-indicator');
+  if (!indicator) return;
+  // Remove existing bubbles
+  indicator.querySelectorAll('.msg-bubble').forEach(b => b.remove());
+  if (_msgBubbleTimeout) clearTimeout(_msgBubbleTimeout);
+
+  const bubble = document.createElement('div');
+  bubble.className = 'msg-bubble';
+  bubble.innerHTML = '💬 <strong>' + _escChatHtml(senderName) + '</strong>: ' + _escChatHtml(text.substring(0, 40));
+  bubble.onclick = (e) => {
+    e.stopPropagation();
+    bubble.remove();
+    openChat(senderUsername, senderName);
+  };
+  indicator.appendChild(bubble);
+  _msgBubbleTimeout = setTimeout(() => {
+    bubble.classList.add('dismiss');
+    bubble.addEventListener('animationend', () => bubble.remove());
+  }, 5000);
+}
+
+// ─── Update unread badge on online indicator ───
+function _updateOnlineUnreadBadge() {
+  const total = Object.values(_chatUnreadMap).reduce((s, n) => s + n, 0);
+  const badge = document.getElementById('online-unread-badge');
+  if (!badge) return;
+  if (total > 0) {
+    badge.textContent = total > 99 ? '99+' : total;
+    badge.style.display = 'block';
+  } else {
+    badge.style.display = 'none';
+  }
 }
 
 // ─── Chat System ───
@@ -6660,6 +6729,11 @@ function openChat(username, fullName) {
   _chatUnreadMap[username] = 0;
   const dot = document.getElementById('unread-' + fbKey(username));
   if (dot) dot.style.display = 'none';
+  // Update global unread badge
+  _updateOnlineUnreadBadge();
+  // Remove any message bubble
+  const indicator = document.getElementById('online-indicator');
+  if (indicator) indicator.querySelectorAll('.msg-bubble').forEach(b => b.remove());
 
   // Remove old listener
   if (_chatListener) {
@@ -6745,8 +6819,10 @@ function _listenChatRoomForNotifications(roomId) {
       _chatUnreadMap[msg.sender] = (_chatUnreadMap[msg.sender] || 0) + 1;
       const dot = document.getElementById('unread-' + fbKey(msg.sender));
       if (dot) dot.style.display = 'block';
-      // Also show a banner
-      showOnlineNotifyBanner('💬 ' + (msg.senderName || msg.sender) + ': ' + msg.text.substring(0, 50), '#3b82f6');
+      // Update global unread badge on online indicator
+      _updateOnlineUnreadBadge();
+      // Show discrete message bubble near online indicator
+      showMsgBubble(msg.senderName || msg.sender, msg.sender, msg.text);
     }
   });
 }
