@@ -6972,7 +6972,7 @@ function adminOpenChatMonitor() {
     select.innerHTML = '<option value="">\u2014 Seleziona conversazione \u2014</option>';
     Object.keys(rooms).forEach(roomId => {
       // Decode room name from key (format: user1_vs_user2)
-      const decoded = roomId.replace(/_dot_/g, '.').replace(/_at_/g, '@').replace(/__/g, ' ');
+      const decoded = roomId.replace(/%2E/g, '.').replace(/_dot_/g, '.').replace(/_at_/g, '@').replace(/__/g, ' ');
       const parts = decoded.split('_vs_');
       const label = parts.length === 2 ? parts[0] + ' \u2194 ' + parts[1] : decoded;
       const opt = document.createElement('option');
@@ -7269,23 +7269,22 @@ function _startListeningCursors() {
       }
       
       // Map remote cursor position to local viewport
-      // The remote user's position is relative to their viewport
-      // We scale it proportionally if viewport sizes differ
-      let posX = data.x;
-      let posY = data.y;
+      // Convert to absolute page coordinates, then to admin's viewport
+      const absX = data.x + (data.scrollX || 0);
+      const absY = data.y + (data.scrollY || 0);
+      const posX = absX - window.scrollX;
+      const posY = absY - window.scrollY;
       
-      // Adjust for scroll difference
-      const scrollDiffX = data.scrollX - window.scrollX;
-      const scrollDiffY = data.scrollY - window.scrollY;
-      posX = posX - scrollDiffX;
-      posY = posY - scrollDiffY;
-      
-      // Clamp to viewport bounds with some margin
-      posX = Math.max(-10, Math.min(window.innerWidth + 10, posX));
-      posY = Math.max(-10, Math.min(window.innerHeight + 10, posY));
-      
-      el.style.left = posX + 'px';
-      el.style.top = posY + 'px';
+      // Hide cursor if outside admin's viewport (user scrolled elsewhere)
+      const margin = 30;
+      if (posX < -margin || posX > window.innerWidth + margin ||
+          posY < -margin || posY > window.innerHeight + margin) {
+        el.style.display = 'none';
+      } else {
+        el.style.display = '';
+        el.style.left = posX + 'px';
+        el.style.top = posY + 'px';
+      }
     });
   });
 }
