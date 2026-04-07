@@ -904,6 +904,18 @@
     background: #ef4444; border-radius: 50%; border: 2px solid var(--surface);
     display: none;
   }
+  .chat-minimized-bar {
+    position: fixed; bottom: 0; right: 20px; display: flex; gap: 4px; z-index: 499;
+  }
+  .chat-min-pill {
+    background: var(--accent); color: #fff; padding: 6px 14px; border-radius: 10px 10px 0 0;
+    font-size: 11px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px;
+    box-shadow: 0 -2px 8px rgba(0,0,0,0.15); max-width: 180px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    transition: background 0.15s;
+  }
+  .chat-min-pill:hover { background: var(--accent-hover, #2563eb); }
+  .chat-min-pill .min-close { font-size: 13px; opacity: 0.7; margin-left: 4px; }
+  .chat-min-pill .min-close:hover { opacity: 1; }
 </style>
 <!-- Google Identity Services -->
 <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -1213,6 +1225,16 @@
       </div>
     </div>
 
+    <!-- GESTIONE CHAT (admin-only) -->
+    <div class="card admin-only">
+      <div class="card-title">💬 Gestione Chat</div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:12px;">Svuota tutte le conversazioni tra utenti. I messaggi verranno eliminati permanentemente.</p>
+      <button class="btn btn-sm" style="background:#ef4444;color:#fff;border:none;" onclick="adminClearAllChats()">🗑️ Svuota tutte le chat</button>
+      <div style="margin-top:16px;">
+        <button class="btn btn-primary btn-sm" onclick="adminOpenChatMonitor()">📋 Monitora Messaggi</button>
+      </div>
+    </div>
+
     <!-- CONFLITTI MEDICI (admin-only) -->
     <div class="card admin-only" id="conflicts-card">
       <div class="card-title">⚠️ Conflitti Turno Medici</div>
@@ -1481,6 +1503,7 @@ function onLoginSuccess() {
   initPresence();
   listenOnlineUsers();
   _listenAllChatNotifications();
+  setTimeout(_autoClearMondayChat, 3000);
 }
 
 function doLogout() {
@@ -6746,15 +6769,25 @@ function openChat(username, fullName) {
   _chatListener.on('value', snap => {
     const msgs = snap.val() || {};
     const container = document.getElementById('chat-messages');
-    container.innerHTML = Object.values(msgs).sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0)).map(m => {
+    const sorted = Object.values(msgs).sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+    let html = '';
+    let lastDateStr = '';
+    sorted.forEach(m => {
       const isSelf = m.sender === currentUser.username;
-      const timeStr = m.timestamp ? new Date(m.timestamp).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : '';
-      return `<div class="chat-msg ${isSelf ? 'chat-msg-self' : 'chat-msg-other'}">
+      const msgDate = m.timestamp ? new Date(m.timestamp) : null;
+      const dateStr = msgDate ? msgDate.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : '';
+      const timeStr = msgDate ? msgDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : '';
+      if (dateStr && dateStr !== lastDateStr) {
+        html += `<div style="text-align:center;margin:10px 0 6px;"><span style="background:var(--surface2,#e5e7eb);color:var(--muted);font-size:10px;padding:3px 10px;border-radius:10px;">${dateStr}</span></div>`;
+        lastDateStr = dateStr;
+      }
+      html += `<div class="chat-msg ${isSelf ? 'chat-msg-self' : 'chat-msg-other'}">
         ${!isSelf ? '<div style="font-size:10px;font-weight:600;opacity:0.7;margin-bottom:2px;">' + (m.senderName || m.sender) + '</div>' : ''}
         <div>${_escChatHtml(m.text)}</div>
         <div class="chat-msg-time">${timeStr}</div>
       </div>`;
-    }).join('');
+    });
+    container.innerHTML = html;
     container.scrollTop = container.scrollHeight;
   });
 
@@ -6769,6 +6802,11 @@ function closeChat() {
     _chatListener = null;
   }
   _chatRoomId = null;
+  // Also remove from minimized
+  if (_chatPartnerUsername) {
+    delete _minimizedChats[_chatPartnerUsername];
+    _renderMinimizedBar();
+  }
   _chatPartnerUsername = null;
 }
 
@@ -6789,6 +6827,115 @@ function _escChatHtml(str) {
   const d = document.createElement('div');
   d.textContent = str;
   return d.innerHTML;
+}
+
+let _minimizedChats = {}; // { username: fullName }
+
+function minimizeChat() {
+  if (!_chatPartnerUsername) return;
+  _minimizedChats[_chatPartnerUsername] = document.getElementById('chat-panel-title').textContent.replace('\u{1f4ac} ', '');
+  document.getElementById('chat-panel').classList.remove('open');
+  // Keep listener alive - don't detach
+  _renderMinimizedBar();
+}
+
+function restoreChat(username) {
+  const fullName = _minimizedChats[username];
+  delete _minimizedChats[username];
+  _renderMinimizedBar();
+  if (fullName) {
+    openChat(username, fullName);
+  }
+}
+
+function closeMinimizedChat(username, evt) {
+  evt.stopPropagation();
+  delete _minimizedChats[username];
+  _renderMinimizedBar();
+}
+
+function _renderMinimizedBar() {
+  const bar = document.getElementById('chat-minimized-bar');
+  if (!bar) return;
+  const entries = Object.entries(_minimizedChats);
+  if (entries.length === 0) { bar.innerHTML = ''; return; }
+  bar.innerHTML = entries.map(([uname, name]) => {
+    const unread = _chatUnreadMap[uname] || 0;
+    const badge = unread > 0 ? `<span style="background:#ef4444;color:#fff;font-size:9px;font-weight:700;min-width:14px;height:14px;line-height:14px;text-align:center;border-radius:7px;padding:0 3px;">${unread}</span>` : '';
+    return `<div class="chat-min-pill" onclick="restoreChat('${uname.replace(/'/g,"\\'")}')">
+      \u{1f4ac} ${_escChatHtml(name)} ${badge}
+      <span class="min-close" onclick="closeMinimizedChat('${uname.replace(/'/g,"\\'")}', event)">\u2715</span>
+    </div>`;
+  }).join('');
+}
+
+function adminClearAllChats() {
+  if (!currentUser || currentUser.role !== 'admin') return;
+  if (!confirm('\u26a0\ufe0f Sei sicuro di voler eliminare TUTTE le chat? Questa azione \u00e8 irreversibile.')) return;
+  firebase.database().ref('cardio_chat').remove().then(() => {
+    showToast('Tutte le chat sono state svuotate', 'success');
+  }).catch(err => {
+    showToast('Errore: ' + err.message, 'error');
+  });
+}
+
+function adminOpenChatMonitor() {
+  if (!currentUser || currentUser.role !== 'admin') return;
+  const overlay = document.getElementById('chat-monitor-overlay');
+  overlay.style.display = 'flex';
+  // Load all chat rooms
+  firebase.database().ref('cardio_chat').once('value', snap => {
+    const rooms = snap.val() || {};
+    const select = document.getElementById('chat-monitor-room');
+    select.innerHTML = '<option value="">\u2014 Seleziona conversazione \u2014</option>';
+    Object.keys(rooms).forEach(roomId => {
+      // Decode room name from key (format: user1_vs_user2)
+      const decoded = roomId.replace(/_dot_/g, '.').replace(/_at_/g, '@').replace(/__/g, ' ');
+      const parts = decoded.split('_vs_');
+      const label = parts.length === 2 ? parts[0] + ' \u2194 ' + parts[1] : decoded;
+      const opt = document.createElement('option');
+      opt.value = roomId;
+      opt.textContent = label;
+      select.appendChild(opt);
+    });
+  });
+}
+
+function loadChatMonitorRoom() {
+  const roomId = document.getElementById('chat-monitor-room').value;
+  const container = document.getElementById('chat-monitor-messages');
+  if (!roomId) {
+    container.innerHTML = '<div style="color:var(--muted);font-size:12px;text-align:center;padding:40px;">Seleziona una conversazione per visualizzare i messaggi</div>';
+    return;
+  }
+  firebase.database().ref('cardio_chat/' + roomId + '/messages').orderByChild('timestamp').once('value', snap => {
+    const msgs = snap.val() || {};
+    const sorted = Object.values(msgs).sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+    if (sorted.length === 0) {
+      container.innerHTML = '<div style="color:var(--muted);font-size:12px;text-align:center;padding:40px;">Nessun messaggio in questa conversazione</div>';
+      return;
+    }
+    let html = '';
+    let lastDateStr = '';
+    sorted.forEach(m => {
+      const msgDate = m.timestamp ? new Date(m.timestamp) : null;
+      const dateStr = msgDate ? msgDate.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : '';
+      const timeStr = msgDate ? msgDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : '';
+      if (dateStr && dateStr !== lastDateStr) {
+        html += `<div style="text-align:center;margin:10px 0 6px;"><span style="background:var(--surface2,#e5e7eb);color:var(--muted);font-size:10px;padding:3px 10px;border-radius:10px;">${dateStr}</span></div>`;
+        lastDateStr = dateStr;
+      }
+      html += `<div style="padding:8px 12px;background:var(--surface2,#f3f4f6);border-radius:10px;font-size:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+          <span style="font-weight:700;font-size:11px;color:var(--accent);">${_escChatHtml(m.senderName || m.sender)}</span>
+          <span style="font-size:9px;color:var(--muted);">${timeStr}</span>
+        </div>
+        <div>${_escChatHtml(m.text)}</div>
+      </div>`;
+    });
+    container.innerHTML = html;
+    container.scrollTop = container.scrollHeight;
+  });
 }
 
 // Listen for incoming chat messages (for unread notifications)
@@ -6920,17 +7067,52 @@ db.ref('cardio_rules').on('value', snap => {
   renderRulesList();
 });
 
+function _autoClearMondayChat() {
+  // Clear chat messages every Monday
+  const now = new Date();
+  if (now.getDay() !== 1) return; // Not Monday
+  const mondayKey = now.toISOString().slice(0, 10); // YYYY-MM-DD
+  const clearFlag = localStorage.getItem('chat_cleared_' + mondayKey);
+  if (clearFlag) return; // Already cleared today
+  // Only admin triggers the clear to avoid race conditions
+  if (!currentUser || currentUser.role !== 'admin') return;
+  firebase.database().ref('cardio_chat').remove().then(() => {
+    localStorage.setItem('chat_cleared_' + mondayKey, '1');
+    console.log('Chat auto-cleared on Monday', mondayKey);
+  });
+}
+
 init();
 </script>
 <div id="chat-panel" class="chat-panel">
   <div class="chat-panel-header">
     <span id="chat-panel-title">Chat</span>
-    <button onclick="closeChat()" title="Chiudi">✕</button>
+    <div style="display:flex;gap:6px;align-items:center;">
+      <button onclick="minimizeChat()" title="Riduci a icona" style="font-size:16px;">−</button>
+      <button onclick="closeChat()" title="Chiudi">✕</button>
+    </div>
   </div>
   <div id="chat-messages" class="chat-messages"></div>
   <div class="chat-input-area">
     <input id="chat-input" type="text" placeholder="Scrivi un messaggio..." autocomplete="off" onkeydown="if(event.key==='Enter')sendChatMessage()">
     <button onclick="sendChatMessage()" title="Invia">➤</button>
+  </div>
+</div>
+<div id="chat-minimized-bar" class="chat-minimized-bar"></div>
+<div id="chat-monitor-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:600;justify-content:center;align-items:center;" onclick="if(event.target===this)this.style.display='none'">
+  <div style="background:var(--surface);border-radius:14px;width:90%;max-width:700px;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,0.3);">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);">
+      <span style="font-weight:700;font-size:15px;">📋 Monitor Chat Utenti</span>
+      <button onclick="document.getElementById('chat-monitor-overlay').style.display='none'" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text);">✕</button>
+    </div>
+    <div style="padding:12px 20px;border-bottom:1px solid var(--border);">
+      <select id="chat-monitor-room" onchange="loadChatMonitorRoom()" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:12px;">
+        <option value="">— Seleziona conversazione —</option>
+      </select>
+    </div>
+    <div id="chat-monitor-messages" style="flex:1;overflow-y:auto;padding:16px 20px;display:flex;flex-direction:column;gap:6px;min-height:300px;">
+      <div style="color:var(--muted);font-size:12px;text-align:center;padding:40px;">Seleziona una conversazione per visualizzare i messaggi</div>
+    </div>
   </div>
 </div>
 </body>
