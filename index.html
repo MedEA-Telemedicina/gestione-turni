@@ -917,26 +917,28 @@
   .chat-min-pill .min-close { font-size: 13px; opacity: 0.7; margin-left: 4px; }
   .chat-min-pill .min-close:hover { opacity: 1; }
 
-  /* Remote cursor indicators (admin only) */
+  /* Remote cursor indicators (admin only) — subtle */
   .remote-cursor {
     position: fixed; pointer-events: none; z-index: 9998;
-    transition: left 0.15s ease-out, top 0.15s ease-out;
+    transition: left 0.12s ease-out, top 0.12s ease-out, opacity 0.3s;
+    opacity: 0.55;
   }
+  .remote-cursor:hover { opacity: 0.9; }
   .remote-cursor-arrow {
     width: 0; height: 0;
-    border-left: 6px solid transparent;
-    border-right: 6px solid transparent;
-    border-bottom: 10px solid var(--cursor-color, #3b82f6);
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-bottom: 7px solid var(--cursor-color, #3b82f6);
     transform: rotate(-30deg);
     transform-origin: bottom left;
   }
   .remote-cursor-label {
-    margin-left: 10px; margin-top: -2px;
+    margin-left: 8px; margin-top: -2px;
     background: var(--cursor-color, #3b82f6); color: #fff;
-    font-size: 10px; font-weight: 600; padding: 2px 8px;
-    border-radius: 6px; white-space: nowrap;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-    opacity: 0.85;
+    font-size: 8px; font-weight: 600; padding: 1px 5px;
+    border-radius: 4px; white-space: nowrap;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+    letter-spacing: 0.2px;
   }
 
 </style>
@@ -1156,6 +1158,9 @@
   <div class="week-bar" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
     <p style="color:var(--muted);font-size:12px;margin:0;">Messaggi da inviare ai cardiologi con turni confermati (C) per la settimana selezionata.</p>
     <button id="reset-wa-btn" class="admin-only" onclick="resetWhatsAppSent()" style="display:none;padding:6px 14px;font-size:11px;font-weight:700;border-radius:8px;border:1.5px solid #f59e0b;background:#fffbeb;color:#b45309;cursor:pointer;transition:all .2s;white-space:nowrap;" onmouseover="this.style.background='#fef3c7'" onmouseout="this.style.background='#fffbeb'" title="Resetta lo stato 'Inviato' di tutti i WhatsApp per questa settimana">🔄 Reset WhatsApp</button>
+  </div>
+  <div style="margin:8px 0;">
+    <input type="text" id="conf-search" placeholder="🔍 Cerca medico..." oninput="filterConferma()" style="width:100%;max-width:320px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:12px;background:var(--surface2);color:var(--text);">
   </div>
   <div class="conf-list" id="conf-list">
     <div class="empty-state">Nessun turno confermato questa settimana.</div>
@@ -1923,7 +1928,9 @@ function showWarningBanner(messages) {
   banner._timer = setTimeout(() => { banner.style.transform = 'translateY(-100%)'; banner.style.opacity = '0'; }, 6000);
 }
 
+let _currentActiveTab = 'disponibilita';
 function switchTab(id) {
+  _currentActiveTab = id;
   // Stacca il listener real-time dello storico quando si esce dal tab
   if (id !== 'storico' && _auditListener) {
     firebase.database().ref('cardio_audit').off('value', _auditListener);
@@ -4475,6 +4482,8 @@ function renderConferma() {
     // ── Holter: tutti e solo confermati ──
     const hw = state.holterWeeks[currentWeek];
     const hdoc = hw && hw[doc];
+    // Skip if holter doctor is on holter ferie
+    if (hdoc && hdoc.ferie && !dd) return; // pure holter doctor on ferie
     const allHolterSlots = hdoc && hdoc.slots
       ? Object.entries(hdoc.slots).filter(([k,v]) => v && v !== '')
       : [];
@@ -4574,6 +4583,14 @@ function renderConferma() {
   list.innerHTML = html;
   // Controlla Firebase per lo stato "inviato" e aggiorna i pulsanti
   restoreWaSentState();
+}
+
+function filterConferma() {
+  const q = (document.getElementById('conf-search')?.value || '').trim().toLowerCase();
+  document.querySelectorAll('#conf-list .conf-item').forEach(el => {
+    const name = (el.querySelector('.name')?.textContent || '').toLowerCase();
+    el.style.display = (!q || name.includes(q)) ? '' : 'none';
+  });
 }
 
 function restoreWaSentState() {
@@ -7197,6 +7214,7 @@ function _onMouseMoveBroadcast(e) {
     vpW: window.innerWidth,
     vpH: window.innerHeight,
     fullName: currentUser.fullName || currentUser.username,
+    activeTab: _currentActiveTab || 'disponibilita',
     timestamp: firebase.database.ServerValue.TIMESTAMP
   });
 }
@@ -7220,6 +7238,12 @@ function _startListeningCursors() {
       // Skip stale cursors (older than 30s)
       if (data.timestamp && now - data.timestamp > 30000) {
         firebase.database().ref('cardio_cursors/' + uid).remove();
+        return;
+      }
+      // Only show cursors of users in the Disponibilità section
+      if (data.activeTab && data.activeTab !== 'disponibilita') {
+        const existing = container.querySelector('.remote-cursor[data-uid="' + uid + '"]');
+        if (existing) existing.remove();
         return;
       }
       
