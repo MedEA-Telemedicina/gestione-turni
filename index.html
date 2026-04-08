@@ -1129,6 +1129,53 @@
     color: var(--muted);
     font-style: italic;
   }
+
+  /* ---- SPLASH / LOADING SCREEN ---- */
+  #splash-screen {
+    position: fixed;
+    inset: 0;
+    z-index: 99999;
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    transition: opacity 0.45s ease, visibility 0.45s ease;
+  }
+  #splash-screen.hidden {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+  #splash-screen img {
+    width: 280px;
+    max-width: 80%;
+    height: auto;
+    animation: splash-pulse 1.8s ease-in-out infinite;
+  }
+  #splash-screen .splash-text {
+    font-family: var(--font-display);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: 0.5px;
+  }
+  #splash-screen .splash-dots::after {
+    content: '';
+    animation: splash-dots 1.4s steps(4, end) infinite;
+  }
+  @keyframes splash-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.6; transform: scale(0.96); }
+  }
+  @keyframes splash-dots {
+    0%   { content: ''; }
+    25%  { content: '.'; }
+    50%  { content: '..'; }
+    75%  { content: '...'; }
+    100% { content: ''; }
+  }
 </style>
 <!-- Google Identity Services -->
 <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -1137,6 +1184,12 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 </head>
 <body>
+
+<!-- Splash / Loading screen — hides flash of unstyled content before login -->
+<div id="splash-screen">
+  <img src="data:image/png;base64,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" alt="Medea Logo" />
+  <div class="splash-text">Caricamento<span class="splash-dots"></span></div>
+</div>
 
 <div id="viewonly-overlay"></div>
 <div id="viewonly-bar">👁️ Modalità solo visualizzazione — non puoi apportare modifiche</div>
@@ -7116,6 +7169,13 @@ function init() {
     } catch(e) {
     }
   });
+
+  // ── Dismiss splash screen ──
+  const _splash = document.getElementById('splash-screen');
+  if (_splash) {
+    _splash.classList.add('hidden');
+    _splash.addEventListener('transitionend', () => _splash.remove(), { once: true });
+  }
 }
 
 // Real-time conflict sync
