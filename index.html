@@ -1059,6 +1059,8 @@
   [data-theme="dark"] .ai-mincpd-tag { color: #6ee7b7; background: linear-gradient(135deg, rgba(5,150,105,.2), rgba(5,150,105,.1)); }
   .ai-tag.mincpd { background: rgba(5,150,105,.1); border-color: rgba(5,150,105,.25); }
   [data-theme="dark"] .ai-tag.mincpd { color: #6ee7b7; }
+  .ai-tag.rule { background: rgba(220,38,38,.1); border-color: rgba(220,38,38,.25); }
+  [data-theme="dark"] .ai-tag.rule { color: #fca5a5; }
   .ai-gen-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 14px 24px; font-size: 15px; font-weight: 700; background: linear-gradient(135deg, #6366f1, #2563eb); color: #fff; border: none; border-radius: 12px; cursor: pointer; transition: all .2s; box-shadow: 0 4px 14px rgba(99,102,241,.3); }
   .ai-gen-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(99,102,241,.4); }
   .ai-gen-btn:active { transform: translateY(0); }
@@ -1555,6 +1557,27 @@
         <button class="btn btn-warning btn-sm" onclick="addCustomRule()">+ Aggiungi Regola</button>
       </div>
       <div id="rules-list" style="display:flex;flex-direction:column;gap:0;max-height:300px;overflow-y:auto;"></div>
+
+    <!-- MEDICI DA CONFERMARE SEMPRE (AI rule) -->
+    <div class="card admin-only" id="always-confirm-card">
+      <div class="card-title">👑 Medici da Confermare Sempre</div>
+      <p style="font-size:11px;color:var(--muted);margin-bottom:12px;">Medici che l'AI assegnerà automaticamente a <strong>tutti</strong> i turni per cui si sono resi disponibili, ogni settimana. Questa regola viene rispettata durante la generazione AI e segnalata come avviso.</p>
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center;">
+        <select id="settings-always-select" class="styled" style="flex:1;min-width:140px;"></select>
+        <button class="btn btn-sm" style="background:#7c3aed;color:#fff;border:none;font-weight:700;" onclick="addAlwaysConfirmFromSettings()">+ Aggiungi</button>
+      </div>
+      <div id="settings-always-list" style="display:flex;flex-direction:column;gap:0;max-height:300px;overflow-y:auto;"></div>
+    </div>
+
+    <!-- MIN 1 CONFERMA AL GIORNO (AI rule) -->
+    <div class="card admin-only" id="mincpd-settings-card">
+      <div class="card-title">📅 Min. 1 Conferma al Giorno</div>
+      <p style="font-size:11px;color:var(--muted);margin-bottom:12px;">Medici per cui, se disponibili in un determinato giorno, l'AI deve confermare <strong>almeno un turno</strong> in quel giorno. Mai un giorno senza conferma se c'è disponibilità.</p>
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center;">
+        <select id="settings-mincpd-select" class="styled" style="flex:1;min-width:140px;"></select>
+        <button class="btn btn-sm" style="background:#059669;color:#fff;border:none;font-weight:700;" onclick="addMinCpdFromSettings()">+ Aggiungi</button>
+      </div>
+      <div id="settings-mincpd-list" style="display:flex;flex-direction:column;gap:0;max-height:300px;overflow-y:auto;"></div>
     </div>
 
   </div>
@@ -1564,7 +1587,7 @@
 <div class="tab-content admin-only" id="tab-turniai">
   <div style="margin-bottom:16px;">
     <h3 style="margin:0 0 4px;font-size:16px;font-weight:700;color:#6366f1;">🤖 Generazione Bozza Turni AI</h3>
-    <p style="color:var(--muted);font-size:12px;margin:0;">Genera automaticamente una bozza dei turni basata su disponibilità, settimana precedente e regole configurate.<br><span style="font-size:11px;">👑 = sempre confermato · 🎯 = unica disponibilità (auto-inserito) · 📅 = min 1 conf/giorno</span></p>
+    <p style="color:var(--muted);font-size:12px;margin:0;">Genera automaticamente una bozza dei turni basata su disponibilità, settimana precedente e regole configurate.<br><span style="font-size:11px;">👑 = sempre confermato · 🎯 = unica disponibilità (auto-inserito) · 📅 = min 1 conf/giorno &nbsp;|&nbsp; ⚙️ Configura queste regole in <strong>Impostazioni</strong></span></p>
   </div>
   <div id="ai-turni-content"></div>
 </div>
@@ -2271,7 +2294,7 @@ function switchTab(id) {
   if (id === 'calendar') renderCalendar();
   if (id === 'whatsapp') renderWaHistory();
   if (id === 'storico') loadAuditLog();
-  if (id === 'impostazioni') { renderSettings(); loadUsersList(); loadConflicts(); populateConflictSelects(); loadCustomRules(); populateRuleSelects(); }
+  if (id === 'impostazioni') { renderSettings(); loadUsersList(); loadConflicts(); populateConflictSelects(); loadCustomRules(); populateRuleSelects(); loadAlwaysConfirmSettings(); loadMinCpdSettings(); }
   if (id === 'turniai') renderTurniAI();
 }
 
@@ -6127,6 +6150,117 @@ function removeCustomRule(idx) {
     logAudit('Rimossa regola turno per: ' + rule.doctor);
   });
 }
+// =============================================
+// AI RULES IN IMPOSTAZIONI
+// =============================================
+function loadAlwaysConfirmSettings() {
+  _aiAlwaysLoaded = false; // force reload to stay in sync
+  _aiLoadAlwaysConfirm(function() {
+    renderAlwaysConfirmSettingsList();
+    populateAlwaysConfirmSettingsSelect();
+  });
+}
+
+function loadMinCpdSettings() {
+  _aiMinConfPerDayLoaded = false; // force reload to stay in sync
+  _aiLoadMinConfPerDay(function() {
+    renderMinCpdSettingsList();
+    populateMincpdSettingsSelect();
+  });
+}
+
+function renderAlwaysConfirmSettingsList() {
+  const el = document.getElementById('settings-always-list');
+  if (!el) return;
+  const arr = Array.from(_aiAlwaysConfirm).sort((a,b) => a.localeCompare(b));
+  if (arr.length === 0) {
+    el.innerHTML = '<div style="text-align:center;padding:16px;color:var(--muted);font-size:12px;">Nessun medico selezionato</div>';
+    return;
+  }
+  el.innerHTML = arr.map(doc => `
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid var(--border);font-size:12px;">
+      <span style="font-weight:700;color:#7c3aed;">👑</span>
+      <span style="flex:1;font-weight:600;">${doc}</span>
+      <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 6px;color:var(--danger);" onclick="removeAlwaysConfirmFromSettings('${doc.replace(/'/g, "\'").replace(/"/g, '&quot;')}')">✕</button>
+    </div>
+  `).join('');
+}
+
+function renderMinCpdSettingsList() {
+  const el = document.getElementById('settings-mincpd-list');
+  if (!el) return;
+  const arr = Array.from(_aiMinConfPerDay).sort((a,b) => a.localeCompare(b));
+  if (arr.length === 0) {
+    el.innerHTML = '<div style="text-align:center;padding:16px;color:var(--muted);font-size:12px;">Nessun medico selezionato</div>';
+    return;
+  }
+  el.innerHTML = arr.map(doc => `
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid var(--border);font-size:12px;">
+      <span style="font-weight:700;color:#059669;">📅</span>
+      <span style="flex:1;font-weight:600;">${doc}</span>
+      <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 6px;color:var(--danger);" onclick="removeMinCpdFromSettings('${doc.replace(/'/g, "\'").replace(/"/g, '&quot;')}')">✕</button>
+    </div>
+  `).join('');
+}
+
+function populateAlwaysConfirmSettingsSelect() {
+  const sel = document.getElementById('settings-always-select');
+  if (!sel) return;
+  const docs = (state.doctors || []).filter(d => !_aiAlwaysConfirm.has(d));
+  sel.innerHTML = '<option value="">Seleziona medico...</option>' + docs.map(d => '<option value="' + d.replace(/"/g,'&quot;') + '">' + d + '</option>').join('');
+}
+
+function populateMincpdSettingsSelect() {
+  const sel = document.getElementById('settings-mincpd-select');
+  if (!sel) return;
+  const docs = (state.doctors || []).filter(d => !_aiMinConfPerDay.has(d));
+  sel.innerHTML = '<option value="">Seleziona medico...</option>' + docs.map(d => '<option value="' + d.replace(/"/g,'&quot;') + '">' + d + '</option>').join('');
+}
+
+function addAlwaysConfirmFromSettings() {
+  const sel = document.getElementById('settings-always-select');
+  if (!sel) return;
+  const doc = sel.value;
+  if (!doc) { showToast('⚠️ Seleziona un medico', 'warning'); return; }
+  _aiAlwaysConfirm.add(doc);
+  _aiSaveAlwaysConfirm();
+  showToast('👑 ' + doc + ' aggiunto ai confermati sempre');
+  renderAlwaysConfirmSettingsList();
+  populateAlwaysConfirmSettingsSelect();
+  logAudit('AI regola: aggiunto sempre-conferma per ' + doc);
+}
+
+function removeAlwaysConfirmFromSettings(doc) {
+  _aiAlwaysConfirm.delete(doc);
+  _aiSaveAlwaysConfirm();
+  showToast('✕ ' + doc + ' rimosso dai confermati sempre');
+  renderAlwaysConfirmSettingsList();
+  populateAlwaysConfirmSettingsSelect();
+  logAudit('AI regola: rimosso sempre-conferma per ' + doc);
+}
+
+function addMinCpdFromSettings() {
+  const sel = document.getElementById('settings-mincpd-select');
+  if (!sel) return;
+  const doc = sel.value;
+  if (!doc) { showToast('⚠️ Seleziona un medico', 'warning'); return; }
+  _aiMinConfPerDay.add(doc);
+  _aiSaveMinConfPerDay();
+  showToast('📅 ' + doc + ' aggiunto a min 1 conferma/giorno');
+  renderMinCpdSettingsList();
+  populateMincpdSettingsSelect();
+  logAudit('AI regola: aggiunto min-conf-giorno per ' + doc);
+}
+
+function removeMinCpdFromSettings(doc) {
+  _aiMinConfPerDay.delete(doc);
+  _aiSaveMinConfPerDay();
+  showToast('✕ ' + doc + ' rimosso da min 1 conferma/giorno');
+  renderMinCpdSettingsList();
+  populateMincpdSettingsSelect();
+  logAudit('AI regola: rimosso min-conf-giorno per ' + doc);
+}
+
 
 // Check custom rules for a doctor — returns array of warning messages
 function checkCustomRulesForDoc(doc) {
@@ -7914,72 +8048,6 @@ function _aiRenderInner() {
 
   var h = '<div class="ai-config">';
 
-  // ── Card 1: Always Confirm (dropdown + tags) ──
-  h += '<div class="ai-card">';
-  h += '<h4 style="color:#7c3aed;">👑 Medici da Confermare Sempre</h4>';
-  h += '<p style="font-size:11px;color:var(--muted);margin-bottom:8px;">Seleziona dal menù i medici da assegnare automaticamente a <strong>tutti</strong> i turni per cui si sono resi disponibili.</p>';
-  if (availDocs.length === 0) {
-    h += '<p style="color:var(--muted);font-size:12px;">Nessun medico con disponibilità questa settimana.</p>';
-  } else {
-    // Selected tags (dynamic container)
-    h += '<div class="ai-selected-tags" id="ai-always-tags">';
-    var hasTags = false;
-    _aiAlwaysConfirm.forEach(function(doc) {
-      if (availDocs.includes(doc)) {
-        hasTags = true;
-        var safeDoc = doc.replace(/'/g, "\\'");
-        h += '<span class="ai-always-tag" data-doc="' + doc.replace(/"/g, '&quot;') + '">👑 ' + doc + ' <span class="ai-tag-remove" onclick="_aiRemoveAlwaysDoc(\'' + safeDoc + '\')" title="Rimuovi">✕</span></span>';
-      }
-    });
-    if (!hasTags) h += '<span class="ai-no-tags">Nessun medico selezionato</span>';
-    h += '</div>';
-    // Dropdown + button to add
-    var notSelected = availDocs.filter(function(d) { return !_aiAlwaysConfirm.has(d); });
-    h += '<div style="display:flex;gap:8px;align-items:center;margin-top:8px;max-width:400px;">';
-    h += '<select class="ai-select-dropdown" id="ai-always-select" style="flex:1;">';
-    h += '<option value="">Seleziona medico...</option>';
-    notSelected.forEach(function(doc) {
-      h += '<option value="' + doc.replace(/"/g, '&quot;') + '">' + doc + '</option>';
-    });
-    h += '</select>';
-    h += '<button class="btn btn-primary btn-sm" onclick="_aiAddFromDropdown()" style="padding:8px 16px;font-size:12px;font-weight:700;white-space:nowrap;">+ Aggiungi</button>';
-    h += '</div>';
-    // Store availDocs for dynamic use
-    window._aiCurrentAvailDocs = availDocs;
-  }
-  h += '</div>';
-
-  // ── Card 1.5: Min 1 Conferma al Giorno ──
-  h += '<div class="ai-card">';
-  h += '<h4 style="color:#059669;">📅 Min. 1 Conferma al Giorno</h4>';
-  h += '<p style="font-size:11px;color:var(--muted);margin-bottom:8px;">Medici per cui, se hanno disponibilità in un determinato giorno, deve essere confermato <strong>almeno un turno</strong> in quel giorno. Mai un giorno senza conferma.</p>';
-  if (availDocs.length === 0) {
-    h += '<p style="color:var(--muted);font-size:12px;">Nessun medico con disponibilità questa settimana.</p>';
-  } else {
-    h += '<div class="ai-selected-tags" id="ai-mincpd-tags">';
-    var hasMincpdTags = false;
-    _aiMinConfPerDay.forEach(function(doc) {
-      if (availDocs.includes(doc)) {
-        hasMincpdTags = true;
-        var safeDoc = doc.replace(/'/g, "\'");
-        h += '<span class="ai-mincpd-tag" data-doc="' + doc.replace(/"/g, '&quot;') + '">📅 ' + doc + ' <span class="ai-mincpd-tag-remove" onclick="_aiRemoveMinConfDoc(\'' + safeDoc + '\')" title="Rimuovi">✕</span></span>';
-      }
-    });
-    if (!hasMincpdTags) h += '<span class="ai-no-tags">Nessun medico selezionato</span>';
-    h += '</div>';
-    var notSelectedMincpd = availDocs.filter(function(d) { return !_aiMinConfPerDay.has(d); });
-    h += '<div style="display:flex;gap:8px;align-items:center;margin-top:8px;max-width:400px;">';
-    h += '<select class="ai-select-dropdown" id="ai-mincpd-select" style="flex:1;">';
-    h += '<option value="">Seleziona medico...</option>';
-    notSelectedMincpd.forEach(function(doc) {
-      h += '<option value="' + doc.replace(/"/g, '&quot;') + '">' + doc + '</option>';
-    });
-    h += '</select>';
-    h += '<button class="btn btn-success btn-sm" onclick="_aiAddMinConfFromDropdown()" style="padding:8px 16px;font-size:12px;font-weight:700;white-space:nowrap;">+ Aggiungi</button>';
-    h += '</div>';
-  }
-  h += '</div>';
-
   // ── Card 2: Number inputs ──
   h += '<div class="ai-card">';
   h += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px;">';
@@ -8005,6 +8073,50 @@ function _aiRenderInner() {
     h += '</tr>';
   }
   h += '</tbody></table></div></div>';
+
+  // ── Card 3: Rules & Conflicts from Settings (always shown) ──
+  var _activeRules = state.customRules || [];
+  var _activeConflicts = state.doctorConflicts || [];
+  var _activeAlways = Array.from(_aiAlwaysConfirm).sort();
+  var _activeMincpd = Array.from(_aiMinConfPerDay).sort();
+  var _hasAnyRule = _activeRules.length > 0 || _activeConflicts.length > 0 || _activeAlways.length > 0 || _activeMincpd.length > 0;
+  h += '<div class="ai-card" style="border-color:rgba(220,38,38,.25);">';
+  h += '<h4 style="color:#dc2626;">⚙️ Regole da Impostazioni</h4>';
+  h += '<p style="font-size:11px;color:var(--muted);margin-bottom:8px;">Queste regole configurate in Impostazioni vengono rispettate automaticamente dalla generazione AI. Per modificarle vai su <strong>Impostazioni</strong>.</p>';
+  if (!_hasAnyRule) {
+    h += '<div style="text-align:center;padding:12px;color:var(--muted);font-size:12px;">Nessuna regola configurata. Aggiungile dalle Impostazioni.</div>';
+  }
+  if (_activeAlways.length > 0) {
+    h += '<div style="margin-bottom:6px;"><strong style="font-size:12px;">👑 Medici sempre confermati:</strong></div>';
+    _activeAlways.forEach(function(doc) {
+      h += '<div style="font-size:12px;padding:3px 0;border-bottom:1px solid var(--border);">👑 <strong>' + doc + '</strong></div>';
+    });
+  }
+  if (_activeMincpd.length > 0) {
+    h += '<div style="margin-top:' + (_activeAlways.length > 0 ? '12' : '0') + 'px;margin-bottom:6px;"><strong style="font-size:12px;">📅 Min. 1 conferma al giorno:</strong></div>';
+    _activeMincpd.forEach(function(doc) {
+      h += '<div style="font-size:12px;padding:3px 0;border-bottom:1px solid var(--border);">📅 <strong>' + doc + '</strong></div>';
+    });
+  }
+  if (_activeRules.length > 0) {
+    h += '<div style="margin-top:' + (_activeAlways.length > 0 || _activeMincpd.length > 0 ? '12' : '0') + 'px;margin-bottom:6px;"><strong style="font-size:12px;">📋 Regole turni personalizzate:</strong></div>';
+    var _opLabelsAI = { min: 'minimo', max: 'massimo', exact: 'esattamente' };
+    _activeRules.forEach(function(r) {
+      h += '<div style="font-size:12px;padding:3px 0;border-bottom:1px solid var(--border);">';
+      h += '👤 <strong>' + r.doctor + '</strong>: ' + (_opLabelsAI[r.operator] || r.operator) + ' <strong>' + r.value + '</strong> turni';
+      h += '</div>';
+    });
+  }
+  if (_activeConflicts.length > 0) {
+    var _prevSections = _activeAlways.length + _activeMincpd.length + _activeRules.length;
+    h += '<div style="margin-top:' + (_prevSections > 0 ? '12' : '0') + 'px;margin-bottom:6px;"><strong style="font-size:12px;">🚫 Coppie incompatibili:</strong></div>';
+    _activeConflicts.forEach(function(pair) {
+      h += '<div style="font-size:12px;padding:3px 0;border-bottom:1px solid var(--border);">';
+      h += pair[0] + ' ↔ ' + pair[1];
+      h += '</div>';
+    });
+  }
+  h += '</div>';
 
   // ── Generate button ──
   h += '<button class="ai-gen-btn" onclick="generateAIDraft()">🤖 Genera Bozza Turni</button>';
@@ -8057,6 +8169,16 @@ function generateAIDraft() {
   // Track total assignments for fairness balancing
   var assignCount = {};
   (state.doctors || []).forEach(function(d) { assignCount[d] = 0; });
+
+  // ── Custom rules from Impostazioni (min/max/exact turni) ──
+  var _ruleMinMap = {}; // doc -> min shifts required
+  var _ruleMaxMap = {}; // doc -> max shifts allowed
+  (state.customRules || []).forEach(function(r) {
+    var v = parseInt(r.value) || 0;
+    if (r.operator === 'min')   { _ruleMinMap[r.doctor] = v; }
+    if (r.operator === 'max')   { _ruleMaxMap[r.doctor] = v; }
+    if (r.operator === 'exact') { _ruleMinMap[r.doctor] = v; _ruleMaxMap[r.doctor] = v; }
+  });
 
   // Track which doctors are already placed on each day (to prevent double shifts)
   // Exception: doctors in _aiAlwaysConfirm can still receive multiple slots per day
@@ -8160,8 +8282,15 @@ function generateAIDraft() {
       var sortCand = function(list, type) {
         return list.filter(function(d) {
           // Exclude already placed, always-confirm (handled in step 1), and doctors already used today
-          return !allPlacedDocs().includes(d) && !_aiAlwaysConfirm.has(d) && !(usedOnDay[d] && usedOnDay[d].has(di));
+          if (allPlacedDocs().includes(d) || _aiAlwaysConfirm.has(d) || (usedOnDay[d] && usedOnDay[d].has(di))) return false;
+          // Exclude if at or over max assignments (custom rule)
+          if (_ruleMaxMap[d] !== undefined && (assignCount[d] || 0) >= _ruleMaxMap[d]) return false;
+          return true;
         }).sort(function(a, b) {
+          // Priority 0: below min target (custom rule) → strongly prefer
+          var aBelowMin = (_ruleMinMap[a] !== undefined && (assignCount[a] || 0) < _ruleMinMap[a]) ? 1 : 0;
+          var bBelowMin = (_ruleMinMap[b] !== undefined && (assignCount[b] || 0) < _ruleMinMap[b]) ? 1 : 0;
+          if (aBelowMin !== bBelowMin) return bBelowMin - aBelowMin;
           // Priority 1: confirmed in prev week same slot → prefer
           var pa = prevData[a], pb = prevData[b];
           var aConf = (pa && pa.slots && (pa.slots[key] === 'confermato' || pa.slots[key] === 'confermato-ecg')) ? 1 : 0;
@@ -8294,6 +8423,39 @@ function generateAIDraft() {
     }
   });
 
+  // ── Post-processing: Custom Rules min/exact ──
+  // Ensure doctors with a minimum-shift rule are assigned at least the required number
+  Object.keys(_ruleMinMap).forEach(function(doc) {
+    var minTarget = _ruleMinMap[doc];
+    if ((assignCount[doc] || 0) >= minTarget) return; // already satisfied
+    var tipo = state.doctorTypes[doc] || 'completo';
+    if (tipo === 'nessuno') return;
+    var dd = weekData[doc];
+    if (!dd || dd.ferie) return;
+    var sl = dd.slots || {};
+    for (var _di5 = 0; _di5 < 6; _di5++) {
+      if ((assignCount[doc] || 0) >= minTarget) break;
+      // Don't double-shift unless alwaysConfirm
+      if (!_aiAlwaysConfirm.has(doc) && usedOnDay[doc] && usedOnDay[doc].has(_di5)) continue;
+      for (var _si5 = 0; _si5 < 2; _si5++) {
+        if ((assignCount[doc] || 0) >= minTarget) break;
+        var _k5 = _di5 + '_' + _si5;
+        var _v5 = sl[_k5] || '';
+        if (_v5 !== 'disponibile' && _v5 !== 'solo-ecg') continue;
+        var _type5 = _v5 === 'solo-ecg' ? 'ecg' : 'completo';
+        var _placed5 = draft.slots[_k5] || [];
+        if (_placed5.some(function(p) { return p.doc === doc; })) continue;
+        if (!_aiConflictsWithList(doc, _placed5)) {
+          _placed5.push({ doc: doc, type: _type5, always: false, single: false, rule: true });
+          draft.slots[_k5] = _placed5;
+          assignCount[doc] = (assignCount[doc] || 0) + 1;
+          if (!usedOnDay[doc]) usedOnDay[doc] = new Set();
+          usedOnDay[doc].add(_di5);
+        }
+      }
+    }
+  });
+
   _aiDraft = draft;
   _aiRenderDraftTable();
   showToast('🤖 Bozza turni generata!');
@@ -8380,11 +8542,13 @@ function _aiRenderSlotCell(di, si) {
     if (item.always) cls += ' crown';
     if (item.single) cls += ' single';
     if (item.mincpd) cls += ' mincpd';
+    if (item.rule) cls += ' rule';
     var label = item.doc;
     if (item.type === 'ecg') label += ' <span style="font-size:9px;opacity:.7;">(ECG)</span>';
     if (item.always) label = '👑 ' + label;
     else if (item.single) label = '🎯 ' + label;
     else if (item.mincpd) label = '📅 ' + label;
+    else if (item.rule) label = '📋 ' + label;
     h += '<span class="' + cls + '">' + label;
     h += ' <button class="x" onclick="_aiRemoveFromSlot(' + di + ',' + si + ',' + idx + ')" title="Rimuovi">✕</button>';
     h += '</span>';
