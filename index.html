@@ -1052,6 +1052,13 @@
   .ai-sel-tag .x { background: none; border: none; color: #7c3aed; cursor: pointer; font-size: 12px; padding: 0 2px; line-height: 1; opacity: .7; }
   .ai-sel-tag .x:hover { opacity: 1; color: #ef4444; }
   [data-theme="dark"] .ai-sel-tag { color: #c4b5fd; }
+  .ai-mincpd-tag { display: inline-flex; align-items: center; gap: 4px; background: linear-gradient(135deg, rgba(5,150,105,.12), rgba(5,150,105,.06)); border: 1px solid rgba(5,150,105,.3); color: var(--text); padding: 5px 8px 5px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; white-space: nowrap; transition: all 0.25s ease; }
+  .ai-mincpd-tag:hover { border-color: rgba(5,150,105,.5); box-shadow: 0 2px 8px rgba(5,150,105,.15); }
+  .ai-mincpd-tag-remove { background: none; border: none; color: #059669; cursor: pointer; font-size: 14px; font-weight: 700; padding: 0 2px; line-height: 1; opacity: .6; transition: all 0.15s; margin-left: 2px; }
+  .ai-mincpd-tag-remove:hover { opacity: 1; color: #ef4444; transform: scale(1.2); }
+  [data-theme="dark"] .ai-mincpd-tag { color: #6ee7b7; background: linear-gradient(135deg, rgba(5,150,105,.2), rgba(5,150,105,.1)); }
+  .ai-tag.mincpd { background: rgba(5,150,105,.1); border-color: rgba(5,150,105,.25); }
+  [data-theme="dark"] .ai-tag.mincpd { color: #6ee7b7; }
   .ai-gen-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 14px 24px; font-size: 15px; font-weight: 700; background: linear-gradient(135deg, #6366f1, #2563eb); color: #fff; border: none; border-radius: 12px; cursor: pointer; transition: all .2s; box-shadow: 0 4px 14px rgba(99,102,241,.3); }
   .ai-gen-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(99,102,241,.4); }
   .ai-gen-btn:active { transform: translateY(0); }
@@ -1065,6 +1072,7 @@
   .ai-tag { display: inline-flex; align-items: center; gap: 3px; border-radius: 6px; padding: 2px 4px 2px 8px; margin: 2px; font-size: 11px; white-space: nowrap; background: rgba(37,99,235,.1); border: 1px solid rgba(37,99,235,.2); color: var(--text); }
   .ai-tag.ecg { background: rgba(217,119,6,.1); border-color: rgba(217,119,6,.25); }
   .ai-tag.crown { background: rgba(124,58,237,.1); border-color: rgba(124,58,237,.25); }
+  .ai-tag.single { background: rgba(5,150,105,.1); border-color: rgba(5,150,105,.25); }
   .ai-tag .x { background: none; border: none; color: #ef4444; cursor: pointer; font-size: 13px; padding: 0 2px; line-height: 1; opacity: .6; }
   .ai-tag .x:hover { opacity: 1; }
   .ai-plus { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; background: rgba(5,150,105,.08); border: 1px dashed rgba(5,150,105,.4); border-radius: 6px; color: #059669; cursor: pointer; font-size: 16px; font-weight: 700; margin: 2px; }
@@ -1078,6 +1086,7 @@
   [data-theme="dark"] .ai-tag { color: #e2e8f0; }
   [data-theme="dark"] .ai-tag.ecg { color: #fbbf24; }
   [data-theme="dark"] .ai-tag.crown { color: #c4b5fd; }
+  [data-theme="dark"] .ai-tag.single { color: #6ee7b7; }
   [data-theme="dark"] .ai-nums-grid th { background: var(--surface2); }
   [data-theme="dark"] .ai-nums-grid td:first-child { background: var(--surface2); }
   [data-theme="dark"] .ai-draft-tbl .dcell { background: var(--surface2); }
@@ -1555,7 +1564,7 @@
 <div class="tab-content admin-only" id="tab-turniai">
   <div style="margin-bottom:16px;">
     <h3 style="margin:0 0 4px;font-size:16px;font-weight:700;color:#6366f1;">🤖 Generazione Bozza Turni AI</h3>
-    <p style="color:var(--muted);font-size:12px;margin:0;">Genera automaticamente una bozza dei turni basata su disponibilità, settimana precedente e regole configurate.</p>
+    <p style="color:var(--muted);font-size:12px;margin:0;">Genera automaticamente una bozza dei turni basata su disponibilità, settimana precedente e regole configurate.<br><span style="font-size:11px;">👑 = sempre confermato · 🎯 = unica disponibilità (auto-inserito) · 📅 = min 1 conf/giorno</span></p>
   </div>
   <div id="ai-turni-content"></div>
 </div>
@@ -7624,6 +7633,8 @@ function saveCursorColors() {
 let _aiDraft = null;       // { slots: {key: [{doc,type}]}, holter: {di: [doc]}, skipped: {key: {completo:[], ecg:[]}}, holterSkipped: {di:[]} }
 let _aiAlwaysConfirm = new Set();
 let _aiAlwaysLoaded = false;
+let _aiMinConfPerDay = new Set();
+let _aiMinConfPerDayLoaded = false;
 
 // ── Load/save "always confirm" list from Firebase ──
 function _aiLoadAlwaysConfirm(cb) {
@@ -7639,6 +7650,97 @@ function _aiLoadAlwaysConfirm(cb) {
 function _aiSaveAlwaysConfirm() {
   const arr = Array.from(_aiAlwaysConfirm);
   firebase.database().ref('cardio_ai_config/alwaysConfirm').set(arr.length > 0 ? arr : null);
+}
+
+function _aiLoadMinConfPerDay(cb) {
+  if (_aiMinConfPerDayLoaded) { if (cb) cb(); return; }
+  firebase.database().ref('cardio_ai_config/minConfPerDay').once('value').then(snap => {
+    const arr = snap.val();
+    _aiMinConfPerDay = new Set(Array.isArray(arr) ? arr : []);
+    _aiMinConfPerDayLoaded = true;
+    if (cb) cb();
+  });
+}
+
+function _aiSaveMinConfPerDay() {
+  const arr = Array.from(_aiMinConfPerDay);
+  firebase.database().ref('cardio_ai_config/minConfPerDay').set(arr.length > 0 ? arr : null);
+}
+
+function _aiAddMinConfFromDropdown() {
+  var sel = document.getElementById('ai-mincpd-select');
+  if (!sel) return;
+  var doc = sel.value;
+  if (!doc) { showToast('⚠️ Seleziona un medico dal menu', 'warning'); return; }
+  _aiMinConfPerDay.add(doc);
+  _aiSaveMinConfPerDay();
+  var container = document.getElementById('ai-mincpd-tags');
+  if (container) {
+    var placeholder = container.querySelector('.ai-no-tags');
+    if (placeholder) placeholder.remove();
+    var tag = document.createElement('span');
+    tag.className = 'ai-mincpd-tag';
+    tag.dataset.doc = doc;
+    tag.style.opacity = '0';
+    tag.style.transform = 'scale(0.8)';
+    tag.style.transition = 'opacity 0.25s ease, transform 0.25s ease';
+    var removeBtn = document.createElement('span');
+    removeBtn.className = 'ai-mincpd-tag-remove';
+    removeBtn.title = 'Rimuovi';
+    removeBtn.textContent = '✕';
+    removeBtn.onclick = function() { _aiRemoveMinConfDoc(doc); };
+    tag.textContent = '📅 ' + doc + ' ';
+    tag.appendChild(removeBtn);
+    container.appendChild(tag);
+    requestAnimationFrame(function() {
+      requestAnimationFrame(function() {
+        tag.style.opacity = '1';
+        tag.style.transform = 'scale(1)';
+      });
+    });
+  }
+  var opts = sel.options;
+  for (var i = 0; i < opts.length; i++) { if (opts[i].value === doc) { opts[i].remove(); break; } }
+  sel.value = '';
+  showToast('📅 ' + doc + ' aggiunto a min 1 conferma/giorno');
+}
+
+function _aiRemoveMinConfDoc(doc) {
+  _aiMinConfPerDay.delete(doc);
+  _aiSaveMinConfPerDay();
+  var container = document.getElementById('ai-mincpd-tags');
+  if (container) {
+    var tags = container.querySelectorAll('.ai-mincpd-tag');
+    tags.forEach(function(tag) {
+      if (tag.dataset.doc === doc) {
+        tag.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
+        tag.style.opacity = '0';
+        tag.style.transform = 'scale(0.8)';
+        setTimeout(function() {
+          tag.remove();
+          _aiCheckEmptyMinConfTags();
+        }, 220);
+      }
+    });
+  }
+  var sel = document.getElementById('ai-mincpd-select');
+  if (sel) {
+    var opt = document.createElement('option');
+    opt.value = doc;
+    opt.textContent = doc;
+    sel.appendChild(opt);
+    var optArr = Array.from(sel.options).slice(1).sort(function(a, b) { return a.textContent.localeCompare(b.textContent); });
+    while (sel.options.length > 1) sel.remove(1);
+    optArr.forEach(function(o) { sel.appendChild(o); });
+  }
+  showToast('✕ ' + doc + ' rimosso da min 1 conferma/giorno');
+}
+
+function _aiCheckEmptyMinConfTags() {
+  var tagsEl = document.getElementById('ai-mincpd-tags');
+  if (tagsEl && tagsEl.querySelectorAll('.ai-mincpd-tag').length === 0) {
+    tagsEl.innerHTML = '<span class="ai-no-tags">Nessun medico selezionato</span>';
+  }
 }
 
 function _aiAddFromDropdown() {
@@ -7778,7 +7880,9 @@ function _aiCountPrevWeek() {
 
 // ── Main render ──
 function renderTurniAI() {
-  _aiLoadAlwaysConfirm(function() { _aiRenderInner(); });
+  _aiLoadAlwaysConfirm(function() {
+    _aiLoadMinConfPerDay(function() { _aiRenderInner(); });
+  });
 }
 
 function _aiRenderInner() {
@@ -7842,6 +7946,37 @@ function _aiRenderInner() {
     h += '</div>';
     // Store availDocs for dynamic use
     window._aiCurrentAvailDocs = availDocs;
+  }
+  h += '</div>';
+
+  // ── Card 1.5: Min 1 Conferma al Giorno ──
+  h += '<div class="ai-card">';
+  h += '<h4 style="color:#059669;">📅 Min. 1 Conferma al Giorno</h4>';
+  h += '<p style="font-size:11px;color:var(--muted);margin-bottom:8px;">Medici per cui, se hanno disponibilità in un determinato giorno, deve essere confermato <strong>almeno un turno</strong> in quel giorno. Mai un giorno senza conferma.</p>';
+  if (availDocs.length === 0) {
+    h += '<p style="color:var(--muted);font-size:12px;">Nessun medico con disponibilità questa settimana.</p>';
+  } else {
+    h += '<div class="ai-selected-tags" id="ai-mincpd-tags">';
+    var hasMincpdTags = false;
+    _aiMinConfPerDay.forEach(function(doc) {
+      if (availDocs.includes(doc)) {
+        hasMincpdTags = true;
+        var safeDoc = doc.replace(/'/g, "\'");
+        h += '<span class="ai-mincpd-tag" data-doc="' + doc.replace(/"/g, '&quot;') + '">📅 ' + doc + ' <span class="ai-mincpd-tag-remove" onclick="_aiRemoveMinConfDoc(\'' + safeDoc + '\')" title="Rimuovi">✕</span></span>';
+      }
+    });
+    if (!hasMincpdTags) h += '<span class="ai-no-tags">Nessun medico selezionato</span>';
+    h += '</div>';
+    var notSelectedMincpd = availDocs.filter(function(d) { return !_aiMinConfPerDay.has(d); });
+    h += '<div style="display:flex;gap:8px;align-items:center;margin-top:8px;max-width:400px;">';
+    h += '<select class="ai-select-dropdown" id="ai-mincpd-select" style="flex:1;">';
+    h += '<option value="">Seleziona medico...</option>';
+    notSelectedMincpd.forEach(function(doc) {
+      h += '<option value="' + doc.replace(/"/g, '&quot;') + '">' + doc + '</option>';
+    });
+    h += '</select>';
+    h += '<button class="btn btn-success btn-sm" onclick="_aiAddMinConfFromDropdown()" style="padding:8px 16px;font-size:12px;font-weight:700;white-space:nowrap;">+ Aggiungi</button>';
+    h += '</div>';
   }
   h += '</div>';
 
@@ -7923,7 +8058,46 @@ function generateAIDraft() {
   var assignCount = {};
   (state.doctors || []).forEach(function(d) { assignCount[d] = 0; });
 
+  // Track which doctors are already placed on each day (to prevent double shifts)
+  // Exception: doctors in _aiAlwaysConfirm can still receive multiple slots per day
+  var usedOnDay = {}; // doc -> Set of day indices already assigned
+
   var draft = { slots: {}, holter: {}, skipped: {}, holterSkipped: {} };
+
+  // ── Pre-compute: doctors with a single availability across the week ──
+  var _singleSlotMap = {}; // doc → { key, type } only if exactly 1 slot available
+  (state.doctors || []).forEach(function(doc) {
+    var tipo = state.doctorTypes[doc] || 'completo';
+    if (tipo === 'nessuno') return;
+    if (_aiAlwaysConfirm.has(doc)) return; // already handled
+    var dd = weekData[doc];
+    if (!dd || dd.ferie) return;
+    var slots = dd.slots || {};
+    var avails = [];
+    for (var _di = 0; _di < 6; _di++) {
+      for (var _si = 0; _si < 2; _si++) {
+        var _k = _di + '_' + _si;
+        var _v = slots[_k] || '';
+        if (_v === 'disponibile') avails.push({ key: _k, type: 'completo' });
+        else if (_v === 'solo-ecg') avails.push({ key: _k, type: 'ecg' });
+      }
+    }
+    if (avails.length === 1) _singleSlotMap[doc] = avails[0];
+  });
+
+  // Same for holter
+  var _singleHolterMap = {}; // doc → dayIndex only if exactly 1 holter day available
+  (state.doctors || []).filter(function(d) { return state.holterEnabled[d]; }).forEach(function(doc) {
+    if (_aiAlwaysConfirm.has(doc)) return;
+    var hd = holterData[doc];
+    if (!hd || hd.ferie) return;
+    var hSlots = hd.slots || {};
+    var hAvails = [];
+    for (var _di = 0; _di < 6; _di++) {
+      if (hSlots[_di] === 'disponibile') hAvails.push(_di);
+    }
+    if (hAvails.length === 1) _singleHolterMap[doc] = hAvails[0];
+  });
 
   for (var di = 0; di < 6; di++) {
     for (var si = 0; si < 2; si++) {
@@ -7946,28 +8120,47 @@ function generateAIDraft() {
         else if (val === 'solo-ecg') availEcg.push(doc);
       });
 
-      var placed = [];     // { doc, type: 'completo'|'ecg', always: bool }
+      var placed = [];     // { doc, type: 'completo'|'ecg', always: bool, single: bool }
       var allPlacedDocs = function() { return placed.map(function(p) { return p.doc; }); };
 
       // ── Step 1: Always-confirm doctors ──
+      // These doctors are exempt from the double-shift restriction
       _aiAlwaysConfirm.forEach(function(doc) {
         if (availCompleto.includes(doc)) {
           if (!_aiConflictsWithList(doc, placed)) {
-            placed.push({ doc: doc, type: 'completo', always: true });
+            placed.push({ doc: doc, type: 'completo', always: true, single: false });
             assignCount[doc] = (assignCount[doc] || 0) + 1;
+            if (!usedOnDay[doc]) usedOnDay[doc] = new Set();
+            usedOnDay[doc].add(di);
           }
         } else if (availEcg.includes(doc)) {
           if (!_aiConflictsWithList(doc, placed)) {
-            placed.push({ doc: doc, type: 'ecg', always: true });
+            placed.push({ doc: doc, type: 'ecg', always: true, single: false });
             assignCount[doc] = (assignCount[doc] || 0) + 1;
+            if (!usedOnDay[doc]) usedOnDay[doc] = new Set();
+            usedOnDay[doc].add(di);
           }
         }
+      });
+
+      // ── Step 1.5: Single-availability doctors (auto-confirm) ──
+      Object.keys(_singleSlotMap).forEach(function(doc) {
+        var info = _singleSlotMap[doc];
+        if (info.key !== key) return; // not this slot
+        if (allPlacedDocs().includes(doc)) return;
+        if (_aiConflictsWithList(doc, placed)) return;
+        if (usedOnDay[doc] && usedOnDay[doc].has(di)) return; // no double shift
+        placed.push({ doc: doc, type: info.type, always: false, single: true });
+        assignCount[doc] = (assignCount[doc] || 0) + 1;
+        if (!usedOnDay[doc]) usedOnDay[doc] = new Set();
+        usedOnDay[doc].add(di);
       });
 
       // ── Step 2: Sort remaining candidates ──
       var sortCand = function(list, type) {
         return list.filter(function(d) {
-          return !allPlacedDocs().includes(d) && !_aiAlwaysConfirm.has(d);
+          // Exclude already placed, always-confirm (handled in step 1), and doctors already used today
+          return !allPlacedDocs().includes(d) && !_aiAlwaysConfirm.has(d) && !(usedOnDay[d] && usedOnDay[d].has(di));
         }).sort(function(a, b) {
           // Priority 1: confirmed in prev week same slot → prefer
           var pa = prevData[a], pb = prevData[b];
@@ -7986,8 +8179,10 @@ function generateAIDraft() {
         if (placedCompletoCount >= targetCompleto) break;
         var doc = candCompleto[ci];
         if (_aiConflictsWithList(doc, placed)) continue;
-        placed.push({ doc: doc, type: 'completo', always: false });
+        placed.push({ doc: doc, type: 'completo', always: false, single: false });
         assignCount[doc] = (assignCount[doc] || 0) + 1;
+        if (!usedOnDay[doc]) usedOnDay[doc] = new Set();
+        usedOnDay[doc].add(di);
         placedCompletoCount++;
       }
 
@@ -7998,8 +8193,10 @@ function generateAIDraft() {
         if (placedEcgCount >= targetEcg) break;
         var doc2 = candEcg[ei];
         if (_aiConflictsWithList(doc2, placed)) continue;
-        placed.push({ doc: doc2, type: 'ecg', always: false });
+        placed.push({ doc: doc2, type: 'ecg', always: false, single: false });
         assignCount[doc2] = (assignCount[doc2] || 0) + 1;
+        if (!usedOnDay[doc2]) usedOnDay[doc2] = new Set();
+        usedOnDay[doc2].add(di);
         placedEcgCount++;
       }
 
@@ -8029,6 +8226,12 @@ function generateAIDraft() {
         placedH.push(doc);
       }
     });
+    // Single-holter-availability doctors
+    Object.keys(_singleHolterMap).forEach(function(doc) {
+      if (_singleHolterMap[doc] !== di) return;
+      if (placedH.includes(doc)) return;
+      placedH.push(doc);
+    });
     // Sort remaining
     var candH = availHolter.filter(function(d) { return !placedH.includes(d); }).sort(function(a, b) {
       var pha = prevHolter[a], phb = prevHolter[b];
@@ -8045,6 +8248,52 @@ function generateAIDraft() {
     draft.holterSkipped[di] = availHolter.filter(function(d) { return !placedH.includes(d); });
   }
 
+  // ── Post-processing: Min 1 Conferma al Giorno ──
+  // Per ogni medico in _aiMinConfPerDay: se ha disponibilità in un giorno
+  // ma NON è ancora stato assegnato in quel giorno, forza l'aggiunta in un turno disponibile.
+  _aiMinConfPerDay.forEach(function(doc) {
+    if (_aiAlwaysConfirm.has(doc)) return; // già gestito da alwaysConfirm
+    var tipo = state.doctorTypes[doc] || 'completo';
+    if (tipo === 'nessuno') return;
+    var dd = weekData[doc];
+    if (!dd || dd.ferie) return;
+    var sl = dd.slots || {};
+    for (var _di2 = 0; _di2 < 6; _di2++) {
+      // Controlla se ha disponibilità in questo giorno
+      var hasDayAvail = false;
+      for (var _si2 = 0; _si2 < 2; _si2++) {
+        var _k2 = _di2 + '_' + _si2;
+        var _v2 = sl[_k2] || '';
+        if (_v2 === 'disponibile' || _v2 === 'solo-ecg') { hasDayAvail = true; break; }
+      }
+      if (!hasDayAvail) continue; // nessuna disponibilità in questo giorno, skip
+      // Controlla se è già assegnato in questo giorno
+      var alreadyPlaced = false;
+      for (var _si3 = 0; _si3 < 2; _si3++) {
+        var _k3 = _di2 + '_' + _si3;
+        if ((draft.slots[_k3] || []).some(function(item) { return item.doc === doc; })) {
+          alreadyPlaced = true; break;
+        }
+      }
+      if (alreadyPlaced) continue; // già confermato in questo giorno
+      // Non è assegnato: forza aggiunta nel primo turno disponibile
+      for (var _si4 = 0; _si4 < 2; _si4++) {
+        var _k4 = _di2 + '_' + _si4;
+        var _v4 = sl[_k4] || '';
+        if (_v4 !== 'disponibile' && _v4 !== 'solo-ecg') continue;
+        var _type4 = _v4 === 'solo-ecg' ? 'ecg' : 'completo';
+        // Verifica conflitti con i medici già in questo slot
+        var _placed4 = draft.slots[_k4] || [];
+        if (!_aiConflictsWithList(doc, _placed4)) {
+          _placed4.push({ doc: doc, type: _type4, always: false, single: false, mincpd: true });
+          draft.slots[_k4] = _placed4;
+          assignCount[doc] = (assignCount[doc] || 0) + 1;
+          break; // aggiunto al primo slot disponibile del giorno, basta
+        }
+      }
+    }
+  });
+
   _aiDraft = draft;
   _aiRenderDraftTable();
   showToast('🤖 Bozza turni generata!');
@@ -8060,20 +8309,31 @@ function _aiRenderDraftTable() {
   var DAYSL = ['LUNEDÌ','MARTEDÌ','MERCOLEDÌ','GIOVEDÌ','VENERDÌ','SABATO'];
   var h = '';
 
-  // Stats summary
-  var totalPlaced = 0, totalSkipped = 0;
-  for (var k in _aiDraft.slots) totalPlaced += _aiDraft.slots[k].length;
+  // Stats summary — count UNIQUE doctors, not total slot assignments
+  var _placedDocSet = new Set();
+  var _skippedDocSet = new Set();
+  for (var k in _aiDraft.slots) _aiDraft.slots[k].forEach(function(item) { _placedDocSet.add(item.doc); });
   for (var k2 in _aiDraft.skipped) {
-    totalSkipped += (_aiDraft.skipped[k2].completo || []).length + (_aiDraft.skipped[k2].ecg || []).length;
+    (_aiDraft.skipped[k2].completo || []).forEach(function(d) { _skippedDocSet.add(d); });
+    (_aiDraft.skipped[k2].ecg || []).forEach(function(d) { _skippedDocSet.add(d); });
   }
-  for (var k3 in _aiDraft.holter) totalPlaced += _aiDraft.holter[k3].length;
-  for (var k4 in _aiDraft.holterSkipped) totalSkipped += _aiDraft.holterSkipped[k4].length;
+  for (var k3 in _aiDraft.holter) _aiDraft.holter[k3].forEach(function(doc) { _placedDocSet.add(doc); });
+  for (var k4 in _aiDraft.holterSkipped) _aiDraft.holterSkipped[k4].forEach(function(d) { _skippedDocSet.add(d); });
+  // Remove from skipped any doctor that is also placed somewhere
+  _placedDocSet.forEach(function(d) { _skippedDocSet.delete(d); });
+  var totalPlacedDocs = _placedDocSet.size;
+  var totalSkippedDocs = _skippedDocSet.size;
+  // Build sorted list for popup
+  var _skippedDocList = Array.from(_skippedDocSet).sort();
 
   h += '<div style="margin-top:20px;padding:12px 16px;background:rgba(99,102,241,.06);border:1px solid rgba(99,102,241,.15);border-radius:10px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;">';
   h += '<span style="font-weight:700;font-size:14px;color:#6366f1;">📋 Bozza Generata</span>';
-  h += '<span style="font-size:12px;color:var(--text);">✅ ' + totalPlaced + ' assegnati</span>';
-  if (totalSkipped > 0) h += '<span style="font-size:12px;color:#f59e0b;">⚠️ ' + totalSkipped + ' disponibili non inseriti</span>';
-  else h += '<span style="font-size:12px;color:#059669;">🎯 Tutti i disponibili inseriti!</span>';
+  h += '<span style="font-size:12px;color:var(--text);">✅ ' + totalPlacedDocs + ' medici assegnati</span>';
+  if (totalSkippedDocs > 0) {
+    h += '<span id="ai-skipped-trigger" style="font-size:12px;color:#f59e0b;cursor:pointer;text-decoration:underline dotted;user-select:none;" onclick="_aiShowSkippedPopup(event)" title="Clicca per vedere i medici non inseriti">⚠️ ' + totalSkippedDocs + ' disponibili non inseriti</span>';
+  } else {
+    h += '<span style="font-size:12px;color:#059669;">🎯 Tutti i disponibili inseriti!</span>';
+  }
   h += '</div>';
 
   // Table
@@ -8113,13 +8373,18 @@ function _aiRenderSlotCell(di, si) {
   var hasSkipped = skipped.completo.length > 0 || skipped.ecg.length > 0;
   var h = '<div class="slot-cell">';
 
+  items.sort(function(a, b) { return a.doc.localeCompare(b.doc, 'it'); });
   items.forEach(function(item, idx) {
     var cls = 'ai-tag';
     if (item.type === 'ecg') cls += ' ecg';
     if (item.always) cls += ' crown';
+    if (item.single) cls += ' single';
+    if (item.mincpd) cls += ' mincpd';
     var label = item.doc;
     if (item.type === 'ecg') label += ' <span style="font-size:9px;opacity:.7;">(ECG)</span>';
     if (item.always) label = '👑 ' + label;
+    else if (item.single) label = '🎯 ' + label;
+    else if (item.mincpd) label = '📅 ' + label;
     h += '<span class="' + cls + '">' + label;
     h += ' <button class="x" onclick="_aiRemoveFromSlot(' + di + ',' + si + ',' + idx + ')" title="Rimuovi">✕</button>';
     h += '</span>';
@@ -8139,6 +8404,7 @@ function _aiRenderSlotCell(di, si) {
 
 function _aiRenderHolterCell(di) {
   var items = _aiDraft.holter[di] || [];
+  items.sort(function(a, b) { return a.localeCompare(b, 'it'); });
   var skipped = _aiDraft.holterSkipped[di] || [];
   var h = '<div class="slot-cell">';
 
@@ -8249,13 +8515,81 @@ function _aiShowHolterPopup(evt, di) {
 function _aiClosePopup() {
   var p = document.getElementById('ai-add-popup');
   if (p) p.remove();
+  var sp = document.getElementById('ai-skipped-popup');
+  if (sp) sp.remove();
+}
+
+// ── Popup: show non-inserted doctors ──
+function _aiShowSkippedPopup(evt) {
+  _aiClosePopup();
+  if (!_aiDraft) return;
+
+  // Collect unique skipped doctors (not placed anywhere)
+  var placedSet = new Set();
+  for (var k in _aiDraft.slots) _aiDraft.slots[k].forEach(function(item) { placedSet.add(item.doc); });
+  for (var k3 in _aiDraft.holter) _aiDraft.holter[k3].forEach(function(doc) { placedSet.add(doc); });
+
+  var skippedMap = {}; // doc → [descriptions]
+  var DAYSL = ['Lun','Mar','Mer','Gio','Ven','Sab'];
+  for (var k2 in _aiDraft.skipped) {
+    var parts = k2.split('_');
+    var dayIdx = parseInt(parts[0]);
+    var slotIdx = parseInt(parts[1]);
+    var slotLabel = DAYSL[dayIdx] + ' ' + (slotIdx === 0 ? 'matt.' : 'pom.');
+    (_aiDraft.skipped[k2].completo || []).forEach(function(d) {
+      if (placedSet.has(d)) return;
+      if (!skippedMap[d]) skippedMap[d] = [];
+      skippedMap[d].push(slotLabel);
+    });
+    (_aiDraft.skipped[k2].ecg || []).forEach(function(d) {
+      if (placedSet.has(d)) return;
+      if (!skippedMap[d]) skippedMap[d] = [];
+      skippedMap[d].push(slotLabel + ' (ECG)');
+    });
+  }
+  for (var k4 in _aiDraft.holterSkipped) {
+    (_aiDraft.holterSkipped[k4] || []).forEach(function(d) {
+      if (placedSet.has(d)) return;
+      if (!skippedMap[d]) skippedMap[d] = [];
+      skippedMap[d].push(DAYSL[parseInt(k4)] + ' Holter');
+    });
+  }
+
+  var sortedDocs = Object.keys(skippedMap).sort();
+  if (sortedDocs.length === 0) return;
+
+  var popup = document.createElement('div');
+  popup.id = 'ai-skipped-popup';
+  popup.style.cssText = 'position:fixed;z-index:500;background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.25);padding:16px;max-width:420px;max-height:400px;overflow-y:auto;';
+  popup.style.left = Math.min(evt.clientX, window.innerWidth - 440) + 'px';
+  popup.style.top = Math.min(evt.clientY + 8, window.innerHeight - 420) + 'px';
+
+  var title = document.createElement('div');
+  title.style.cssText = 'font-weight:700;font-size:14px;color:#f59e0b;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;';
+  title.innerHTML = '<span>⚠️ Medici non inseriti (' + sortedDocs.length + ')</span><button onclick="_aiClosePopup()" style="background:none;border:none;font-size:16px;cursor:pointer;color:var(--muted);padding:0 4px;">✕</button>';
+  popup.appendChild(title);
+
+  sortedDocs.forEach(function(doc) {
+    var row = document.createElement('div');
+    row.style.cssText = 'padding:6px 8px;border-bottom:1px solid var(--border);font-size:12px;';
+    row.innerHTML = '<strong style="color:var(--text);">' + doc + '</strong><br><span style="color:var(--muted);font-size:11px;">' + skippedMap[doc].join(', ') + '</span>';
+    popup.appendChild(row);
+  });
+
+  document.body.appendChild(popup);
+  evt.stopPropagation();
+  setTimeout(function() {
+    document.addEventListener('click', function handler(e) {
+      if (!popup.contains(e.target)) { _aiClosePopup(); document.removeEventListener('click', handler); }
+    });
+  }, 10);
 }
 
 // ── Add doctor to slot from skipped ──
 function _aiAddToSlot(di, si, doc, type) {
   var key = di + '_' + si;
   if (!_aiDraft.slots[key]) _aiDraft.slots[key] = [];
-  _aiDraft.slots[key].push({ doc: doc, type: type, always: _aiAlwaysConfirm.has(doc) });
+  _aiDraft.slots[key].push({ doc: doc, type: type, always: _aiAlwaysConfirm.has(doc), single: false });
   // Remove from skipped
   var sk = _aiDraft.skipped[key];
   if (sk) {
