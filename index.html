@@ -8545,8 +8545,6 @@ function _aiRenderDraftTable() {
 function _aiRenderSlotCell(di, si) {
   var key = di + '_' + si;
   var items = _aiDraft.slots[key] || [];
-  var skipped = _aiDraft.skipped[key] || { completo: [], ecg: [] };
-  var hasSkipped = skipped.completo.length > 0 || skipped.ecg.length > 0;
   var h = '<div class="slot-cell">';
 
   items.sort(function(a, b) { return a.doc.localeCompare(b.doc, 'it'); });
@@ -8568,11 +8566,24 @@ function _aiRenderSlotCell(di, si) {
     h += '</span>';
   });
 
-  if (hasSkipped) {
+  // Ricalcola live chi è disponibile per questo slot ma non ancora inserito
+  var placedDocs = items.map(function(item) { return item.doc; });
+  var weekData = state.weeks[currentWeek] || {};
+  var hasLiveAvail = (state.doctors || []).some(function(doc) {
+    var tipo = state.doctorTypes[doc] || 'completo';
+    if (tipo === 'nessuno') return false;
+    if (placedDocs.includes(doc)) return false;
+    var dd = weekData[doc];
+    if (!dd || dd.ferie) return false;
+    var val = (dd.slots || {})[key] || '';
+    return val === 'disponibile' || val === 'solo-ecg';
+  });
+
+  if (hasLiveAvail) {
     h += '<button class="ai-plus" onclick="_aiShowAddPopup(event,' + di + ',' + si + ')" title="Aggiungi specialista">+</button>';
   }
 
-  if (items.length === 0 && !hasSkipped) {
+  if (items.length === 0 && !hasLiveAvail) {
     h += '<span style="color:var(--muted);font-size:11px;">—</span>';
   }
 
@@ -8583,7 +8594,6 @@ function _aiRenderSlotCell(di, si) {
 function _aiRenderHolterCell(di) {
   var items = _aiDraft.holter[di] || [];
   items.sort(function(a, b) { return a.localeCompare(b, 'it'); });
-  var skipped = _aiDraft.holterSkipped[di] || [];
   var h = '<div class="slot-cell">';
 
   items.forEach(function(doc, idx) {
@@ -8595,11 +8605,21 @@ function _aiRenderHolterCell(di) {
     h += '</span>';
   });
 
-  if (skipped.length > 0) {
+  // Ricalcola live chi è disponibile per holter in questo giorno ma non ancora inserito
+  var holterWeekData = state.holterWeeks[currentWeek] || {};
+  var hasLiveHolterAvail = (state.doctors || []).some(function(doc) {
+    if (!state.holterEnabled[doc]) return false;
+    if (items.includes(doc)) return false;
+    var hd = holterWeekData[doc];
+    if (!hd || hd.ferie) return false;
+    return (hd.slots || {})[di] === 'disponibile';
+  });
+
+  if (hasLiveHolterAvail) {
     h += '<button class="ai-plus" onclick="_aiShowHolterPopup(event,' + di + ')" title="Aggiungi">+</button>';
   }
 
-  if (items.length === 0 && skipped.length === 0) {
+  if (items.length === 0 && !hasLiveHolterAvail) {
     h += '<span style="color:var(--muted);font-size:11px;">—</span>';
   }
   h += '</div>';
@@ -8633,11 +8653,27 @@ function _aiRemoveHolter(di, idx) {
 function _aiShowAddPopup(evt, di, si) {
   _aiClosePopup();
   var key = di + '_' + si;
-  var skipped = _aiDraft.skipped[key] || { completo: [], ecg: [] };
-  var allSkipped = [];
-  skipped.completo.forEach(function(d) { allSkipped.push({ doc: d, type: 'completo' }); });
-  skipped.ecg.forEach(function(d) { allSkipped.push({ doc: d, type: 'ecg' }); });
-  if (allSkipped.length === 0) return;
+  // Ricalcola live chi è disponibile per questo slot ma non ancora inserito
+  var placedDocs = (_aiDraft.slots[key] || []).map(function(item) { return item.doc; });
+  var weekData = state.weeks[currentWeek] || {};
+  var liveCompleto = [];
+  var liveEcg = [];
+  (state.doctors || []).forEach(function(doc) {
+    var tipo = state.doctorTypes[doc] || 'completo';
+    if (tipo === 'nessuno') return;
+    if (placedDocs.includes(doc)) return;
+    var dd = weekData[doc];
+    if (!dd || dd.ferie) return;
+    var val = (dd.slots || {})[key] || '';
+    if (val === 'disponibile') liveCompleto.push(doc);
+    else if (val === 'solo-ecg') liveEcg.push(doc);
+  });
+  liveCompleto.sort(function(a, b) { return a.localeCompare(b, 'it'); });
+  liveEcg.sort(function(a, b) { return a.localeCompare(b, 'it'); });
+  var allAvail = [];
+  liveCompleto.forEach(function(d) { allAvail.push({ doc: d, type: 'completo' }); });
+  liveEcg.forEach(function(d) { allAvail.push({ doc: d, type: 'ecg' }); });
+  if (allAvail.length === 0) return;
 
   var popup = document.createElement('div');
   popup.className = 'ai-popup';
@@ -8645,7 +8681,7 @@ function _aiShowAddPopup(evt, di, si) {
   popup.style.left = Math.min(evt.clientX, window.innerWidth - 200) + 'px';
   popup.style.top = Math.min(evt.clientY, window.innerHeight - 240) + 'px';
 
-  allSkipped.forEach(function(item) {
+  allAvail.forEach(function(item) {
     var div = document.createElement('div');
     div.className = 'ai-popup-item' + (item.type === 'ecg' ? ' ecg' : '');
     div.textContent = item.doc + (item.type === 'ecg' ? ' (ECG)' : '');
@@ -8664,8 +8700,19 @@ function _aiShowAddPopup(evt, di, si) {
 
 function _aiShowHolterPopup(evt, di) {
   _aiClosePopup();
-  var skipped = _aiDraft.holterSkipped[di] || [];
-  if (skipped.length === 0) return;
+  // Ricalcola live chi è disponibile per holter in questo giorno ma non ancora inserito
+  var placedDocs = _aiDraft.holter[di] || [];
+  var holterWeekData = state.holterWeeks[currentWeek] || {};
+  var liveAvail = [];
+  (state.doctors || []).forEach(function(doc) {
+    if (!state.holterEnabled[doc]) return;
+    if (placedDocs.includes(doc)) return;
+    var hd = holterWeekData[doc];
+    if (!hd || hd.ferie) return;
+    if ((hd.slots || {})[di] === 'disponibile') liveAvail.push(doc);
+  });
+  liveAvail.sort(function(a, b) { return a.localeCompare(b, 'it'); });
+  if (liveAvail.length === 0) return;
 
   var popup = document.createElement('div');
   popup.className = 'ai-popup';
@@ -8673,7 +8720,7 @@ function _aiShowHolterPopup(evt, di) {
   popup.style.left = Math.min(evt.clientX, window.innerWidth - 200) + 'px';
   popup.style.top = Math.min(evt.clientY, window.innerHeight - 240) + 'px';
 
-  skipped.forEach(function(doc) {
+  liveAvail.forEach(function(doc) {
     var div = document.createElement('div');
     div.className = 'ai-popup-item';
     div.textContent = doc;
