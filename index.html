@@ -1,5 +1,6 @@
 
 
+
 <!DOCTYPE html>
 <html lang="it">
 <head>
@@ -1559,6 +1560,28 @@
       <div id="rules-list" style="display:flex;flex-direction:column;gap:0;max-height:300px;overflow-y:auto;"></div>
     </div>
 
+    <!-- MEDICI DA CONFERMARE SEMPRE (admin-only) -->
+    <div class="card admin-only" id="ai-always-card">
+      <div class="card-title">👑 Medici da Confermare Sempre</div>
+      <p style="font-size:11px;color:var(--muted);margin-bottom:12px;">Medici che la generazione AI assegna automaticamente a <strong>tutti</strong> i turni per cui si sono resi disponibili. Impostazione persistente, non legata alla settimana.</p>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
+        <select id="cfg-always-select" class="styled" style="flex:1;min-width:140px;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:7px 10px;border-radius:6px;font-size:12px;"></select>
+        <button class="btn btn-sm" style="background:#7c3aed;color:#fff;border:none;font-weight:700;" onclick="_cfgAddAlways()">+ Aggiungi</button>
+      </div>
+      <div class="ai-selected-tags" id="cfg-always-tags"><span class="ai-no-tags">Caricamento...</span></div>
+    </div>
+
+    <!-- MIN 1 CONFERMA AL GIORNO (admin-only) -->
+    <div class="card admin-only" id="ai-mincpd-card">
+      <div class="card-title">📅 Min. 1 Conferma al Giorno</div>
+      <p style="font-size:11px;color:var(--muted);margin-bottom:12px;">Medici per cui la generazione AI garantisce <strong>almeno una conferma al giorno</strong> nei giorni in cui hanno disponibilità. Impostazione persistente.</p>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
+        <select id="cfg-mincpd-select" class="styled" style="flex:1;min-width:140px;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:7px 10px;border-radius:6px;font-size:12px;"></select>
+        <button class="btn btn-sm" style="background:#059669;color:#fff;border:none;font-weight:700;" onclick="_cfgAddMinConf()">+ Aggiungi</button>
+      </div>
+      <div class="ai-selected-tags" id="cfg-mincpd-tags"><span class="ai-no-tags">Caricamento...</span></div>
+    </div>
+
   </div>
 </div>
 
@@ -2273,7 +2296,7 @@ function switchTab(id) {
   if (id === 'calendar') renderCalendar();
   if (id === 'whatsapp') renderWaHistory();
   if (id === 'storico') loadAuditLog();
-  if (id === 'impostazioni') { renderSettings(); loadUsersList(); loadConflicts(); populateConflictSelects(); loadCustomRules(); populateRuleSelects(); }
+  if (id === 'impostazioni') { renderSettings(); loadUsersList(); loadConflicts(); populateConflictSelects(); loadCustomRules(); populateRuleSelects(); renderAIConfigInSettings(); }
   if (id === 'turniai') renderTurniAI();
 }
 
@@ -7629,6 +7652,123 @@ function saveCursorColors() {
 
 
 // =============================================
+// AI CONFIG IN SETTINGS — Medici da Confermare Sempre + Min 1 Conf/Giorno
+// =============================================
+
+function renderAIConfigInSettings() {
+  _aiLoadAlwaysConfirm(function() {
+    _aiLoadMinConfPerDay(function() {
+      _cfgRenderAlways();
+      _cfgRenderMinConf();
+    });
+  });
+}
+
+function _cfgRenderAlways() {
+  var allDocs = (state.doctors || []).slice().sort();
+  var sel = document.getElementById('cfg-always-select');
+  var tags = document.getElementById('cfg-always-tags');
+  if (!sel || !tags) return;
+  // Build tags
+  tags.innerHTML = '';
+  var hasTags = false;
+  _aiAlwaysConfirm.forEach(function(doc) {
+    if (!allDocs.includes(doc)) return;
+    hasTags = true;
+    var span = document.createElement('span');
+    span.className = 'ai-always-tag';
+    span.dataset.doc = doc;
+    var rm = document.createElement('span');
+    rm.className = 'ai-tag-remove';
+    rm.title = 'Rimuovi';
+    rm.textContent = '✕';
+    rm.onclick = function() { _cfgRemoveAlways(doc); };
+    span.textContent = '👑 ' + doc + ' ';
+    span.appendChild(rm);
+    tags.appendChild(span);
+  });
+  if (!hasTags) tags.innerHTML = '<span class="ai-no-tags">Nessun medico selezionato</span>';
+  // Build dropdown (only unselected)
+  var notSel = allDocs.filter(function(d) { return !_aiAlwaysConfirm.has(d); });
+  sel.innerHTML = '<option value="">Seleziona medico...</option>';
+  notSel.forEach(function(doc) {
+    var opt = document.createElement('option');
+    opt.value = doc;
+    opt.textContent = doc;
+    sel.appendChild(opt);
+  });
+}
+
+function _cfgRenderMinConf() {
+  var allDocs = (state.doctors || []).slice().sort();
+  var sel = document.getElementById('cfg-mincpd-select');
+  var tags = document.getElementById('cfg-mincpd-tags');
+  if (!sel || !tags) return;
+  // Build tags
+  tags.innerHTML = '';
+  var hasTags = false;
+  _aiMinConfPerDay.forEach(function(doc) {
+    if (!allDocs.includes(doc)) return;
+    hasTags = true;
+    var span = document.createElement('span');
+    span.className = 'ai-mincpd-tag';
+    span.dataset.doc = doc;
+    var rm = document.createElement('span');
+    rm.className = 'ai-mincpd-tag-remove';
+    rm.title = 'Rimuovi';
+    rm.textContent = '✕';
+    rm.onclick = function() { _cfgRemoveMinConf(doc); };
+    span.textContent = '📅 ' + doc + ' ';
+    span.appendChild(rm);
+    tags.appendChild(span);
+  });
+  if (!hasTags) tags.innerHTML = '<span class="ai-no-tags">Nessun medico selezionato</span>';
+  // Build dropdown (only unselected)
+  var notSel = allDocs.filter(function(d) { return !_aiMinConfPerDay.has(d); });
+  sel.innerHTML = '<option value="">Seleziona medico...</option>';
+  notSel.forEach(function(doc) {
+    var opt = document.createElement('option');
+    opt.value = doc;
+    opt.textContent = doc;
+    sel.appendChild(opt);
+  });
+}
+
+function _cfgAddAlways() {
+  var sel = document.getElementById('cfg-always-select');
+  if (!sel || !sel.value) { showToast('⚠️ Seleziona un medico dal menu', 'warning'); return; }
+  var doc = sel.value;
+  _aiAlwaysConfirm.add(doc);
+  _aiSaveAlwaysConfirm();
+  _cfgRenderAlways();
+  showToast('👑 ' + doc + ' aggiunto ai confermati sempre');
+}
+
+function _cfgRemoveAlways(doc) {
+  _aiAlwaysConfirm.delete(doc);
+  _aiSaveAlwaysConfirm();
+  _cfgRenderAlways();
+  showToast('✕ ' + doc + ' rimosso dai confermati sempre');
+}
+
+function _cfgAddMinConf() {
+  var sel = document.getElementById('cfg-mincpd-select');
+  if (!sel || !sel.value) { showToast('⚠️ Seleziona un medico dal menu', 'warning'); return; }
+  var doc = sel.value;
+  _aiMinConfPerDay.add(doc);
+  _aiSaveMinConfPerDay();
+  _cfgRenderMinConf();
+  showToast('📅 ' + doc + ' aggiunto a min 1 conferma/giorno');
+}
+
+function _cfgRemoveMinConf(doc) {
+  _aiMinConfPerDay.delete(doc);
+  _aiSaveMinConfPerDay();
+  _cfgRenderMinConf();
+  showToast('✕ ' + doc + ' rimosso da min 1 conferma/giorno');
+}
+
+// =============================================
 // TURNI AI — Generazione Bozza Automatica
 // =============================================
 
@@ -7916,71 +8056,28 @@ function _aiRenderInner() {
 
   var h = '<div class="ai-config">';
 
-  // ── Card 1: Always Confirm (dropdown + tags) ──
-  h += '<div class="ai-card">';
-  h += '<h4 style="color:#7c3aed;">👑 Medici da Confermare Sempre</h4>';
-  h += '<p style="font-size:11px;color:var(--muted);margin-bottom:8px;">Seleziona dal menù i medici da assegnare automaticamente a <strong>tutti</strong> i turni per cui si sono resi disponibili.</p>';
-  if (availDocs.length === 0) {
-    h += '<p style="color:var(--muted);font-size:12px;">Nessun medico con disponibilità questa settimana.</p>';
-  } else {
-    // Selected tags (dynamic container)
-    h += '<div class="ai-selected-tags" id="ai-always-tags">';
-    var hasTags = false;
-    _aiAlwaysConfirm.forEach(function(doc) {
-      if (availDocs.includes(doc)) {
-        hasTags = true;
-        var safeDoc = doc.replace(/'/g, "\\'");
-        h += '<span class="ai-always-tag" data-doc="' + doc.replace(/"/g, '&quot;') + '">👑 ' + doc + ' <span class="ai-tag-remove" onclick="_aiRemoveAlwaysDoc(\'' + safeDoc + '\')" title="Rimuovi">✕</span></span>';
-      }
-    });
-    if (!hasTags) h += '<span class="ai-no-tags">Nessun medico selezionato</span>';
-    h += '</div>';
-    // Dropdown + button to add
-    var notSelected = availDocs.filter(function(d) { return !_aiAlwaysConfirm.has(d); });
-    h += '<div style="display:flex;gap:8px;align-items:center;margin-top:8px;max-width:400px;">';
-    h += '<select class="ai-select-dropdown" id="ai-always-select" style="flex:1;">';
-    h += '<option value="">Seleziona medico...</option>';
-    notSelected.forEach(function(doc) {
-      h += '<option value="' + doc.replace(/"/g, '&quot;') + '">' + doc + '</option>';
-    });
-    h += '</select>';
-    h += '<button class="btn btn-primary btn-sm" onclick="_aiAddFromDropdown()" style="padding:8px 16px;font-size:12px;font-weight:700;white-space:nowrap;">+ Aggiungi</button>';
-    h += '</div>';
-    // Store availDocs for dynamic use
-    window._aiCurrentAvailDocs = availDocs;
-  }
-  h += '</div>';
 
-  // ── Card 1.5: Min 1 Conferma al Giorno ──
-  h += '<div class="ai-card">';
-  h += '<h4 style="color:#059669;">📅 Min. 1 Conferma al Giorno</h4>';
-  h += '<p style="font-size:11px;color:var(--muted);margin-bottom:8px;">Medici per cui, se hanno disponibilità in un determinato giorno, deve essere confermato <strong>almeno un turno</strong> in quel giorno. Mai un giorno senza conferma.</p>';
-  if (availDocs.length === 0) {
-    h += '<p style="color:var(--muted);font-size:12px;">Nessun medico con disponibilità questa settimana.</p>';
-  } else {
-    h += '<div class="ai-selected-tags" id="ai-mincpd-tags">';
-    var hasMincpdTags = false;
-    _aiMinConfPerDay.forEach(function(doc) {
-      if (availDocs.includes(doc)) {
-        hasMincpdTags = true;
-        var safeDoc = doc.replace(/'/g, "\'");
-        h += '<span class="ai-mincpd-tag" data-doc="' + doc.replace(/"/g, '&quot;') + '">📅 ' + doc + ' <span class="ai-mincpd-tag-remove" onclick="_aiRemoveMinConfDoc(\'' + safeDoc + '\')" title="Rimuovi">✕</span></span>';
-      }
-    });
-    if (!hasMincpdTags) h += '<span class="ai-no-tags">Nessun medico selezionato</span>';
+  // ── Card 0: Summary of Always Confirm + MinConf settings (from Impostazioni) ──
+  var _alwaysActive = Array.from(_aiAlwaysConfirm).filter(function(d) { return availDocs.includes(d); });
+  var _minconfActive = Array.from(_aiMinConfPerDay).filter(function(d) { return availDocs.includes(d); });
+  if (_alwaysActive.length > 0 || _minconfActive.length > 0) {
+    h += '<div class="ai-card" style="border-color:rgba(124,58,237,.3);background:linear-gradient(135deg,rgba(124,58,237,.06),rgba(5,150,105,.04));">';
+    h += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px;">';
+    h += '<h4 style="color:#6366f1;margin:0;">⚙️ Regole Conferma AI Attive</h4>';
+    h += '<a onclick="switchTab(\'impostazioni\')" style="font-size:11px;color:var(--accent);cursor:pointer;text-decoration:underline;">✏️ Modifica in Impostazioni</a>';
     h += '</div>';
-    var notSelectedMincpd = availDocs.filter(function(d) { return !_aiMinConfPerDay.has(d); });
-    h += '<div style="display:flex;gap:8px;align-items:center;margin-top:8px;max-width:400px;">';
-    h += '<select class="ai-select-dropdown" id="ai-mincpd-select" style="flex:1;">';
-    h += '<option value="">Seleziona medico...</option>';
-    notSelectedMincpd.forEach(function(doc) {
-      h += '<option value="' + doc.replace(/"/g, '&quot;') + '">' + doc + '</option>';
-    });
-    h += '</select>';
-    h += '<button class="btn btn-success btn-sm" onclick="_aiAddMinConfFromDropdown()" style="padding:8px 16px;font-size:12px;font-weight:700;white-space:nowrap;">+ Aggiungi</button>';
+    if (_alwaysActive.length > 0) {
+      h += '<div style="margin-bottom:8px;"><span style="font-size:11px;font-weight:700;color:#7c3aed;">👑 Sempre confermati:</span> ';
+      _alwaysActive.forEach(function(d) { h += '<span class="ai-always-tag" style="font-size:11px;">' + d + '</span> '; });
+      h += '</div>';
+    }
+    if (_minconfActive.length > 0) {
+      h += '<div><span style="font-size:11px;font-weight:700;color:#059669;">📅 Min. 1/giorno:</span> ';
+      _minconfActive.forEach(function(d) { h += '<span class="ai-mincpd-tag" style="font-size:11px;">' + d + '</span> '; });
+      h += '</div>';
+    }
     h += '</div>';
   }
-  h += '</div>';
 
   // ── Card 2: Number inputs ──
   h += '<div class="ai-card">';
