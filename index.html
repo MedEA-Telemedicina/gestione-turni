@@ -181,6 +181,11 @@
   [data-theme="dark"] #tab-impostazioni .btn-primary {
     background: #1e3a5f !important; color: #93c5fd !important; border-color: #2563eb !important;
   }
+
+  /* Dark mode: sezione rating stelle */
+  [data-theme="dark"] #ratings-list .rating-row { background: var(--surface); border-bottom-color: var(--border); }
+  [data-theme="dark"] #ratings-list .star-btn { color: #4b5563; }
+  [data-theme="dark"] #ratings-list .star-btn.active { color: #fbbf24; }
   [data-theme="dark"] #tab-impostazioni .btn-ghost {
     background: #1e293b !important; color: #94a3b8 !important; border-color: #334155 !important;
   }
@@ -1582,6 +1587,21 @@
       <div class="ai-selected-tags" id="cfg-mincpd-tags"><span class="ai-no-tags">Caricamento...</span></div>
     </div>
 
+
+    <!-- VALUTAZIONE AFFIDABILITÀ MEDICI (admin-only) -->
+    <div class="card admin-only" id="ratings-card">
+      <div class="card-title">⭐ Valutazione Affidabilità Medici</div>
+      <p style="font-size:11px;color:var(--muted);margin-bottom:12px;">
+        Assegna da <strong>1 a 5 stelle</strong> a ciascun medico in base all'affidabilità. 
+        Il generatore bozza AI dà <strong>precedenza ai medici con valutazione più alta</strong> 
+        quando deve scegliere chi aggiungere a un turno.
+      </p>
+      <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center;">
+        <input type="text" id="ratings-search" placeholder="🔍 Cerca medico..." style="flex:1;max-width:220px;" oninput="renderRatingsSection()">
+      </div>
+      <div id="ratings-list" style="display:flex;flex-direction:column;gap:0;max-height:420px;overflow-y:auto;padding-right:4px;"></div>
+    </div>
+
   </div>
 </div>
 
@@ -1797,6 +1817,7 @@ function onLoginSuccess() {
   }
   // Attiva presenza online (each wrapped so one failure doesn't break all)
   try { initPresence(); } catch(e) { console.warn('initPresence:', e); }
+  try { initUsersNameCache(); } catch(e) { console.warn('initUsersNameCache:', e); }
   try { listenOnlineUsers(); } catch(e) { console.warn('listenOnlineUsers:', e); }
   try { _listenAllChatNotifications(); } catch(e) { console.warn('_listenAllChatNotifications:', e); }
   try { initCursorTracking(); } catch(e) { console.warn('initCursorTracking:', e); }
@@ -1969,6 +1990,7 @@ let state = {
   doctorConflicts: [], // [[docA, docB], ...] pairs that cannot work same shift
   customRules: [], // [{doctor, operator, value, description}] custom rules for warnings
   doctorPhones: {}, // { [doctorName]: phoneNumber }
+  doctorRatings: {}, // { [doctorName]: 1..5 } — affidabilità (default 3)
   requestTemplate: "Buongiorno Dott. [NOME],\npotrebbe indicarci le sue disponibilità per la settimana del [DATA]?\nGrazie mille!",
   confirmTemplate: "Salve, per la prossima settimana Le confermiamo i seguenti turni:\n[TURNI]\nGrazie!"
 };
@@ -2296,7 +2318,7 @@ function switchTab(id) {
   if (id === 'calendar') renderCalendar();
   if (id === 'whatsapp') renderWaHistory();
   if (id === 'storico') loadAuditLog();
-  if (id === 'impostazioni') { renderSettings(); loadUsersList(); loadConflicts(); populateConflictSelects(); loadCustomRules(); populateRuleSelects(); renderAIConfigInSettings(); }
+  if (id === 'impostazioni') { renderSettings(); loadUsersList(); loadConflicts(); populateConflictSelects(); loadCustomRules(); populateRuleSelects(); renderAIConfigInSettings(); renderRatingsSection(); }
   if (id === 'turniai') renderTurniAI();
 }
 
@@ -4866,21 +4888,27 @@ function renderConferma() {
     const slotNames = confSlots.map(([key, val]) => {
       const [di, si] = key.split('_').map(Number);
       const ecgLabel = val === 'confermato-ecg' ? ' (SOLO ECG)' : '';
-      return `${DAYS[di]} ${si === 0 ? 'mattina' : 'pomeriggio'}${ecgLabel}`;
+      const dayNum = parseLocalDate(addDays(currentWeek, di)).getDate();
+      return `${DAYS[di]} ${dayNum} ${si === 0 ? 'mattina' : 'pomeriggio'}${ecgLabel}`;
     });
 
-    const holterNames = holterConfSlots.map(([di]) => HNAMES_FULL[parseInt(di, 10)]);
-    holterNames.sort((a,b) => HNAMES_FULL.indexOf(a) - HNAMES_FULL.indexOf(b));
+    const holterNames = holterConfSlots.map(([di]) => {
+      const idx = parseInt(di, 10);
+      const dayNum = parseLocalDate(addDays(currentWeek, idx)).getDate();
+      return { label: `${HNAMES_FULL[idx]} ${dayNum}`, idx };
+    });
+    holterNames.sort((a,b) => a.idx - b.idx);
+    const holterNamesLabels = holterNames.map(h => h.label);
 
     // ── Costruisci messaggio ──
     let msg = 'Salve, per la prossima settimana ';
     if (slotNames.length > 0) {
       msg += `Le confermiamo i seguenti turni:\n${slotNames.join(' -  ')}`;
-      if (holterNames.length > 0) {
-        msg += `\nLe confermiamo i seguenti turni HOLTER: ${holterNames.join(' -  ')}.`;
+      if (holterNamesLabels.length > 0) {
+        msg += `\nLe confermiamo i seguenti turni HOLTER: ${holterNamesLabels.join(' -  ')}.`;
       }
     } else {
-      msg += `Le confermiamo i seguenti turni HOLTER: ${holterNames.join(' -  ')}.`;
+      msg += `Le confermiamo i seguenti turni HOLTER: ${holterNamesLabels.join(' -  ')}.`;
     }
     msg += '\nGrazie';
 
@@ -5645,6 +5673,7 @@ function setDoctorCap(doc, cap, checked) {
   state.doctorExtra[doc].spiro  = caps.spiro;
   state.doctorExtra[doc].pls    = caps.pls;
   renderSettings();
+  renderRatingsSection();
   renderTable();
   renderHolterTable();
   renderHcTable();
@@ -5652,6 +5681,78 @@ function setDoctorCap(doc, cap, checked) {
   renderSpiroTable();
   renderPlsTable();
   saveData();
+}
+
+
+// ─── VALUTAZIONE AFFIDABILITÀ MEDICI ───────────────────────────────────────
+
+function renderRatingsSection() {
+  const list = document.getElementById('ratings-list');
+  if (!list) return;
+  const search = (document.getElementById('ratings-search')?.value || '').toLowerCase();
+  if (!state.doctorRatings) state.doctorRatings = {};
+
+  const docs = [...state.doctors]
+    .filter(d => (state.doctorTypes?.[d] || 'completo') !== 'nessuno' || !!state.holterEnabled?.[d])
+    .sort((a, b) => a.localeCompare(b))
+    .filter(d => d.toLowerCase().includes(search));
+
+  if (docs.length === 0) {
+    list.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:12px 0;">Nessun medico trovato.</div>';
+    return;
+  }
+
+  list.innerHTML = docs.map(doc => {
+    const rating = state.doctorRatings[doc] || 0;
+    const stars = [1,2,3,4,5].map(s => {
+      const active = s <= rating;
+      return `<button class="star-btn${active?' active':''}" onclick="saveDoctorRating('${doc.replace(/'/g,"\'")}',${s})" title="${s} ${s===1?'stella':'stelle'}" style="background:none;border:none;cursor:pointer;font-size:20px;padding:2px 1px;line-height:1;color:${active?'#f59e0b':'#d1d5db'};transition:color .12s;" onmouseenter="highlightStars('${doc.replace(/'/g,"\'")}',${s})" onmouseleave="restoreStars('${doc.replace(/'/g,"\'")}')">★</button>`;
+    }).join('');
+    const ratingLabel = rating === 0 ? '<span style="font-size:10px;color:var(--muted);">non valutato</span>'
+      : rating === 1 ? '<span style="font-size:10px;color:#ef4444;">Bassa</span>'
+      : rating === 2 ? '<span style="font-size:10px;color:#f97316;">Discreta</span>'
+      : rating === 3 ? '<span style="font-size:10px;color:#eab308;">Media</span>'
+      : rating === 4 ? '<span style="font-size:10px;color:#22c55e;">Buona</span>'
+      : '<span style="font-size:10px;color:#2563eb;font-weight:700;">Ottima</span>';
+    return `<div class="rating-row" data-doc="${doc}" style="display:flex;align-items:center;gap:12px;padding:7px 4px;border-bottom:1px solid var(--border);">
+      <span style="flex:1;font-size:13px;font-weight:600;color:var(--text);">${doc}</span>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <div class="stars-row" data-doc="${doc}">${stars}</div>
+        ${ratingLabel}
+        ${rating > 0 ? `<button onclick="saveDoctorRating('${doc.replace(/'/g,"\'")}',0)" style="background:none;border:none;cursor:pointer;font-size:11px;color:var(--muted);padding:2px 5px;border-radius:4px;" title="Rimuovi valutazione">✕</button>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function highlightStars(doc, upTo) {
+  const row = document.querySelector('.stars-row[data-doc="' + doc + '"]');
+  if (!row) return;
+  row.querySelectorAll('.star-btn').forEach((btn, i) => {
+    btn.style.color = (i < upTo) ? '#fbbf24' : '#d1d5db';
+  });
+}
+
+function restoreStars(doc) {
+  const row = document.querySelector('.stars-row[data-doc="' + doc + '"]');
+  if (!row) return;
+  const rating = (state.doctorRatings && state.doctorRatings[doc]) || 0;
+  row.querySelectorAll('.star-btn').forEach((btn, i) => {
+    btn.style.color = (i < rating) ? '#f59e0b' : '#d1d5db';
+  });
+}
+
+function saveDoctorRating(doc, rating) {
+  if (!state.doctorRatings) state.doctorRatings = {};
+  if (rating === 0) {
+    delete state.doctorRatings[doc];
+  } else {
+    state.doctorRatings[doc] = rating;
+  }
+  saveData(true);
+  renderRatingsSection();
+  const stars = ['', '⭐', '⭐⭐', '⭐⭐⭐', '⭐⭐⭐⭐', '⭐⭐⭐⭐⭐'];
+  showToast(rating > 0 ? `${doc}: ${stars[rating]}` : `${doc}: valutazione rimossa`);
 }
 
 function renderSettings() {
@@ -5776,6 +5877,7 @@ function addDoctor() {
   state.doctors.sort((a, b) => a.localeCompare(b));
   inp.value = '';
   renderSettings();
+  renderRatingsSection();
   renderTable();
   renderHolterTable();
   saveData();
@@ -5816,6 +5918,7 @@ function updateDoctor(i, val) {
   if (state.holterEnabled[oldName] !== undefined) { state.holterEnabled[newName] = state.holterEnabled[oldName]; delete state.holterEnabled[oldName]; }
   if (state.doctorExtra[oldName] !== undefined) { state.doctorExtra[newName] = state.doctorExtra[oldName]; delete state.doctorExtra[oldName]; }
   if (state.doctorPhones[oldName] !== undefined) { state.doctorPhones[newName] = state.doctorPhones[oldName]; delete state.doctorPhones[oldName]; }
+  if (state.doctorRatings[oldName] !== undefined) { state.doctorRatings[newName] = state.doctorRatings[oldName]; delete state.doctorRatings[oldName]; }
   logAudit('Rinominato medico: ' + oldName + ' → ' + newName);
   renderSettings();
   renderTable();
@@ -6162,7 +6265,9 @@ function checkCustomRulesForDoc(doc) {
   const w = getWeekData();
   const dd = w[doc];
   if (!dd || !dd.slots) return warnings;
-  const confCount = Object.values(dd.slots).filter(v => v === 'confermato' || v === 'confermato-ecg').length;
+  const _holterSlotsForDoc = (state.holterWeeks[currentWeek] && state.holterWeeks[currentWeek][doc] && state.holterWeeks[currentWeek][doc].slots) || {};
+  const confCount = Object.values(dd.slots).filter(v => v === 'confermato' || v === 'confermato-ecg').length
+                  + Object.values(_holterSlotsForDoc).filter(v => v === 'confermato').length;
   const opLabels = { min: 'almeno', max: 'massimo', exact: 'esattamente' };
   for (const r of rules) {
     let violated = false;
@@ -6187,7 +6292,9 @@ function checkAllCustomRules() {
     const dd = w[r.doctor];
     // Se il medico è in ferie, la regola non si applica
     if (dd && dd.ferie) continue;
-    const confCount = dd && dd.slots ? Object.values(dd.slots).filter(v => v === 'confermato' || v === 'confermato-ecg').length : 0;
+    const _holterSlotsAll = (state.holterWeeks[currentWeek] && state.holterWeeks[currentWeek][r.doctor] && state.holterWeeks[currentWeek][r.doctor].slots) || {};
+    const confCount = (dd && dd.slots ? Object.values(dd.slots).filter(v => v === 'confermato' || v === 'confermato-ecg').length : 0)
+                    + Object.values(_holterSlotsAll).filter(v => v === 'confermato').length;
     let violated = false;
     if (r.operator === 'min' && confCount < r.value) violated = true;
     if (r.operator === 'max' && confCount > r.value) violated = true;
@@ -6630,6 +6737,7 @@ function copyTextFallback(text) {
 // ONLINE PRESENCE
 // =============================================
 let _presenceRef = null;
+let _usersNameCache = {};
 let _connectedRef = null;
 let _heartbeatInterval = null;
 
@@ -6686,6 +6794,19 @@ let _prevOnlineUsernames = new Set();
 let _prevOnlineFullNames = {};
 let _onlineFirstLoad = true;
 
+function initUsersNameCache() {
+  firebase.database().ref('cardio_users').on('value', snap => {
+    const users = snap.val() || {};
+    _usersNameCache = {};
+    Object.entries(users).forEach(([key, data]) => {
+      const username = fbKeyDecode(key);
+      if (data && (data.fullName || username)) {
+        _usersNameCache[username] = data.fullName || username;
+      }
+    });
+  });
+}
+
 function listenOnlineUsers() {
   firebase.database().ref('cardio_presence').on('value', snap => {
     const users = snap.val() || {};
@@ -6702,7 +6823,7 @@ function listenOnlineUsers() {
       })
       .map(([uid, data]) => ({
         username: fbKeyDecode(uid),
-        fullName: data.fullName || fbKeyDecode(uid),
+        fullName: _usersNameCache[fbKeyDecode(uid)] || data.fullName || fbKeyDecode(uid),
         role: data.role || 'user'
       }));
 
@@ -8007,11 +8128,11 @@ function _aiCountPrevWeek() {
       }
     }
   });
-  // Holter
+  // Holter (inclusa domenica, di=6)
   (state.doctors || []).filter(function(d) { return state.holterEnabled[d]; }).forEach(function(doc) {
     var hd = ph[doc];
     if (!hd || hd.ferie) return;
-    for (var di = 0; di < 6; di++) {
+    for (var di = 0; di < 7; di++) {
       if ((hd.slots || {})[di] === 'confermato') {
         counts['h_' + di] = (counts['h_' + di] || 0) + 1;
       }
@@ -8103,6 +8224,13 @@ function _aiRenderInner() {
     h += '<td><input type="number" id="ai-ho-' + di + '" min="0" max="10" value="' + hc + '"></td>';
     h += '</tr>';
   }
+  // Riga DOM: solo holter
+  var hcDom = counts['h_6'] || 0;
+  h += '<tr style="background:rgba(99,102,241,0.06);">';
+  h += '<td style="font-weight:700;color:#6366f1;">DOM</td>';
+  h += '<td colspan="4" style="text-align:center;color:var(--muted);font-size:12px;letter-spacing:.5px;">—</td>';
+  h += '<td><input type="number" id="ai-ho-6" min="0" max="10" value="' + hcDom + '"></td>';
+  h += '</tr>';
   h += '</tbody></table></div></div>';
 
   // ── Card 3: Rules & Conflicts from Settings ──
@@ -8159,6 +8287,8 @@ function _aiLoadFromPrevWeek() {
     el = document.getElementById('ai-pe-' + di); if (el) el.value = pc.ecg;
     el = document.getElementById('ai-ho-' + di); if (el) el.value = hc;
   }
+  // DOM holter
+  var elDom = document.getElementById('ai-ho-6'); if (elDom) elDom.value = counts['h_6'] || 0;
   showToast('🔄 Numeri caricati dalla settimana precedente');
 }
 
@@ -8229,7 +8359,7 @@ function generateAIDraft() {
     if (!hd || hd.ferie) return;
     var hSlots = hd.slots || {};
     var hAvails = [];
-    for (var _di = 0; _di < 6; _di++) {
+    for (var _di = 0; _di < 7; _di++) {
       if (hSlots[_di] === 'disponibile') hAvails.push(_di);
     }
     if (hAvails.length === 1) _singleHolterMap[doc] = hAvails[0];
@@ -8305,12 +8435,16 @@ function generateAIDraft() {
           var aBelowMin = (_ruleMinMap[a] !== undefined && (assignCount[a] || 0) < _ruleMinMap[a]) ? 1 : 0;
           var bBelowMin = (_ruleMinMap[b] !== undefined && (assignCount[b] || 0) < _ruleMinMap[b]) ? 1 : 0;
           if (aBelowMin !== bBelowMin) return bBelowMin - aBelowMin;
-          // Priority 1: confirmed in prev week same slot → prefer
+          // Priority 1: rating stelle affidabilità → prefer higher
+          var aRating = (state.doctorRatings && state.doctorRatings[a]) || 3;
+          var bRating = (state.doctorRatings && state.doctorRatings[b]) || 3;
+          if (aRating !== bRating) return bRating - aRating;
+          // Priority 2: confirmed in prev week same slot → prefer
           var pa = prevData[a], pb = prevData[b];
           var aConf = (pa && pa.slots && (pa.slots[key] === 'confermato' || pa.slots[key] === 'confermato-ecg')) ? 1 : 0;
           var bConf = (pb && pb.slots && (pb.slots[key] === 'confermato' || pb.slots[key] === 'confermato-ecg')) ? 1 : 0;
           if (aConf !== bConf) return bConf - aConf;
-          // Priority 2: fewer total assignments → prefer
+          // Priority 3: fewer total assignments → prefer
           return (assignCount[a] || 0) - (assignCount[b] || 0);
         });
       };
@@ -8390,6 +8524,40 @@ function generateAIDraft() {
     draft.holter[di] = placedH;
     draft.holterSkipped[di] = availHolter.filter(function(d) { return !placedH.includes(d); });
   }
+
+  // ── Holter domenicale (di=6) ──
+  (function() {
+    var di6 = 6;
+    var targetHolterDom = parseInt((document.getElementById('ai-ho-6') || {}).value) || 0;
+    var availHolterDom = [];
+    (state.doctors || []).filter(function(d) { return state.holterEnabled[d]; }).forEach(function(doc) {
+      var hd = holterData[doc];
+      if (!hd || hd.ferie) return;
+      if ((hd.slots || {})[di6] === 'disponibile') availHolterDom.push(doc);
+    });
+    var placedHDom = [];
+    _aiAlwaysConfirm.forEach(function(doc) {
+      if (availHolterDom.includes(doc) && placedHDom.length < targetHolterDom) placedHDom.push(doc);
+    });
+    Object.keys(_singleHolterMap).forEach(function(doc) {
+      if (_singleHolterMap[doc] !== di6) return;
+      if (placedHDom.includes(doc)) return;
+      placedHDom.push(doc);
+    });
+    var candHDom = availHolterDom.filter(function(d) { return !placedHDom.includes(d); }).sort(function(a, b) {
+      var pha = prevHolter[a], phb = prevHolter[b];
+      var aConf = (pha && pha.slots && pha.slots[di6] === 'confermato') ? 1 : 0;
+      var bConf = (phb && phb.slots && phb.slots[di6] === 'confermato') ? 1 : 0;
+      if (aConf !== bConf) return bConf - aConf;
+      return (assignCount[a] || 0) - (assignCount[b] || 0);
+    });
+    for (var hi6 = 0; hi6 < candHDom.length; hi6++) {
+      if (placedHDom.length >= targetHolterDom) break;
+      placedHDom.push(candHDom[hi6]);
+    }
+    draft.holter[di6] = placedHDom;
+    draft.holterSkipped[di6] = availHolterDom.filter(function(d) { return !placedHDom.includes(d); });
+  })();
 
   // ── Post-processing: Min 1 Conferma al Giorno ──
   // Per ogni medico in _aiMinConfPerDay: se ha disponibilità in un giorno
@@ -8523,15 +8691,36 @@ function _aiRenderDraftTable() {
     h += '<tr>';
     h += '<td class="dcell">' + DAYSL[di] + '<br><span style="font-size:10px;font-weight:400;color:var(--muted);">' + formatDate(dayStr) + '</span></td>';
 
-    // Mattina
-    h += '<td>' + _aiRenderSlotCell(di, 0) + '</td>';
-    // Pomeriggio
-    h += '<td>' + _aiRenderSlotCell(di, 1) + '</td>';
+    // Mattina — colora rosso se supera il numero preventivato
+    var _mItems = _aiDraft.slots[di + '_0'] || [];
+    var _mTargetC = parseInt((document.getElementById('ai-mc-' + di) || {}).value) || 0;
+    var _mTargetE = parseInt((document.getElementById('ai-me-' + di) || {}).value) || 0;
+    var _mPlacedC = _mItems.filter(function(p){ return p.type === 'completo'; }).length;
+    var _mPlacedE = _mItems.filter(function(p){ return p.type === 'ecg'; }).length;
+    var _mOverflow = (_mPlacedC > _mTargetC) || (_mPlacedE > _mTargetE);
+    h += '<td' + (_mOverflow ? ' style="background:rgba(220,38,38,0.15);border:2px solid #dc2626;"' : '') + '>' + _aiRenderSlotCell(di, 0) + '</td>';
+    // Pomeriggio — colora rosso se supera il numero preventivato
+    var _pItems = _aiDraft.slots[di + '_1'] || [];
+    var _pTargetC = parseInt((document.getElementById('ai-pc-' + di) || {}).value) || 0;
+    var _pTargetE = parseInt((document.getElementById('ai-pe-' + di) || {}).value) || 0;
+    var _pPlacedC = _pItems.filter(function(p){ return p.type === 'completo'; }).length;
+    var _pPlacedE = _pItems.filter(function(p){ return p.type === 'ecg'; }).length;
+    var _pOverflow = (_pPlacedC > _pTargetC) || (_pPlacedE > _pTargetE);
+    h += '<td' + (_pOverflow ? ' style="background:rgba(220,38,38,0.15);border:2px solid #dc2626;"' : '') + '>' + _aiRenderSlotCell(di, 1) + '</td>';
     // Holter
     h += '<td>' + _aiRenderHolterCell(di) + '</td>';
 
     h += '</tr>';
   }
+
+  // Riga DOM: solo holter
+  var domStr = addDays(currentWeek, 6);
+  h += '<tr style="background:rgba(99,102,241,0.06);">';
+  h += '<td class="dcell" style="color:#6366f1;">DOM<br><span style="font-size:10px;font-weight:400;color:var(--muted);">' + formatDate(domStr) + '</span></td>';
+  h += '<td style="text-align:center;color:var(--muted);font-size:12px;">—</td>';
+  h += '<td style="text-align:center;color:var(--muted);font-size:12px;">—</td>';
+  h += '<td>' + _aiRenderHolterCell(6) + '</td>';
+  h += '</tr>';
 
   h += '</tbody></table></div>';
 
@@ -8867,7 +9056,7 @@ function _aiApplyDraft() {
   // Apply holter
   var holterWeek = state.holterWeeks[currentWeek];
   if (!holterWeek) { state.holterWeeks[currentWeek] = {}; holterWeek = state.holterWeeks[currentWeek]; }
-  for (var di = 0; di < 6; di++) {
+  for (var di = 0; di < 7; di++) {
     var hDocs = _aiDraft.holter[di] || [];
     hDocs.forEach(function(doc) {
       if (!holterWeek[doc]) holterWeek[doc] = { slots: {}, ferie: false };
