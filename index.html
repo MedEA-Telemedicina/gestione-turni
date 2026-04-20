@@ -1194,6 +1194,8 @@
     100% { content: ''; }
   }
 </style>
+<!-- Microsoft Authentication Library (MSAL.js v2) -->
+<script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"></script>
 <!-- Google Identity Services -->
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <!-- Firebase SDK -->
@@ -5143,6 +5145,165 @@ function renderCalendar() {
 }
 
 // =============================================
+// MICROSOFT EXCEL ONLINE — EXPORT
+// =============================================
+
+// ⚙️  CONFIGURA QUI i tuoi ID Azure AD
+const MSAL_CLIENT_ID  = '879cce82-20a9-4a19-8090-da52783d4356';   // Application (client) ID
+const MSAL_TENANT_ID  = '9517c96a-8492-4ea0-a5e4-c791b8006c61';   // Directory (tenant) ID
+
+// 📄 Coordinate del file Excel Online
+const EXCEL_OWNER_UPN  = 'a_marino@med-ea.it';
+const EXCEL_ITEM_ID    = '262D4F88-53C5-4E88-BAE3-869F9D2A3B6E';
+const EXCEL_WORKSHEET  = 'TURNI DEFINITIVI';
+const EXCEL_START_ROW  = 18; // riga di partenza nel foglio (A18)
+
+let _msalInstance = null;
+
+function getMsalInstance() {
+  if (_msalInstance) return _msalInstance;
+  if (!window.msal) { showToast('❌ Libreria Microsoft non caricata. Verifica connessione.'); return null; }
+  _msalInstance = new msal.PublicClientApplication({
+    auth: {
+      clientId: MSAL_CLIENT_ID,
+      authority: 'https://login.microsoftonline.com/' + MSAL_TENANT_ID,
+      redirectUri: 'https://medea-telemedicina.github.io/gestione-turni/'
+    },
+    cache: { cacheLocation: 'sessionStorage' }
+  });
+  return _msalInstance;
+}
+
+function setExcelStatus(msg, color) {
+  const el = document.getElementById('excel-export-status');
+  if (el) { el.textContent = msg; el.style.color = color || 'var(--muted)'; }
+}
+
+// Converte il numero di colonne in lettera (es. 1→A, 27→AA)
+function colToLetter(n) {
+  let s = '';
+  while (n > 0) { s = String.fromCharCode(65 + (n - 1) % 26) + s; n = Math.floor((n - 1) / 26); }
+  return s;
+}
+
+// Estrae la tabella DOM in un array bidimensionale di stringhe
+function extractTableToArray(table) {
+  const domRows = Array.from(table.querySelectorAll('tr'));
+  const grid = [];   // grid[row][col] = valore
+  const occupied = {};
+
+  domRows.forEach((tr, ri) => {
+    if (!grid[ri]) grid[ri] = [];
+    let ci = 0;
+    Array.from(tr.querySelectorAll('td, th')).forEach(td => {
+      while (occupied[ri + ',' + ci]) ci++;
+      const cs = td.colSpan || 1;
+      const rs = td.rowSpan || 1;
+      const clone = td.cloneNode(true);
+      clone.querySelectorAll('br').forEach(br => br.replaceWith(' / '));
+      const text = clone.textContent.replace(/\s+/g, ' ').trim();
+      for (let r = 0; r < rs; r++) {
+        for (let c = 0; c < cs; c++) {
+          if (!grid[ri + r]) grid[ri + r] = [];
+          grid[ri + r][ci + c] = (r === 0 && c === 0) ? text : '';
+          occupied[(ri + r) + ',' + (ci + c)] = true;
+        }
+      }
+      ci += cs;
+    });
+  });
+
+  // Uniforma lunghezza righe
+  const maxCols = Math.max(...grid.map(r => r.length));
+  return grid.map(row => {
+    const arr = [];
+    for (let c = 0; c < maxCols; c++) arr.push(row[c] !== undefined ? row[c] : '');
+    return arr;
+  });
+}
+
+async function exportToExcelOnline() {
+  if (MSAL_CLIENT_ID === 'INSERISCI_QUI_IL_CLIENT_ID') {
+    showToast('⚠️ Configura prima il Client ID e Tenant ID nel file HTML.');
+    return;
+  }
+
+  const btn = document.getElementById('excel-export-btn');
+  if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
+  setExcelStatus('🔐 Autenticazione Microsoft...', '#2563eb');
+
+  try {
+    const msalInst = getMsalInstance();
+    if (!msalInst) return;
+
+    const scopes = ['Files.ReadWrite.All'];
+    let tokenResp;
+    const accounts = msalInst.getAllAccounts();
+    if (accounts.length > 0) {
+      try {
+        tokenResp = await msalInst.acquireTokenSilent({ scopes, account: accounts[0] });
+      } catch (e) {
+        tokenResp = await msalInst.acquireTokenPopup({ scopes });
+      }
+    } else {
+      tokenResp = await msalInst.acquireTokenPopup({ scopes });
+    }
+
+    const token = tokenResp.accessToken;
+    setExcelStatus('📊 Lettura tabella...', '#2563eb');
+
+    const table = document.getElementById('riepilogo-conf-table');
+    if (!table) { showToast('❌ Tabella "Turni Definitivi" non trovata. Apri la scheda Riepilogo.'); return; }
+
+    const data = extractTableToArray(table);
+    if (!data.length) { showToast('❌ Nessun dato nella tabella.'); return; }
+
+    const numRows = data.length;
+    const numCols = data[0].length;
+    const endCol = colToLetter(numCols);
+    const endRow = EXCEL_START_ROW + numRows - 1;
+    const rangeAddr = 'A' + EXCEL_START_ROW + ':' + endCol + endRow;
+
+    setExcelStatus('☁️ Scrittura su Excel Online...', '#2563eb');
+
+    // Prima cancella il range di destinazione (evita residui settimane precedenti)
+    const clearUrl = `https://graph.microsoft.com/v1.0/users/${EXCEL_OWNER_UPN}/drive/items/${EXCEL_ITEM_ID}/workbook/worksheets('${encodeURIComponent(EXCEL_WORKSHEET)}')/range(address='A${EXCEL_START_ROW}:Z${endRow + 10}')/clear`;
+    await fetch(clearUrl, {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ applyTo: 'Contents' })
+    });
+
+    // Scrive i nuovi dati
+    const writeUrl = `https://graph.microsoft.com/v1.0/users/${EXCEL_OWNER_UPN}/drive/items/${EXCEL_ITEM_ID}/workbook/worksheets('${encodeURIComponent(EXCEL_WORKSHEET)}')/range(address='${rangeAddr}')`;
+    const writeResp = await fetch(writeUrl, {
+      method: 'PATCH',
+      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ values: data })
+    });
+
+    if (writeResp.ok) {
+      setExcelStatus('✅ Esportato con successo!', '#16a34a');
+      showToast('✅ Turni Definitivi esportati su Excel Online (riga A' + EXCEL_START_ROW + ')!');
+      setTimeout(() => setExcelStatus('', ''), 5000);
+    } else {
+      const errData = await writeResp.json().catch(() => ({}));
+      const errMsg = errData?.error?.message || ('HTTP ' + writeResp.status);
+      setExcelStatus('❌ Errore: ' + errMsg, '#dc2626');
+      showToast('❌ Errore esportazione: ' + errMsg);
+    }
+
+  } catch (err) {
+    const msg = err?.message || String(err);
+    setExcelStatus('❌ ' + msg, '#dc2626');
+    showToast('❌ Errore: ' + msg);
+    console.error('Excel export error:', err);
+  } finally {
+    if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+  }
+}
+
+// =============================================
 // GOOGLE CALENDAR SYNC
 // =============================================
 const GCAL_CLIENT_ID    = '442937844790-u48rsq47pam83j861psobppvh1e8bb62.apps.googleusercontent.com';
@@ -5511,6 +5672,11 @@ function renderRiepilogo() {
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
       <h3 style="margin:0;font-size:14px;font-weight:700;">✅ Turni Definitivi — Conferme</h3>
       <button onclick="copyRiepilogoTable('riepilogo-conf-table')" style="padding:5px 14px;font-size:11px;background:#16a34a;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600;">Copia per Excel</button>
+      <button onclick="exportToExcelOnline()" id="excel-export-btn" style="padding:5px 14px;font-size:11px;background:#107c41;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600;display:flex;align-items:center;gap:5px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="3" width="20" height="18" rx="2" fill="#fff" fill-opacity="0.2"/><path d="M14 3v6h6" stroke="#fff" stroke-width="2"/><path d="M14 3l6 6" stroke="#fff" stroke-width="2"/><path d="M8 13l2.5 4 2.5-4" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/><path d="M5 17h14" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/></svg>
+        Esporta su Excel Online
+      </button>
+      <span id="excel-export-status" style="font-size:11px;color:var(--muted);"></span>
     </div>
     <div style="overflow-x:auto;margin-bottom:24px;">
       ${buildTable('riepilogo-conf-table', slotConf, thConf, hcCombinedConf, hpConf, spiroData, plsData)}
