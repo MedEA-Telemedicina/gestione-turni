@@ -1195,7 +1195,9 @@
   }
 </style>
 <!-- Microsoft Authentication Library (MSAL.js v2) -->
-<script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.3/lib/msal-browser.min.js"
+        onerror="console.error('MSAL CDN failed, trying fallback...');var s=document.createElement('script');s.src='https://unpkg.com/@azure/msal-browser@2.38.3/lib/msal-browser.min.js';document.head.appendChild(s);">
+</script>
 <!-- Google Identity Services -->
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <!-- Firebase SDK -->
@@ -5162,8 +5164,12 @@ let _msalInstance = null;
 
 function getMsalInstance() {
   if (_msalInstance) return _msalInstance;
-  if (!window.msal) { showToast('❌ Libreria Microsoft non caricata. Verifica connessione.'); return null; }
-  _msalInstance = new msal.PublicClientApplication({
+  if (typeof window.msal === 'undefined' && typeof msal === 'undefined') {
+    showToast('❌ Libreria Microsoft non caricata. Ricarica la pagina e riprova.');
+    return null;
+  }
+  const msalLib = window.msal || msal;
+  _msalInstance = new msalLib.PublicClientApplication({
     auth: {
       clientId: MSAL_CLIENT_ID,
       authority: 'https://login.microsoftonline.com/' + MSAL_TENANT_ID,
