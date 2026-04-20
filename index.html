@@ -5155,10 +5155,9 @@ const MSAL_CLIENT_ID  = '879cce82-20a9-4a19-8090-da52783d4356';   // Application
 const MSAL_TENANT_ID  = '9517c96a-8492-4ea0-a5e4-c791b8006c61';   // Directory (tenant) ID
 
 // 📄 Coordinate del file Excel Online
-const EXCEL_OWNER_UPN  = 'a_marino@med-ea.it';
-const EXCEL_ITEM_ID    = '262D4F88-53C5-4E88-BAE3-869F9D2A3B6E';
-const EXCEL_WORKSHEET  = 'TURNI DEFINITIVI';
-const EXCEL_START_ROW  = 18; // riga di partenza nel foglio (A18)
+const EXCEL_SHARING_ENCODED = 'dSFodHRwczovL21lZGVhZGlnaXRhbGhlYWx0aC1teS5zaGFyZXBvaW50LmNvbS86eDovZy9wZXJzb25hbC9hX21hcmlub19tZWQtZWFfaXQvSVFDSVR5MG14Vk9JVHJyamhwLWRLanR1QWNzWGtBTTI4QWJPQVltTXlZUGVNb1U'; // Link condiviso codificato
+const EXCEL_WORKSHEET  = 'TURNI DEFINITIVI';           // Nome del foglio
+const EXCEL_START_ROW  = 18;                           // Riga di partenza (A18)
 
 let _msalInstance = null;
 
@@ -5272,8 +5271,11 @@ async function exportToExcelOnline() {
 
     setExcelStatus('☁️ Scrittura su Excel Online...', '#2563eb');
 
+    // Usa il link di condivisione — funziona per qualsiasi collega loggato con account @med-ea.it
+    const baseUrl = `https://graph.microsoft.com/v1.0/shares/${EXCEL_SHARING_ENCODED}/driveItem/workbook/worksheets('${encodeURIComponent(EXCEL_WORKSHEET)}')`;
+
     // Prima cancella il range di destinazione (evita residui settimane precedenti)
-    const clearUrl = `https://graph.microsoft.com/v1.0/users/${EXCEL_OWNER_UPN}/drive/items/${EXCEL_ITEM_ID}/workbook/worksheets('${encodeURIComponent(EXCEL_WORKSHEET)}')/range(address='A${EXCEL_START_ROW}:Z${endRow + 10}')/clear`;
+    const clearUrl = `${baseUrl}/range(address='A${EXCEL_START_ROW}:Z${endRow + 10}')/clear`;
     await fetch(clearUrl, {
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
@@ -5281,7 +5283,7 @@ async function exportToExcelOnline() {
     });
 
     // Scrive i nuovi dati
-    const writeUrl = `https://graph.microsoft.com/v1.0/users/${EXCEL_OWNER_UPN}/drive/items/${EXCEL_ITEM_ID}/workbook/worksheets('${encodeURIComponent(EXCEL_WORKSHEET)}')/range(address='${rangeAddr}')`;
+    const writeUrl = `${baseUrl}/range(address='${rangeAddr}')`;
     const writeResp = await fetch(writeUrl, {
       method: 'PATCH',
       headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
