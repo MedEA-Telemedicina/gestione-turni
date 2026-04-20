@@ -5241,7 +5241,7 @@ async function exportToExcelOnline() {
     const msalInst = getMsalInstance();
     if (!msalInst) return;
 
-    const scopes = ['Files.ReadWrite.All', 'offline_access'];
+    const scopes = ['Files.ReadWrite', 'offline_access'];
     let tokenResp;
     const accounts = msalInst.getAllAccounts();
     if (accounts.length > 0) {
