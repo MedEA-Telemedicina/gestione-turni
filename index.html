@@ -5269,10 +5269,26 @@ async function exportToExcelOnline() {
     const endRow = EXCEL_START_ROW + numRows - 1;
     const rangeAddr = 'A' + EXCEL_START_ROW + ':' + endCol + endRow;
 
+    setExcelStatus('🔗 Risoluzione file condiviso...', '#2563eb');
+
+    // Step 1: Risolve il link condiviso → ottiene driveId e itemId reali
+    const resolveResp = await fetch(
+      `https://graph.microsoft.com/v1.0/shares/${EXCEL_SHARING_ENCODED}/driveItem?$select=id,parentReference`,
+      { headers: { 'Authorization': 'Bearer ' + token } }
+    );
+    if (!resolveResp.ok) {
+      const err = await resolveResp.json().catch(() => ({}));
+      throw new Error('Impossibile risolvere il file condiviso: ' + (err.error?.message || resolveResp.status));
+    }
+    const resolveData = await resolveResp.json();
+    const itemId  = resolveData.id;
+    const driveId = resolveData.parentReference?.driveId;
+    if (!itemId || !driveId) throw new Error('Risposta inattesa dalla risoluzione del file condiviso.');
+
     setExcelStatus('☁️ Scrittura su Excel Online...', '#2563eb');
 
-    // Usa il link di condivisione — funziona per qualsiasi collega loggato con account @med-ea.it
-    const baseUrl = `https://graph.microsoft.com/v1.0/shares/${EXCEL_SHARING_ENCODED}/driveItem/workbook/worksheets('${encodeURIComponent(EXCEL_WORKSHEET)}')`;
+    // Step 2: Usa driveId + itemId per accedere al workbook (metodo supportato per AAD)
+    const baseUrl = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${itemId}/workbook/worksheets('${encodeURIComponent(EXCEL_WORKSHEET)}')`;
 
     // Prima cancella il range di destinazione (evita residui settimane precedenti)
     const clearUrl = `${baseUrl}/range(address='A${EXCEL_START_ROW}:Z${endRow + 10}')/clear`;
