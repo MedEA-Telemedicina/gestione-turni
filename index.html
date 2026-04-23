@@ -1,6 +1,7 @@
 
 
 
+
 <!DOCTYPE html>
 <html lang="it">
 <head>
@@ -2296,7 +2297,7 @@ function encodeKeys(obj) {
   if (Array.isArray(obj)) return obj.map(encodeKeys);
   const out = {};
   for (const k of Object.keys(obj)) {
-    out[k.replace(/\./g, '·')] = encodeKeys(obj[k]);
+    out[k.replace(/\./g, '·').replace(/'/g, 'ʼ')] = encodeKeys(obj[k]);
   }
   return out;
 }
@@ -2305,7 +2306,7 @@ function decodeKeys(obj) {
   if (Array.isArray(obj)) return obj.map(decodeKeys);
   const out = {};
   for (const k of Object.keys(obj)) {
-    out[k.replace(/·/g, '.')] = decodeKeys(obj[k]);
+    out[k.replace(/·/g, '.').replace(/ʼ/g, "'")] = decodeKeys(obj[k]);
   }
   return out;
 }
@@ -6288,9 +6289,10 @@ function renderRatingsSection() {
 
   list.innerHTML = docs.map(doc => {
     const rating = state.doctorRatings[doc] || 0;
+    const docJson = JSON.stringify(doc).replace(/"/g, '&quot;');
     const stars = [1,2,3,4,5].map(s => {
       const active = s <= rating;
-      return `<button class="star-btn${active?' active':''}" onclick="saveDoctorRating('${doc.replace(/'/g,"\'")}',${s})" title="${s} ${s===1?'stella':'stelle'}" style="background:none;border:none;cursor:pointer;font-size:20px;padding:2px 1px;line-height:1;color:${active?'#f59e0b':'#d1d5db'};transition:color .12s;" onmouseenter="highlightStars('${doc.replace(/'/g,"\'")}',${s})" onmouseleave="restoreStars('${doc.replace(/'/g,"\'")}')">★</button>`;
+      return `<button class="star-btn${active?' active':''}" onclick="saveDoctorRating(${docJson},${s})" title="${s} ${s===1?'stella':'stelle'}" style="background:none;border:none;cursor:pointer;font-size:20px;padding:2px 1px;line-height:1;color:${active?'#f59e0b':'#d1d5db'};transition:color .12s;" onmouseenter="highlightStars(${docJson},${s})" onmouseleave="restoreStars(${docJson})">★</button>`;
     }).join('');
     const ratingLabel = rating === 0 ? '<span style="font-size:10px;color:var(--muted);">non valutato</span>'
       : rating === 1 ? '<span style="font-size:10px;color:#ef4444;">Bassa</span>'
@@ -6303,7 +6305,7 @@ function renderRatingsSection() {
       <div style="display:flex;align-items:center;gap:6px;">
         <div class="stars-row" data-doc="${doc}">${stars}</div>
         ${ratingLabel}
-        ${rating > 0 ? `<button onclick="saveDoctorRating('${doc.replace(/'/g,"\'")}',0)" style="background:none;border:none;cursor:pointer;font-size:11px;color:var(--muted);padding:2px 5px;border-radius:4px;" title="Rimuovi valutazione">✕</button>` : ''}
+        ${rating > 0 ? `<button onclick="saveDoctorRating(${docJson},0)" style="background:none;border:none;cursor:pointer;font-size:11px;color:var(--muted);padding:2px 5px;border-radius:4px;" title="Rimuovi valutazione">✕</button>` : ''}
       </div>
     </div>`;
   }).join('');
