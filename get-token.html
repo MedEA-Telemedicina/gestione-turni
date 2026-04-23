@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<title>Ottieni Refresh Token — Admin</title>
+<style>
+  body { font-family: monospace; max-width: 820px; margin: 40px auto; padding: 20px; background: #1e1e2e; color: #cdd6f4; }
+  h2 { color: #89b4fa; }
+  button { padding: 10px 22px; background: #89b4fa; color: #1e1e2e; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 14px; margin-right: 10px; }
+  button:hover { background: #b4befe; }
+  #output { margin-top: 20px; background: #313244; border-radius: 8px; padding: 16px; word-break: break-all; white-space: pre-wrap; font-size: 12px; min-height: 60px; }
+  .label { color: #a6e3a1; font-weight: bold; margin-bottom: 6px; display: block; }
+  .warn { color: #f38ba8; margin-top: 10px; font-size: 12px; }
+  .copy-btn { margin-top: 10px; padding: 6px 14px; background: #a6e3a1; color: #1e1e2e; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; }
+  .token-box { background: #1e1e2e; border: 1px solid #45475a; border-radius: 6px; padding: 10px; margin-top: 8px; word-break: break-all; font-size: 11px; max-height: 120px; overflow-y: auto; }
+  .step { color: #cba6f7; }
+</style>
+</head>
+<body>
+<h2>🔑 Admin: Ottieni Refresh Token Microsoft</h2>
+<p>Usa questa pagina <strong>solo tu</strong> per ottenere il refresh token da salvare su Netlify.<br>
+Lo scambio del codice avviene lato server — nessun problema CORS.</p>
+
+<button onclick="startLogin()">🔐 Login con Microsoft</button>
+
+<div id="output">In attesa...</div>
+
+<script>
+const CLIENT_ID   = '879cce82-20a9-4a19-8090-da52783d4356';
+const TENANT_ID   = '9517c96a-8492-4ea0-a5e4-c791b8006c61';
+const REDIRECT_URI = window.location.origin + window.location.pathname;
+const SCOPE        = 'https://graph.microsoft.com/Files.ReadWrite offline_access';
+
+// --- PKCE helpers ---
+function base64url(buf) {
+  return btoa(String.fromCharCode(...new Uint8Array(buf)))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+async function generatePKCE() {
+  const verifier = base64url(crypto.getRandomValues(new Uint8Array(32)));
+  const hashed   = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
+  const challenge = base64url(hashed);
+  return { verifier, challenge };
+}
+
+async function startLogin() {
+  const out = document.getElementById('output');
+  out.textContent = '⏳ Preparazione login...';
+
+  const { verifier, challenge } = await generatePKCE();
+  const state = base64url(crypto.getRandomValues(new Uint8Array(12)));
+
+  sessionStorage.setItem('pkce_verifier', verifier);
+  sessionStorage.setItem('pkce_state',    state);
+
+  const params = new URLSearchParams({
+    client_id:             CLIENT_ID,
+    response_type:         'code',
+    redirect_uri:          REDIRECT_URI,
+    scope:                 SCOPE,
+    state:                 state,
+    code_challenge:        challenge,
+    code_challenge_method: 'S256',
+    prompt:                'select_account',
+  });
+
+  window.location.href =
+    `https://login.microsoftonline.com/${TENANT_ID}/oauth2/v2.0/authorize?${params}`;
+}
+
+async function handleCallback() {
+  const out    = document.getElementById('output');
+  const params = new URLSearchParams(window.location.search);
+  const code   = params.get('code');
+  const state  = params.get('state');
+  const error  = params.get('error');
+
+  if (error) {
+    out.textContent = '❌ Errore Microsoft: ' + (params.get('error_description') || error);
+    return;
+  }
+  if (!code) return; // Pagina caricata normalmente, nessun codice
+
+  const savedState   = sessionStorage.getItem('pkce_state');
+  const codeVerifier = sessionStorage.getItem('pkce_verifier');
+
+  if (state !== savedState) {
+    out.textContent = '❌ Errore sicurezza: state mismatch. Riprova.';
+    return;
+  }
+
+  // Pulisci URL senza ricaricare
+  history.replaceState({}, '', window.location.pathname);
+
+  out.textContent = '⏳ Scambio codice per token in corso (lato server)...';
+
+  try {
+    // ✅ Lo scambio avviene nella Netlify Function — nessun CORS, riceve il refresh token
+    const resp = await fetch('/api/token-exchange', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        code,
+        codeVerifier,
+        redirectUri: REDIRECT_URI,
+      }),
+    });
+
+    const data = await resp.json();
+
+    // Nuovo flusso: il server salva il token su Netlify Blobs e restituisce { success: true }
+    if (data.success) {
+      out.innerHTML = `
+<span class="step">✅ LOGIN RIUSCITO — Refresh Token salvato su Netlify Blobs</span>
+
+<span class="label" style="color:#a6e3a1; margin-top:12px; display:block;">
+Il refresh token è stato salvato automaticamente sul server.<br>
+Non devi fare nulla: l'app è pronta a leggere i dati da Excel. 🎉
+</span>
+
+<span class="warn">Se in futuro il token scade, ripeti il login da questa pagina.</span>`;
+      return;
+    }
+
+    // Fallback: errore dal server
+    out.textContent = '❌ Errore dal server:\n\n' + JSON.stringify(data, null, 2);
+
+  } catch (e) {
+    out.textContent = '❌ Errore fetch: ' + e.message;
+  }
+}
+
+function copyToken() {
+  const text = document.getElementById('rt-box').textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    alert('✅ Refresh Token copiato negli appunti! (' + text.length + ' caratteri)\n\nIncollalo in Netlify → Site settings → Environment variables → GRAPH_REFRESH_TOKEN');
+  }).catch(() => {
+    const el = document.getElementById('rt-box');
+    const range = document.createRange();
+    range.selectNode(el);
+    window.getSelection().removeAllRanges();
+    window.getSelection().addRange(range);
+    alert('Selezionato! Usa Ctrl+C per copiare.');
+  });
+}
+
+// Esegui al caricamento
+handleCallback();
+</script>
+</body>
+</html>
