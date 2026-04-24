@@ -1791,7 +1791,7 @@
 <div class="tab-content admin-only" id="tab-turniai">
   <div style="margin-bottom:16px;">
     <h3 style="margin:0 0 4px;font-size:16px;font-weight:700;color:#6366f1;">🤖 Generazione Bozza Turni AI</h3>
-    <p style="color:var(--muted);font-size:12px;margin:0;">Genera automaticamente una bozza dei turni basata su disponibilità, settimana precedente e regole configurate.<br><span style="font-size:11px;">👑 = sempre confermato · 🎯 = unica disponibilità (auto-inserito) · 📅 = min 1 conf/giorno</span></p>
+    <p style="color:var(--muted);font-size:12px;margin:0;">Genera automaticamente una bozza dei turni basata su disponibilità, rating affidabilità e regole configurate. Ogni settimana è indipendente.<br><span style="font-size:11px;">👑 = sempre confermato · 🎯 = unica disponibilità (auto-inserito) · 📅 = min 1 conf/giorno · <span style="color:#b91c1c;font-weight:700;">⚠️ rosso = doppio turno</span></span></p>
   </div>
   <div id="ai-turni-content"></div>
 </div>
@@ -9181,12 +9181,7 @@ function generateAIDraft() {
           var aRating = (state.doctorRatings && state.doctorRatings[a]) || 3;
           var bRating = (state.doctorRatings && state.doctorRatings[b]) || 3;
           if (aRating !== bRating) return bRating - aRating;
-          // Priority 2: confirmed in prev week same slot → prefer
-          var pa = prevData[a], pb = prevData[b];
-          var aConf = (pa && pa.slots && (pa.slots[key] === 'confermato' || pa.slots[key] === 'confermato-ecg')) ? 1 : 0;
-          var bConf = (pb && pb.slots && (pb.slots[key] === 'confermato' || pb.slots[key] === 'confermato-ecg')) ? 1 : 0;
-          if (aConf !== bConf) return bConf - aConf;
-          // Priority 3: fewer total assignments → prefer
+          // Priority 2: fewer total assignments → prefer
           return (assignCount[a] || 0) - (assignCount[b] || 0);
         });
       };
@@ -9204,6 +9199,31 @@ function generateAIDraft() {
         usedOnDay[doc].add(di);
         placedCompletoCount++;
       }
+      // ── Secondo giro copertura completo: se il target non è raggiunto,
+      // permetti doppio turno nello stesso giorno (priorità: rating più alto prima)
+      if (placedCompletoCount < targetCompleto) {
+        var doubleOkCompleto = availCompleto.filter(function(d) {
+          if (allPlacedDocs().includes(d)) return false;   // già in questo slot
+          if (_aiAlwaysConfirm.has(d)) return false;       // già gestito step 1
+          if (_ruleMaxMap[d] !== undefined && (assignCount[d] || 0) >= _ruleMaxMap[d]) return false; // max rule
+          return true; // accetta anche se già usato oggi
+        }).sort(function(a, b) {
+          var aRating = (state.doctorRatings && state.doctorRatings[a]) || 3;
+          var bRating = (state.doctorRatings && state.doctorRatings[b]) || 3;
+          if (aRating !== bRating) return bRating - aRating;
+          return (assignCount[a] || 0) - (assignCount[b] || 0);
+        });
+        for (var ci2x = 0; ci2x < doubleOkCompleto.length; ci2x++) {
+          if (placedCompletoCount >= targetCompleto) break;
+          var docDC = doubleOkCompleto[ci2x];
+          if (_aiConflictsWithList(docDC, placed)) continue;
+          placed.push({ doc: docDC, type: 'completo', always: false, single: false });
+          assignCount[docDC] = (assignCount[docDC] || 0) + 1;
+          if (!usedOnDay[docDC]) usedOnDay[docDC] = new Set();
+          usedOnDay[docDC].add(di);
+          placedCompletoCount++;
+        }
+      }
 
       // Fill ECG slots - selezione con copertura servizi (SSR, Pediatrico, FirmaDigitale)
       var placedEcgCount = placed.filter(function(p) { return p.type === 'ecg'; }).length;
@@ -9217,6 +9237,31 @@ function generateAIDraft() {
           assignCount[doc2] = (assignCount[doc2] || 0) + 1;
           if (!usedOnDay[doc2]) usedOnDay[doc2] = new Set();
           usedOnDay[doc2].add(di);
+          placedEcgCount++;
+        });
+      }
+      // ── Secondo giro copertura ECG: se il target non è raggiunto,
+      // permetti doppio turno nello stesso giorno (priorità: rating più alto prima)
+      var toFillEcg2 = targetEcg - placedEcgCount;
+      if (toFillEcg2 > 0) {
+        var doubleOkEcg = availEcg.filter(function(d) {
+          if (allPlacedDocs().includes(d)) return false;
+          if (_aiAlwaysConfirm.has(d)) return false;
+          if (_ruleMaxMap[d] !== undefined && (assignCount[d] || 0) >= _ruleMaxMap[d]) return false;
+          return true;
+        }).sort(function(a, b) {
+          var aRating = (state.doctorRatings && state.doctorRatings[a]) || 3;
+          var bRating = (state.doctorRatings && state.doctorRatings[b]) || 3;
+          if (aRating !== bRating) return bRating - aRating;
+          return (assignCount[a] || 0) - (assignCount[b] || 0);
+        });
+        var alreadyEcgDocs2 = placed.filter(function(p) { return p.type === 'ecg'; }).map(function(p) { return p.doc; });
+        var selectedEcg2 = _selectEcgWithCoverage(doubleOkEcg, toFillEcg2, alreadyEcgDocs2, placed);
+        selectedEcg2.forEach(function(doc2e) {
+          placed.push({ doc: doc2e, type: 'ecg', always: false, single: false });
+          assignCount[doc2e] = (assignCount[doc2e] || 0) + 1;
+          if (!usedOnDay[doc2e]) usedOnDay[doc2e] = new Set();
+          usedOnDay[doc2e].add(di);
           placedEcgCount++;
         });
       }
@@ -9255,10 +9300,11 @@ function generateAIDraft() {
     });
     // Sort remaining
     var candH = availHolter.filter(function(d) { return !placedH.includes(d); }).sort(function(a, b) {
-      var pha = prevHolter[a], phb = prevHolter[b];
-      var aConf = (pha && pha.slots && pha.slots[di] === 'confermato') ? 1 : 0;
-      var bConf = (phb && phb.slots && phb.slots[di] === 'confermato') ? 1 : 0;
-      if (aConf !== bConf) return bConf - aConf;
+      // Priorità 1: rating affidabilità (più alto = prima)
+      var aRatingH = (state.doctorRatings && state.doctorRatings[a]) || 3;
+      var bRatingH = (state.doctorRatings && state.doctorRatings[b]) || 3;
+      if (aRatingH !== bRatingH) return bRatingH - aRatingH;
+      // Priorità 2: meno turni assegnati
       return (assignCount[a] || 0) - (assignCount[b] || 0);
     });
     for (var hi = 0; hi < candH.length; hi++) {
@@ -9289,10 +9335,11 @@ function generateAIDraft() {
       placedHDom.push(doc);
     });
     var candHDom = availHolterDom.filter(function(d) { return !placedHDom.includes(d); }).sort(function(a, b) {
-      var pha = prevHolter[a], phb = prevHolter[b];
-      var aConf = (pha && pha.slots && pha.slots[di6] === 'confermato') ? 1 : 0;
-      var bConf = (phb && phb.slots && phb.slots[di6] === 'confermato') ? 1 : 0;
-      if (aConf !== bConf) return bConf - aConf;
+      // Priorità 1: rating affidabilità (più alto = prima)
+      var aRatingHD = (state.doctorRatings && state.doctorRatings[a]) || 3;
+      var bRatingHD = (state.doctorRatings && state.doctorRatings[b]) || 3;
+      if (aRatingHD !== bRatingHD) return bRatingHD - aRatingHD;
+      // Priorità 2: meno turni assegnati
       return (assignCount[a] || 0) - (assignCount[b] || 0);
     });
     for (var hi6 = 0; hi6 < candHDom.length; hi6++) {
@@ -9433,6 +9480,13 @@ function _aiRenderDraftTable() {
   }
   h += '</div>';
 
+  // Search bar
+  h += '<div style="margin-top:12px;display:flex;align-items:center;gap:8px;">';
+  h += '<span style="font-size:13px;color:var(--muted);">🔍</span>';
+  h += '<input id="ai-draft-search" type="text" placeholder="Cerca medico nella bozza…" oninput="_aiSearchDraft(this.value)" style="flex:1;max-width:320px;padding:6px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface);color:var(--text);">';
+  h += '<button onclick="document.getElementById(\'ai-draft-search\').value=\'\';_aiSearchDraft(\'\');" style="padding:5px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--muted);cursor:pointer;font-size:12px;">✕</button>';
+  h += '</div>';
+
   // Table
   h += '<div style="overflow-x:auto;margin-top:12px;">';
   h += '<table class="ai-draft-tbl"><thead><tr>';
@@ -9482,6 +9536,33 @@ function _aiRenderDraftTable() {
   h += '<p style="font-size:11px;color:var(--muted);text-align:center;margin-top:6px;">Questa azione imposterà i medici della bozza come "confermati" nella tabella disponibilità.</p>';
 
   el.innerHTML = h;
+  // Re-apply existing search highlight after re-render
+  var _prevSearch = window._aiDraftSearchVal || '';
+  if (_prevSearch) {
+    var _inp = document.getElementById('ai-draft-search');
+    if (_inp) _inp.value = _prevSearch;
+    _aiApplyDraftSearch(_prevSearch);
+  }
+}
+
+var _aiDraftSearchVal = '';
+function _aiSearchDraft(val) {
+  window._aiDraftSearchVal = val;
+  _aiApplyDraftSearch(val);
+}
+function _aiApplyDraftSearch(val) {
+  var q = (val || '').trim().toLowerCase();
+  var tags = document.querySelectorAll('#ai-draft-result [data-doc]');
+  tags.forEach(function(el) {
+    var doc = (el.getAttribute('data-doc') || '').toLowerCase();
+    if (q && doc.indexOf(q) !== -1) {
+      el.style.outline = '2.5px solid #f59e0b';
+      el.style.boxShadow = '0 0 0 3px rgba(245,158,11,0.25)';
+    } else {
+      el.style.outline = '';
+      el.style.boxShadow = '';
+    }
+  });
 }
 
 // ═══════════════════════════════════════════════════════
@@ -9559,6 +9640,12 @@ function _aiRenderSlotCell(di, si) {
   var items = _aiDraft.slots[key] || [];
   var h = '<div class="slot-cell">';
 
+  // Calcola quali medici sono in doppio turno nello stesso giorno
+  var otherSi = 1 - si;
+  var otherKey = di + '_' + otherSi;
+  var otherItems = _aiDraft.slots[otherKey] || [];
+  var otherDocs = otherItems.map(function(it) { return it.doc; });
+
   items.sort(function(a, b) { return a.doc.localeCompare(b.doc, 'it'); });
   items.forEach(function(item, idx) {
     var cls = 'ai-tag';
@@ -9567,14 +9654,17 @@ function _aiRenderSlotCell(di, si) {
     if (item.single) cls += ' single';
     if (item.mincpd) cls += ' mincpd';
     if (item.rule) cls += ' rule';
+    var isDouble = !item.always && otherDocs.indexOf(item.doc) !== -1;
+    var extraStyle = isDouble ? ' style="background:#fee2e2;border-color:#ef4444;color:#b91c1c;font-weight:700;"' : '';
     var label = item.doc;
+    if (isDouble) label = '⚠️ ' + label;
     if (item.type === 'ecg') label += ' <span style="font-size:9px;opacity:.7;">(ECG)</span>';
     if (item.always) label = '👑 ' + label;
     else if (item.single) label = '🎯 ' + label;
     else if (item.mincpd) label = '📅 ' + label;
     else if (item.rule) label = '📋 ' + label;
     var _tt = _aiGetServicesTooltip(item.doc).replace(/"/g, '&quot;');
-    h += '<span class="' + cls + '" data-ai-tooltip="' + _tt + '">' + label;
+    h += '<span class="' + cls + '"' + extraStyle + ' data-doc="' + item.doc.replace(/"/g,'&quot;') + '" data-ai-tooltip="' + _tt + '">' + label;
     h += ' <button class="x" onclick="_aiRemoveFromSlot(' + di + ',' + si + ',' + idx + ')" title="Rimuovi">✕</button>';
     h += '</span>';
   });
@@ -9614,7 +9704,7 @@ function _aiRenderHolterCell(di) {
     if (_aiAlwaysConfirm.has(doc)) cls += ' crown';
     var label = _aiAlwaysConfirm.has(doc) ? '👑 ' + doc : doc;
     var _htt = _aiGetServicesTooltip(doc).replace(/"/g, '&quot;');
-    h += '<span class="' + cls + '" data-ai-tooltip="' + _htt + '">' + label;
+    h += '<span class="' + cls + '" data-doc="' + doc.replace(/"/g,'&quot;') + '" data-ai-tooltip="' + _htt + '">' + label;
     h += ' <button class="x" onclick="_aiRemoveHolter(' + di + ',' + idx + ')" title="Rimuovi">✕</button>';
     h += '</span>';
   });
