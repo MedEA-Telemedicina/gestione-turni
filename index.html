@@ -1605,6 +1605,8 @@
   <div style="margin:8px 0;">
     <input type="text" id="conf-search" placeholder="🔍 Cerca medico..." oninput="filterConferma()" style="width:100%;max-width:320px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:12px;background:var(--surface2);color:var(--text);">
   </div>
+  <div id="conf-bulk-wa-bar" style="margin-bottom:10px;display:none;"></div>
+  <div id="conf-bulk-wa-progress" style="display:none;margin-bottom:12px;"></div>
   <div class="conf-list" id="conf-list">
     <div class="empty-state">Nessun turno confermato questa settimana.</div>
   </div>
@@ -2978,7 +2980,28 @@ function showNoAvailPopup() {
     showWarningBanner('Tutti gli specialisti hanno dato disponibilità! 🎉', '#059669');
     return;
   }
+
+  // Raccoglie tutti gli specialisti unici con telefono dall'elenco del popup (senza duplicati)
+  const _seenNoAvailDocs = new Set();
+  const _allUniqueNoAvailDocs = [];
+  for (const doc of [...turniDocs, ...hcNoAvail, ...hpNoAvail, ...spNoAvail, ...plNoAvail]) {
+    if (!_seenNoAvailDocs.has(doc) && state.doctorPhones?.[doc]?.trim()) {
+      _seenNoAvailDocs.add(doc);
+      _allUniqueNoAvailDocs.push(doc);
+    }
+  }
+  window._noAvailAllUniqueDocs = _allUniqueNoAvailDocs;
+
   const resetBtn = isAdm ? `<button onclick="resetNoAvailWaSent()" style="font-size:10px;padding:3px 10px;border-radius:6px;border:1.5px solid #f59e0b;background:#fffbeb;color:#b45309;cursor:pointer;font-weight:600;">🔄 Reset WhatsApp</button>` : '';
+
+  // Pulsante invio bulk — visibile solo se il messaggio di richiesta è già stato generato
+  const bulkNoAvailBtn = (_allUniqueNoAvailDocs.length > 0)
+    ? `<div style="padding:10px 12px;background:rgba(37,211,102,0.08);border:1.5px solid #25d366;border-radius:10px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:4px;">
+        <div style="font-size:12px;color:#065f46;font-weight:600;">📤 Invia messaggio a tutti gli specialisti senza disponibilità</div>
+        <button onclick="startBulkNoAvailWa()" style="background:#25d366;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;box-shadow:0 2px 8px rgba(37,211,102,0.3);">📲 Invia a tutti (${_allUniqueNoAvailDocs.length})</button>
+      </div>`
+    : '';
+
   const overlay = document.createElement('div');
   overlay.className = 'no-avail-overlay';
   overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
@@ -2992,6 +3015,8 @@ function showNoAvailPopup() {
         </div>
       </div>
       <div class="no-avail-body" style="max-height:70vh;overflow-y:auto;">
+        ${bulkNoAvailBtn}
+        <div id="bulk-noavail-wa-progress" style="display:none;margin-bottom:10px;"></div>
         <div style="margin-bottom:6px;padding:6px 10px;background:rgba(99,102,241,0.1);border-radius:8px;font-weight:700;color:#6366f1;font-size:13px;cursor:pointer;" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none'">
           🩺 Turni Cardiologia (${turniDocs.length})
         </div>
@@ -3663,7 +3688,16 @@ function toggleSpiroTableVis() {
 
 function getPlsDoctorData(doc) {
   if (!state.plsWeeks[currentWeek]) state.plsWeeks[currentWeek] = {};
-  if (!state.plsWeeks[currentWeek][doc]) state.plsWeeks[currentWeek][doc] = { slots: {}, ferie: false };
+  if (!state.plsWeeks[currentWeek][doc]) {
+    // Default PLS: Fabiani V. = 4 per giorno (mar-sab), Morando V. = 2 per giorno (mar-sab)
+    const defaultSlots = {};
+    if (doc === 'FABIANI V.') {
+      for (let di = 1; di <= 5; di++) defaultSlots[di] = { num: 4, conf: false };
+    } else if (doc === 'MORANDO V.') {
+      for (let di = 1; di <= 5; di++) defaultSlots[di] = { num: 2, conf: false };
+    }
+    state.plsWeeks[currentWeek][doc] = { slots: defaultSlots, ferie: false };
+  }
   if (!state.plsWeeks[currentWeek][doc].slots) state.plsWeeks[currentWeek][doc].slots = {};
   return state.plsWeeks[currentWeek][doc];
 }
@@ -3671,40 +3705,49 @@ function getPlsDoctorData(doc) {
 function editPlsSlot(btn, doc, di) {
   const dd = getPlsDoctorData(doc);
   const cur = dd.slots[di];
-  if (!cur) {
-    const input = document.createElement('input');
-    input.type = 'text'; input.placeholder = 'N o x';
-    input.style.cssText = 'width:44px;font-size:12px;font-weight:700;border:1px solid #aaa;border-radius:3px;text-align:center;padding:2px;';
-    btn.replaceWith(input);
-    input.focus();
-    const commit = () => {
-      const raw = input.value.trim().toLowerCase();
-      const dayN = ['LUN','MAR','MER','GIO','VEN','SAB','DOM'];
-      if (raw === 'x') {
-        getPlsDoctorData(doc).slots[di] = { val: 'x', conf: false };
-        logSlotChange('PLS', doc, dayN[di] || di, 'x');
-        saveData();
-      } else {
-        const num = parseInt(raw, 10);
-        if (!isNaN(num) && num > 0) {
-          getPlsDoctorData(doc).slots[di] = { num, conf: false };
-          logSlotChange('PLS', doc, dayN[di] || di, num);
-          saveData();
-        }
-      }
-      renderPlsTable(); renderRiepilogo();
-    };
-    input.addEventListener('keydown', e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') renderPlsTable(); });
-    input.addEventListener('blur', commit);
-    return;
-  } else {
-    const dayN = ['LUN','MAR','MER','GIO','VEN','SAB','DOM'];
-    logSlotChange('PLS', doc, dayN[di] || di, 'vuoto');
-    delete dd.slots[di];
+  // Apre sempre un input (sia per celle vuote che per celle con valore)
+  const input = document.createElement('input');
+  input.type = 'text'; input.placeholder = 'N o x';
+  input.style.cssText = 'width:44px;font-size:12px;font-weight:700;border:1px solid #aaa;border-radius:3px;text-align:center;padding:2px;';
+  // Pre-compila con il valore attuale se presente
+  if (cur) {
+    input.value = cur.val === 'x' ? 'x' : (cur.num != null ? String(cur.num) : '');
   }
-  saveData();
-  renderPlsTable();
-  renderRiepilogo();
+  btn.replaceWith(input);
+  input.focus();
+  input.select();
+  let _committed = false;
+  const commit = () => {
+    if (_committed) return;
+    _committed = true;
+    const raw = input.value.trim().toLowerCase();
+    const dayN = ['LUN','MAR','MER','GIO','VEN','SAB','DOM'];
+    if (raw === '') {
+      // Campo vuoto → cancella il valore
+      if (cur) {
+        logSlotChange('PLS', doc, dayN[di] || di, 'vuoto');
+        delete dd.slots[di];
+        saveData();
+      }
+    } else if (raw === 'x') {
+      dd.slots[di] = { val: 'x', conf: cur ? cur.conf : false };
+      logSlotChange('PLS', doc, dayN[di] || di, 'x');
+      saveData();
+    } else {
+      const num = parseInt(raw, 10);
+      if (!isNaN(num) && num > 0) {
+        dd.slots[di] = { num, conf: cur ? cur.conf : false };
+        logSlotChange('PLS', doc, dayN[di] || di, num);
+        saveData();
+      }
+    }
+    renderPlsTable(); renderRiepilogo();
+  };
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); commit(); }
+    if (e.key === 'Escape') { _committed = true; renderPlsTable(); }
+  });
+  input.addEventListener('blur', commit);
 }
 
 function togglePlsFerie(doc, val) {
@@ -5170,13 +5213,137 @@ function generateRequestMsg() {
   const dateStr = formatDate(currentWeek) + ' – ' + formatDate(endStr);
   const msg = tpl.replace('[NOME]', '[nome del dottore]').replace('[DATA]', dateStr);
   window._requestMsg = msg;
+
+  // Conta medici unici con numero di telefono
+  const docsWithPhone = [...new Set(state.doctors)].filter(d => state.doctorPhones && state.doctorPhones[d] && state.doctorPhones[d].trim());
+  const bulkBtnHtml = docsWithPhone.length > 0
+    ? `<button onclick="startBulkWhatsApp()" style="background:#25d366;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px;box-shadow:0 2px 8px rgba(37,211,102,0.3);">📲 Invia a tutti su WhatsApp (${docsWithPhone.length})</button>`
+    : `<span style="font-size:11px;color:var(--warn);">⚠️ Nessun medico con telefono configurato nelle impostazioni</span>`;
+
   document.getElementById('request-msg-area').innerHTML = `
     <div class="wa-bubble">
       <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">Messaggio da inviare:</div>
       <div class="msg-text">${msg.replace(/\n/g,'<br>')}</div>
-      <button class="btn btn-ghost btn-sm" onclick="copyText(window._requestMsg)">Copia</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px;">
+        <button class="btn btn-ghost btn-sm" onclick="copyText(window._requestMsg)">📋 Copia</button>
+        ${bulkBtnHtml}
+      </div>
     </div>
+    <div id="bulk-wa-progress" style="display:none;margin-top:14px;"></div>
   `;
+}
+
+// -------------------------------------------------------
+// INVIO BULK WHATSAPP — invio sequenziale a tutti i medici
+// -------------------------------------------------------
+function startBulkWhatsApp() {
+  const tpl = state.requestTemplate || '';
+  const endStr = addDays(currentWeek, 5);
+  const dateStr = formatDate(currentWeek) + ' – ' + formatDate(endStr);
+
+  // Raccoglie medici unici con numero di telefono (niente duplicati)
+  const seen = new Set();
+  const queue = [];
+  for (const doc of state.doctors) {
+    if (!seen.has(doc) && state.doctorPhones && state.doctorPhones[doc] && state.doctorPhones[doc].trim()) {
+      seen.add(doc);
+      queue.push({ doc, phone: state.doctorPhones[doc].trim() });
+    }
+  }
+
+  if (queue.length === 0) {
+    showToast('Nessun medico con numero di telefono configurato!', 'warn');
+    return;
+  }
+
+  window._bulkWaQueue = queue;
+  window._bulkWaIdx = 0;
+  window._bulkWaTpl = tpl;
+  window._bulkWaDateStr = dateStr;
+
+  sendNextBulkWa();
+}
+
+function sendNextBulkWa() {
+  const queue = window._bulkWaQueue;
+  const idx = window._bulkWaIdx;
+  const progressDiv = document.getElementById('bulk-wa-progress');
+
+  // Segna il medico PRECEDENTE come "Inviato" (l'utente ha appena cliccato "Prossimo")
+  if (idx > 0 && queue && queue[idx - 1]) {
+    const _lastDoc = queue[idx - 1].doc;
+    const _safeDoc = _lastDoc.replace(/\./g, '%2E');
+    document.querySelectorAll('.wa-send-btn').forEach(btn => {
+      if (btn.getAttribute('data-doc') === _lastDoc && btn.getAttribute('data-week') === currentWeek) {
+        markWaSentUI(btn);
+        btn.title = 'Inviato (invio multiplo)';
+      }
+    });
+    if (currentWeek) {
+      firebase.database().ref('cardio_wa_sent/' + currentWeek + '/' + _safeDoc).set({
+        by: currentUser ? (currentUser.fullName || currentUser.username) : 'unknown',
+        at: new Date().toISOString()
+      });
+    }
+  }
+
+  // Tutti inviati
+  if (!queue || idx >= queue.length) {
+    if (progressDiv) {
+      progressDiv.style.display = 'block';
+      progressDiv.innerHTML = `
+        <div style="background:#d1fae5;border:2px solid #6ee7b7;border-radius:12px;padding:16px 20px;color:#065f46;display:flex;align-items:center;gap:10px;">
+          <span style="font-size:22px;">✅</span>
+          <div>
+            <div style="font-size:14px;font-weight:800;">Completato!</div>
+            <div style="font-size:12px;margin-top:2px;">Messaggi inviati a tutti i <strong>${queue ? queue.length : 0}</strong> specialisti.</div>
+          </div>
+        </div>`;
+    }
+    return;
+  }
+
+  const { doc, phone } = queue[idx];
+  const msg = (window._bulkWaTpl || '').replace('[NOME]', doc).replace('[DATA]', window._bulkWaDateStr || '');
+
+  // Pulizia numero e apertura WhatsApp
+  let cleaned = phone.replace(/[\s\-\(\)]/g, '');
+  if (cleaned.startsWith('3') && cleaned.length === 10) cleaned = '39' + cleaned;
+  if (cleaned.startsWith('+')) cleaned = cleaned.substring(1);
+  const url = 'whatsapp://send?phone=' + cleaned + '&text=' + encodeURIComponent(msg);
+  window.open(url, '_self');
+
+  window._bulkWaIdx++;
+  const remaining = queue.length - window._bulkWaIdx;
+  const nextDoc = remaining > 0 ? queue[window._bulkWaIdx].doc : null;
+
+  if (progressDiv) {
+    progressDiv.style.display = 'block';
+    progressDiv.innerHTML = `
+      <div style="background:#f0fdf4;border:2px solid #25d366;border-radius:12px;padding:16px 18px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+          <span style="font-size:18px;">📲</span>
+          <div>
+            <div style="font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:.5px;">Invio in corso</div>
+            <div style="font-size:15px;font-weight:800;color:#065f46;">${idx + 1} / ${queue.length} — <span style="color:#16a34a;">${doc}</span></div>
+          </div>
+          <div style="margin-left:auto;background:#25d366;color:#fff;border-radius:999px;padding:3px 10px;font-size:11px;font-weight:700;">${queue.length - remaining} ✓ / ${queue.length}</div>
+        </div>
+        <div style="font-size:12px;color:#374151;background:#ffffff;border-radius:8px;padding:8px 12px;margin:10px 0;border:1px solid #d1fae5;">
+          💬 WhatsApp aperto per <strong>${doc}</strong>. Invia il messaggio nell'app, poi torna qui e clicca "Prossimo".
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">
+          ${remaining > 0
+            ? `<button onclick="sendNextBulkWa()" style="background:#25d366;color:#fff;border:none;border-radius:8px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(37,211,102,0.4);">➡️ Prossimo: ${nextDoc} (${remaining} rimast${remaining === 1 ? 'o' : 'i'})</button>`
+            : `<button onclick="sendNextBulkWa()" style="background:#059669;color:#fff;border:none;border-radius:8px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;">✅ Segna come completato</button>`
+          }
+          <button onclick="document.getElementById('bulk-wa-progress').style.display='none';window._bulkWaQueue=null;" style="background:transparent;border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--muted);cursor:pointer;">✕ Annulla</button>
+        </div>
+        <div style="font-size:10px;color:var(--muted);padding-top:10px;border-top:1px dashed var(--border);">
+          <strong>Rimanenti:</strong> ${remaining > 0 ? queue.slice(window._bulkWaIdx).map(q => q.doc).join(' · ') : '— nessuno, hai finito! 🎉'}
+        </div>
+      </div>`;
+  }
 }
 
 function renderWaHistory() {
@@ -5340,8 +5507,117 @@ function renderConferma() {
   }
 
   list.innerHTML = html;
+
+  // ── Pulsante bulk WhatsApp conferme ──
+  const bulkBar = document.getElementById('conf-bulk-wa-bar');
+  if (bulkBar) {
+    const allConfermaItems = items.filter(i => state.doctorPhones[i.doc]);
+    if (allConfermaItems.length > 0) {
+      // Salvo la coda globale per il bulk
+      window._confBulkItems = allConfermaItems.map((item, i) => ({
+        doc: item.doc,
+        phone: state.doctorPhones[item.doc],
+        idx: items.indexOf(item)
+      }));
+      bulkBar.style.display = 'block';
+      bulkBar.innerHTML = `<button onclick="startBulkConfermaWa()" style="background:#25d366;color:#fff;border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:7px;box-shadow:0 2px 8px rgba(37,211,102,0.3);">📲 Invia a tutti le conferme su WhatsApp (${allConfermaItems.length})</button>`;
+    } else {
+      bulkBar.style.display = 'none';
+      bulkBar.innerHTML = '';
+    }
+  }
+
   // Controlla Firebase per lo stato "inviato" e aggiorna i pulsanti
   restoreWaSentState();
+}
+
+function startBulkConfermaWa() {
+  if (!window._confBulkItems || window._confBulkItems.length === 0) {
+    alert('Nessun medico con numero di telefono trovato nella lista.');
+    return;
+  }
+  window._confBulkQueue = [...window._confBulkItems];
+  window._confBulkSentCount = 0;
+  const progressDiv = document.getElementById('conf-bulk-wa-progress');
+  if (progressDiv) progressDiv.style.display = 'block';
+  sendNextBulkConfermaWa();
+}
+
+function sendNextBulkConfermaWa() {
+  const queue = window._confBulkQueue || [];
+  const progressDiv = document.getElementById('conf-bulk-wa-progress');
+  if (!progressDiv) return;
+
+  // Segna il medico PRECEDENTE come "Inviato" (l'utente ha appena cliccato "Prossimo")
+  if (window._confBulkLastDoc) {
+    const _lastDoc = window._confBulkLastDoc;
+    const _safeDoc = _lastDoc.replace(/\./g, '%2E');
+    document.querySelectorAll('.wa-send-btn').forEach(btn => {
+      if (btn.getAttribute('data-doc') === _lastDoc && btn.getAttribute('data-week') === currentWeek) {
+        markWaSentUI(btn);
+        btn.title = 'Inviato (invio multiplo)';
+      }
+    });
+    if (currentWeek) {
+      firebase.database().ref('cardio_wa_sent/' + currentWeek + '/' + _safeDoc).set({
+        by: currentUser ? (currentUser.fullName || currentUser.username) : 'unknown',
+        at: new Date().toISOString()
+      });
+    }
+    window._confBulkLastDoc = null;
+  }
+
+  if (queue.length === 0) {
+    const total = window._confBulkSentCount || 0;
+    progressDiv.innerHTML = `
+      <div style="background:rgba(37,211,102,0.08);border:1.5px solid #25d366;border-radius:10px;padding:14px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <span style="font-size:22px;">✅</span>
+        <span style="font-weight:700;font-size:13px;color:#16a34a;">Completato! Messaggi inviati a ${total} medici.</span>
+        <button onclick="document.getElementById('conf-bulk-wa-progress').style.display='none';window._confBulkQueue=null;" style="background:transparent;border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:12px;color:var(--muted);cursor:pointer;margin-left:auto;">✕ Chiudi</button>
+      </div>`;
+    return;
+  }
+
+  const current = queue.shift();
+  window._confBulkQueue = queue;
+  window._confBulkSentCount = (window._confBulkSentCount || 0) + 1;
+  // Memorizza il medico corrente per marcarlo "inviato" al click di "Prossimo"
+  window._confBulkLastDoc = current.doc;
+
+  const total = window._confBulkItems.length;
+  const sent = window._confBulkSentCount;
+  const remaining = queue.length;
+  const nextDoc = queue.length > 0 ? queue[0].doc : null;
+
+  // Format phone
+  let phone = String(current.phone).replace(/\D/g, '');
+  if (phone.startsWith('3') && phone.length === 10) phone = '39' + phone;
+  else if (!phone.startsWith('39') && !phone.startsWith('+')) phone = '39' + phone;
+
+  // Get the message for this doctor
+  const msg = window._confMsgs[current.idx] || '';
+  const encodedMsg = encodeURIComponent(msg);
+  const waUrl = 'whatsapp://send?phone=' + phone + '&text=' + encodedMsg;
+  window.open(waUrl, '_blank');
+
+  progressDiv.innerHTML = `
+    <div style="background:rgba(37,211,102,0.08);border:1.5px solid #25d366;border-radius:10px;padding:14px 16px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+        <span style="font-size:20px;">📲</span>
+        <span style="font-weight:700;font-size:13px;">WhatsApp aperto per: <em>${current.doc}</em></span>
+        <span style="margin-left:auto;font-size:11px;color:var(--muted);">${sent} / ${total}</span>
+      </div>
+      <div style="background:var(--surface2);border-radius:6px;height:5px;margin-bottom:10px;">
+        <div style="background:#25d366;height:100%;border-radius:6px;width:${Math.round((sent/total)*100)}%;transition:width .4s;"></div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        ${remaining > 0
+          ? `<button onclick="sendNextBulkConfermaWa()" style="background:#25d366;color:#fff;border:none;border-radius:8px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(37,211,102,0.4);">➡️ Prossimo: ${nextDoc} (${remaining} rimast${remaining === 1 ? 'o' : 'i'})</button>`
+          : `<button onclick="sendNextBulkConfermaWa()" style="background:#059669;color:#fff;border:none;border-radius:8px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;">✅ Segna come completato</button>`
+        }
+        <button onclick="document.getElementById('conf-bulk-wa-progress').style.display='none';window._confBulkQueue=null;" style="background:transparent;border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--muted);cursor:pointer;">✕ Annulla</button>
+      </div>
+    </div>`;
 }
 
 function filterConferma() {
@@ -7292,6 +7568,110 @@ function resetNoAvailWaSent() {
     logAudit('Reset WA noavail per settimana ' + currentWeek);
     showToast('✅ Stato WhatsApp resettato!');
   });
+}
+
+function startBulkNoAvailWa() {
+  const docs = window._noAvailAllUniqueDocs || [];
+  if (docs.length === 0) {
+    showToast('Nessun specialista con numero di telefono configurato!', 'warn');
+    return;
+  }
+  const fixedMsg = 'Salve, ha novità per la disponibilità? Cortesemente entro le ore 14:00. \nGrazie';
+  const queue = docs.map(doc => ({ doc, phone: (state.doctorPhones[doc] || '').trim() })).filter(q => q.phone);
+  if (queue.length === 0) {
+    showToast('Nessun numero di telefono trovato!', 'warn');
+    return;
+  }
+  window._bulkNoAvailQueue = queue;
+  window._bulkNoAvailIdx = 0;
+  window._bulkNoAvailFixedMsg = fixedMsg;
+  sendNextBulkNoAvailWa();
+}
+
+function sendNextBulkNoAvailWa() {
+  const queue = window._bulkNoAvailQueue;
+  const idx = window._bulkNoAvailIdx;
+  const progressDiv = document.getElementById('bulk-noavail-wa-progress');
+
+  // Segna il medico PRECEDENTE come "Inviato" (l'utente ha appena cliccato "Prossimo")
+  if (idx > 0 && queue && queue[idx - 1]) {
+    const _lastDoc = queue[idx - 1].doc;
+    const _safeDoc = _lastDoc.replace(/\./g, '%2E');
+    document.querySelectorAll('.wa-noavail-btn').forEach(btn => {
+      if (btn.getAttribute('data-doc') === _lastDoc && btn.getAttribute('data-week') === currentWeek) {
+        btn.innerHTML = '✅ Inviato!';
+        btn.style.background = '#16a34a';
+        btn.style.color = '#fff';
+        btn.disabled = true;
+        btn.style.cursor = 'default';
+        btn.style.opacity = '0.85';
+        btn.title = 'Inviato (invio multiplo)';
+      }
+    });
+    if (currentWeek) {
+      firebase.database().ref('cardio_wa_noavail_sent/' + currentWeek + '/' + _safeDoc).set({
+        by: currentUser ? (currentUser.fullName || currentUser.username) : 'unknown',
+        at: new Date().toISOString()
+      });
+    }
+  }
+
+  if (!queue || idx >= queue.length) {
+    if (progressDiv) {
+      progressDiv.style.display = 'block';
+      progressDiv.innerHTML = `
+        <div style="background:#d1fae5;border:2px solid #6ee7b7;border-radius:12px;padding:16px 20px;color:#065f46;display:flex;align-items:center;gap:10px;">
+          <span style="font-size:22px;">✅</span>
+          <div>
+            <div style="font-size:14px;font-weight:800;">Completato!</div>
+            <div style="font-size:12px;margin-top:2px;">Messaggi inviati a tutti i <strong>${queue ? queue.length : 0}</strong> specialisti.</div>
+          </div>
+        </div>`;
+    }
+    return;
+  }
+
+  const { doc, phone } = queue[idx];
+  const msg = window._bulkNoAvailFixedMsg || 'Salve, ha novità per la disponibilità? Cortesemente entro le ore 14:00. \nGrazie';
+
+  // Pulizia numero e apertura app WhatsApp (whatsapp://)
+  let cleaned = phone.replace(/[\s\-\(\)]/g, '');
+  if (cleaned.startsWith('3') && cleaned.length === 10) cleaned = '39' + cleaned;
+  if (cleaned.startsWith('+')) cleaned = cleaned.substring(1);
+  const url = 'whatsapp://send?phone=' + cleaned + '&text=' + encodeURIComponent(msg);
+  window.open(url, '_self');
+
+  window._bulkNoAvailIdx++;
+  const remaining = queue.length - window._bulkNoAvailIdx;
+  const nextDoc = remaining > 0 ? queue[window._bulkNoAvailIdx].doc : null;
+
+  if (progressDiv) {
+    progressDiv.style.display = 'block';
+    progressDiv.innerHTML = `
+      <div style="background:#f0fdf4;border:2px solid #25d366;border-radius:12px;padding:16px 18px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+          <span style="font-size:18px;">📲</span>
+          <div>
+            <div style="font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:.5px;">Invio in corso</div>
+            <div style="font-size:15px;font-weight:800;color:#065f46;">${idx + 1} / ${queue.length} — <span style="color:#16a34a;">${doc}</span></div>
+          </div>
+          <div style="margin-left:auto;background:#25d366;color:#fff;border-radius:999px;padding:3px 10px;font-size:11px;font-weight:700;">${queue.length - remaining} ✓ / ${queue.length}</div>
+        </div>
+        <div style="font-size:12px;color:#374151;background:#ffffff;border-radius:8px;padding:8px 12px;margin:10px 0;border:1px solid #d1fae5;">
+          💬 WhatsApp aperto per <strong>${doc}</strong>. Invia il messaggio nell'app, poi torna qui e clicca "Prossimo".
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">
+          ${remaining > 0
+            ? `<button onclick="sendNextBulkNoAvailWa()" style="background:#25d366;color:#fff;border:none;border-radius:8px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(37,211,102,0.4);">➡️ Prossimo: ${nextDoc} (${remaining} rimast${remaining === 1 ? 'o' : 'i'})</button>`
+            : `<button onclick="sendNextBulkNoAvailWa()" style="background:#059669;color:#fff;border:none;border-radius:8px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;">✅ Segna come completato</button>`
+          }
+          <button onclick="document.getElementById('bulk-noavail-wa-progress').style.display='none';window._bulkNoAvailQueue=null;" style="background:transparent;border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--muted);cursor:pointer;">✕ Annulla</button>
+        </div>
+        <div style="font-size:10px;color:var(--muted);padding-top:10px;border-top:1px dashed var(--border);">
+          <strong>Rimanenti:</strong> ${remaining > 0 ? queue.slice(window._bulkNoAvailIdx).map(q => q.doc).join(' · ') : '— nessuno, hai finito! 🎉'}
+        </div>
+      </div>`;
+  }
 }
 
 function isViewOnly() {
