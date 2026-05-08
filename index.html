@@ -5214,8 +5214,16 @@ function generateRequestMsg() {
   const msg = tpl.replace('[NOME]', '[nome del dottore]').replace('[DATA]', dateStr);
   window._requestMsg = msg;
 
-  // Conta medici unici con numero di telefono
-  const docsWithPhone = [...new Set(state.doctors)].filter(d => state.doctorPhones && state.doctorPhones[d] && state.doctorPhones[d].trim());
+  // Conta medici unici con numero di telefono, esclusi quelli che hanno già dato disponibilità questa settimana
+  const _wDataReq = getWeekData();
+  const docsWithPhone = [...new Set(state.doctors)].filter(d => {
+    if (!state.doctorPhones || !state.doctorPhones[d] || !state.doctorPhones[d].trim()) return false;
+    const _dd = _wDataReq[d];
+    if (!_dd) return true;
+    if (_dd.ferie) return false;
+    if (_dd.slots && Object.values(_dd.slots).some(v => v && v !== '')) return false;
+    return true;
+  });
   const bulkBtnHtml = docsWithPhone.length > 0
     ? `<button onclick="startBulkWhatsApp()" style="background:#25d366;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px;box-shadow:0 2px 8px rgba(37,211,102,0.3);">📲 Invia a tutti su WhatsApp (${docsWithPhone.length})</button>`
     : `<span style="font-size:11px;color:var(--warn);">⚠️ Nessun medico con telefono configurato nelle impostazioni</span>`;
@@ -5242,12 +5250,18 @@ function startBulkWhatsApp() {
   const dateStr = formatDate(currentWeek) + ' – ' + formatDate(endStr);
 
   // Raccoglie medici unici con numero di telefono (niente duplicati)
+  // Esclude i medici che hanno già dato disponibilità per questa settimana
+  const _wDataBulk = getWeekData();
   const seen = new Set();
   const queue = [];
   for (const doc of state.doctors) {
     if (!seen.has(doc) && state.doctorPhones && state.doctorPhones[doc] && state.doctorPhones[doc].trim()) {
-      seen.add(doc);
-      queue.push({ doc, phone: state.doctorPhones[doc].trim() });
+      const _ddBulk = _wDataBulk[doc];
+      const _hasAvail = _ddBulk && (_ddBulk.ferie || (_ddBulk.slots && Object.values(_ddBulk.slots).some(v => v && v !== '')));
+      if (!_hasAvail) {
+        seen.add(doc);
+        queue.push({ doc, phone: state.doctorPhones[doc].trim() });
+      }
     }
   }
 
@@ -8908,6 +8922,23 @@ function _cfgRemoveMinConf(doc) {
 // =============================================
 
 let _aiDraft = null;       // { slots: {key: [{doc,type}]}, holter: {di: [doc]}, skipped: {key: {completo:[], ecg:[]}}, holterSkipped: {di:[]} }
+let _aiSavedCounts = {};   // { [weekKey]: { 'di_slot': {completo,ecg}, 'h_di': N } } — persiste i contatori impostati dall'utente
+
+function _aiPersistInputCounts() {
+  var saved = {};
+  for (var _di = 0; _di < 6; _di++) {
+    var _mc = parseInt((document.getElementById('ai-mc-' + _di) || {}).value) || 0;
+    var _me = parseInt((document.getElementById('ai-me-' + _di) || {}).value) || 0;
+    var _pc = parseInt((document.getElementById('ai-pc-' + _di) || {}).value) || 0;
+    var _pe = parseInt((document.getElementById('ai-pe-' + _di) || {}).value) || 0;
+    var _ho = parseInt((document.getElementById('ai-ho-' + _di) || {}).value) || 0;
+    saved[_di + '_0'] = { completo: _mc, ecg: _me };
+    saved[_di + '_1'] = { completo: _pc, ecg: _pe };
+    saved['h_' + _di] = _ho;
+  }
+  saved['h_6'] = parseInt((document.getElementById('ai-ho-6') || {}).value) || 0;
+  _aiSavedCounts[currentWeek] = saved;
+}
 let _aiAlwaysConfirm = new Set();
 let _aiAlwaysLoaded = false;
 let _aiMinConfPerDay = new Set();
@@ -9248,10 +9279,11 @@ function _aiRenderInner() {
   h += '<tr><th rowspan="2">Giorno</th><th colspan="2" style="background:#2563eb;color:#fff;">MATTINA</th><th colspan="2" style="background:#059669;color:#fff;">POMERIGGIO</th><th rowspan="2" style="background:#6366f1;color:#fff;">Holter</th></tr>';
   h += '<tr><th>Completo</th><th>ECG</th><th>Completo</th><th>ECG</th></tr>';
   h += '</thead><tbody>';
+  var _savedC = (_aiSavedCounts && _aiSavedCounts[currentWeek]) ? _aiSavedCounts[currentWeek] : null;
   for (var di = 0; di < 6; di++) {
-    var mc = counts[di + '_0'] || { completo: 0, ecg: 0 };
-    var pc = counts[di + '_1'] || { completo: 0, ecg: 0 };
-    var hc = counts['h_' + di] || 0;
+    var mc = _savedC ? (_savedC[di + '_0'] || { completo: 0, ecg: 0 }) : (counts[di + '_0'] || { completo: 0, ecg: 0 });
+    var pc = _savedC ? (_savedC[di + '_1'] || { completo: 0, ecg: 0 }) : (counts[di + '_1'] || { completo: 0, ecg: 0 });
+    var hc = _savedC ? (typeof _savedC['h_' + di] === 'number' ? _savedC['h_' + di] : (counts['h_' + di] || 0)) : (counts['h_' + di] || 0);
     h += '<tr><td>' + DAYSL[di] + '</td>';
     h += '<td><input type="number" id="ai-mc-' + di + '" min="0" max="20" value="' + mc.completo + '"></td>';
     h += '<td><input type="number" id="ai-me-' + di + '" min="0" max="20" value="' + mc.ecg + '"></td>';
@@ -9261,7 +9293,7 @@ function _aiRenderInner() {
     h += '</tr>';
   }
   // Riga DOM: solo holter
-  var hcDom = counts['h_6'] || 0;
+  var hcDom = _savedC ? (typeof _savedC['h_6'] === 'number' ? _savedC['h_6'] : (counts['h_6'] || 0)) : (counts['h_6'] || 0);
   h += '<tr style="background:rgba(99,102,241,0.06);">';
   h += '<td style="font-weight:700;color:#6366f1;">DOM</td>';
   h += '<td colspan="4" style="text-align:center;color:var(--muted);font-size:12px;letter-spacing:.5px;">—</td>';
@@ -9327,6 +9359,7 @@ function _aiLoadFromSelectedWeek() {
     el = document.getElementById('ai-ho-' + di); if (el) el.value = hc;
   }
   var elDom = document.getElementById('ai-ho-6'); if (elDom) elDom.value = counts['h_6'] || 0;
+  _aiPersistInputCounts(); // salva i numeri appena caricati
   var endKey = addDays(weekKey, 5);
   showToast('🔄 Numeri caricati da ' + formatDate(weekKey) + ' – ' + formatDate(endKey));
 }
@@ -9426,6 +9459,7 @@ function _selectEcgWithCoverage(candidates, count, alreadyEcgDocs, currentPlaced
 // CORE ALGORITHM
 // ═══════════════════════════════════════════════════════
 function generateAIDraft() {
+  _aiPersistInputCounts(); // salva i contatori prima di generare
   var weekData = state.weeks[currentWeek] || {};
   var holterData = state.holterWeeks[currentWeek] || {};
   var prevWeek = addDays(currentWeek, -7);
@@ -9885,7 +9919,15 @@ function _aiRenderDraftTable() {
     var _mPlacedC = _mItems.filter(function(p){ return p.type === 'completo'; }).length;
     var _mPlacedE = _mItems.filter(function(p){ return p.type === 'ecg'; }).length;
     var _mOverflow = (_mPlacedC > _mTargetC) || (_mPlacedE > _mTargetE);
-    h += '<td' + (_mOverflow ? ' style="background:rgba(220,38,38,0.15);border:2px solid #dc2626;"' : '') + '>' + _aiRenderSlotCell(di, 0) + '</td>';
+    var _mTdStyle = 'position:relative;padding-bottom:22px;' + (_mOverflow ? 'background:rgba(220,38,38,0.15);border:2px solid #dc2626;' : '');
+    var _mColC = _mPlacedC > _mTargetC ? '#dc2626' : (_mPlacedC === _mTargetC && _mTargetC > 0 ? '#059669' : 'var(--muted)');
+    var _mColE = _mPlacedE > _mTargetE ? '#dc2626' : (_mPlacedE === _mTargetE && _mTargetE > 0 ? '#059669' : 'var(--muted)');
+    var _mBadge = '<div style="position:absolute;bottom:4px;right:7px;font-size:10px;white-space:nowrap;pointer-events:none;display:flex;gap:6px;">'
+      + '<span style="color:' + _mColC + ';">' + _mPlacedC + '/' + _mTargetC + ' Completo</span>'
+      + '<span style="color:var(--muted);opacity:0.5;">|</span>'
+      + '<span style="color:' + _mColE + ';">' + _mPlacedE + '/' + _mTargetE + ' ECG</span>'
+      + '</div>';
+    h += '<td style="' + _mTdStyle + '">' + _aiRenderSlotCell(di, 0) + _mBadge + '</td>';
     // Pomeriggio — colora rosso se supera il numero preventivato
     var _pItems = _aiDraft.slots[di + '_1'] || [];
     var _pTargetC = parseInt((document.getElementById('ai-pc-' + di) || {}).value) || 0;
@@ -9893,9 +9935,24 @@ function _aiRenderDraftTable() {
     var _pPlacedC = _pItems.filter(function(p){ return p.type === 'completo'; }).length;
     var _pPlacedE = _pItems.filter(function(p){ return p.type === 'ecg'; }).length;
     var _pOverflow = (_pPlacedC > _pTargetC) || (_pPlacedE > _pTargetE);
-    h += '<td' + (_pOverflow ? ' style="background:rgba(220,38,38,0.15);border:2px solid #dc2626;"' : '') + '>' + _aiRenderSlotCell(di, 1) + '</td>';
+    var _pTdStyle = 'position:relative;padding-bottom:22px;' + (_pOverflow ? 'background:rgba(220,38,38,0.15);border:2px solid #dc2626;' : '');
+    var _pColC = _pPlacedC > _pTargetC ? '#dc2626' : (_pPlacedC === _pTargetC && _pTargetC > 0 ? '#059669' : 'var(--muted)');
+    var _pColE = _pPlacedE > _pTargetE ? '#dc2626' : (_pPlacedE === _pTargetE && _pTargetE > 0 ? '#059669' : 'var(--muted)');
+    var _pBadge = '<div style="position:absolute;bottom:4px;right:7px;font-size:10px;white-space:nowrap;pointer-events:none;display:flex;gap:6px;">'
+      + '<span style="color:' + _pColC + ';">' + _pPlacedC + '/' + _pTargetC + ' Completo</span>'
+      + '<span style="color:var(--muted);opacity:0.5;">|</span>'
+      + '<span style="color:' + _pColE + ';">' + _pPlacedE + '/' + _pTargetE + ' ECG</span>'
+      + '</div>';
+    h += '<td style="' + _pTdStyle + '">' + _aiRenderSlotCell(di, 1) + _pBadge + '</td>';
     // Holter
-    h += '<td>' + _aiRenderHolterCell(di) + '</td>';
+    var _hItems = _aiDraft.holter[di] || [];
+    var _hTarget = parseInt((document.getElementById('ai-ho-' + di) || {}).value) || 0;
+    var _hPlaced = _hItems.length;
+    var _hOverflowH = _hPlaced > _hTarget;
+    var _hColH = _hPlaced > _hTarget ? '#dc2626' : (_hPlaced === _hTarget && _hTarget > 0 ? '#059669' : 'var(--muted)');
+    var _hTdStyle = 'position:relative;padding-bottom:22px;' + (_hOverflowH ? 'background:rgba(220,38,38,0.15);border:2px solid #dc2626;' : '');
+    var _hBadge = '<div style="position:absolute;bottom:4px;right:7px;font-size:10px;white-space:nowrap;pointer-events:none;"><span style="color:' + _hColH + ';">' + _hPlaced + '/' + _hTarget + ' holter</span></div>';
+    h += '<td style="' + _hTdStyle + '">' + _aiRenderHolterCell(di) + _hBadge + '</td>';
 
     h += '</tr>';
   }
@@ -9906,7 +9963,13 @@ function _aiRenderDraftTable() {
   h += '<td class="dcell" style="color:#6366f1;">DOM<br><span style="font-size:10px;font-weight:400;color:var(--muted);">' + formatDate(domStr) + '</span></td>';
   h += '<td style="text-align:center;color:var(--muted);font-size:12px;">—</td>';
   h += '<td style="text-align:center;color:var(--muted);font-size:12px;">—</td>';
-  h += '<td>' + _aiRenderHolterCell(6) + '</td>';
+  var _hItemsDom = _aiDraft.holter[6] || [];
+  var _hTargetDom = parseInt((document.getElementById('ai-ho-6') || {}).value) || 0;
+  var _hPlacedDom = _hItemsDom.length;
+  var _hColDom = _hPlacedDom > _hTargetDom ? '#dc2626' : (_hPlacedDom === _hTargetDom && _hTargetDom > 0 ? '#059669' : 'var(--muted)');
+  var _hTdStyleDom = 'position:relative;padding-bottom:22px;' + (_hPlacedDom > _hTargetDom ? 'background:rgba(220,38,38,0.15);border:2px solid #dc2626;' : '');
+  var _hBadgeDom = '<div style="position:absolute;bottom:4px;right:7px;font-size:10px;white-space:nowrap;pointer-events:none;"><span style="color:' + _hColDom + ';">' + _hPlacedDom + '/' + _hTargetDom + ' holter</span></div>';
+  h += '<td style="' + _hTdStyleDom + '">' + _aiRenderHolterCell(6) + _hBadgeDom + '</td>';
   h += '</tr>';
 
   h += '</tbody></table></div>';
