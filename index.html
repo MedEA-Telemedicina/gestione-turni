@@ -1,3 +1,7 @@
+
+
+
+
 <!DOCTYPE html>
 <html lang="it">
 <head>
@@ -1342,7 +1346,6 @@
 <!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 </head>
 <body>
 <div id="ai-tooltip-box"></div>
@@ -2092,9 +2095,6 @@ function doLogout() {
     const cc = document.getElementById('remote-cursors-container');
     if (cc) cc.innerHTML = '';
   } catch(e) {}
-  
-  // 13b. Sign out from Firebase Auth (anonymous session)
-  try { firebase.auth().signOut().then(function() { firebase.auth().signInAnonymously(); }); } catch(e) {}
   
   // 14. Clear user state
   currentUser = null;
@@ -8610,33 +8610,11 @@ window.onerror = function(msg, url, line, col, err) {
   return false;
 };
 
-// ── Firebase Anonymous Auth: accesso richiesto per leggere/scrivere il DB ──
-// Questo fa sì che le regole "auth != null" siano soddisfatte
-// senza cambiare il sistema di login custom dell'app.
-window._appInitialized = false;
-firebase.auth().onAuthStateChanged(function(user) {
-  if (user && !window._appInitialized) {
-    window._appInitialized = true;
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', function() { init(); });
-    } else {
-      init();
-    }
-  }
-});
-firebase.auth().signInAnonymously().catch(function(err) {
-  // Fallback: se il login anonimo fallisce (es. non abilitato in console),
-  // avvia comunque l'app per non bloccare l'utente
-  console.warn('Firebase anonymous auth non disponibile:', err.message);
-  if (!window._appInitialized) {
-    window._appInitialized = true;
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', function() { init(); });
-    } else {
-      init();
-    }
-  }
-});
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', function() { init(); });
+} else {
+  init();
+}
 
 // ===== REMOTE CURSOR TRACKING =====
 const _cursorColors = ['#3b82f6','#ef4444','#10b981','#f59e0b','#8b5cf6','#ec4899','#06b6d4','#f97316'];
