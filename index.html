@@ -1,8 +1,3 @@
-
-
-
-
-
 <!DOCTYPE html>
 <html lang="it">
 <head>
@@ -5208,6 +5203,26 @@ function clearWaInput() {
   cancelPendingResult();
 }
 
+// Controlla se un dottore ha disponibilità (o ferie) in QUALSIASI tabella della settimana corrente
+function _docHasAnyAvail(doc) {
+  const _tables = [
+    state.weeks[currentWeek],
+    state.holterWeeks[currentWeek],
+    state.hcWeeks[currentWeek],
+    state.hpWeeks[currentWeek],
+    state.spiroWeeks[currentWeek],
+    state.plsWeeks[currentWeek]
+  ];
+  for (const tbl of _tables) {
+    if (!tbl) continue;
+    const dd = tbl[doc];
+    if (!dd) continue;
+    if (dd.ferie) return true;
+    if (dd.slots && Object.values(dd.slots).some(v => v && v !== '')) return true;
+  }
+  return false;
+}
+
 function generateRequestMsg() {
   const tpl = state.requestTemplate || '';
   const endStr = addDays(currentWeek, 5);
@@ -5215,15 +5230,10 @@ function generateRequestMsg() {
   const msg = tpl.replace('[NOME]', '[nome del dottore]').replace('[DATA]', dateStr);
   window._requestMsg = msg;
 
-  // Conta medici unici con numero di telefono, esclusi quelli che hanno già dato disponibilità questa settimana
-  const _wDataReq = getWeekData();
+  // Conta medici unici con numero di telefono, esclusi quelli che hanno già dato disponibilità in QUALSIASI tabella
   const docsWithPhone = [...new Set(state.doctors)].filter(d => {
     if (!state.doctorPhones || !state.doctorPhones[d] || !state.doctorPhones[d].trim()) return false;
-    const _dd = _wDataReq[d];
-    if (!_dd) return true;
-    if (_dd.ferie) return false;
-    if (_dd.slots && Object.values(_dd.slots).some(v => v && v !== '')) return false;
-    return true;
+    return !_docHasAnyAvail(d);
   });
   const bulkBtnHtml = docsWithPhone.length > 0
     ? `<button onclick="startBulkWhatsApp()" style="background:#25d366;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px;box-shadow:0 2px 8px rgba(37,211,102,0.3);">📲 Invia a tutti su WhatsApp (${docsWithPhone.length})</button>`
@@ -5251,15 +5261,12 @@ function startBulkWhatsApp() {
   const dateStr = formatDate(currentWeek) + ' – ' + formatDate(endStr);
 
   // Raccoglie medici unici con numero di telefono (niente duplicati)
-  // Esclude i medici che hanno già dato disponibilità per questa settimana
-  const _wDataBulk = getWeekData();
+  // Esclude i medici che hanno già dato disponibilità in QUALSIASI tabella
   const seen = new Set();
   const queue = [];
   for (const doc of state.doctors) {
     if (!seen.has(doc) && state.doctorPhones && state.doctorPhones[doc] && state.doctorPhones[doc].trim()) {
-      const _ddBulk = _wDataBulk[doc];
-      const _hasAvail = _ddBulk && (_ddBulk.ferie || (_ddBulk.slots && Object.values(_ddBulk.slots).some(v => v && v !== '')));
-      if (!_hasAvail) {
+      if (!_docHasAnyAvail(doc)) {
         seen.add(doc);
         queue.push({ doc, phone: state.doctorPhones[doc].trim() });
       }
