@@ -2,6 +2,7 @@
 
 
 
+
 <!DOCTYPE html>
 <html lang="it">
 <head>
@@ -5700,7 +5701,7 @@ function renderCalendar() {
   for (let di = 0; di < nDays; di++) {
     const dayStr = addDays(currentWeek, di);
     const d = new Date(dayStr + 'T00:00:00');
-    const dd2 = String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0');
+    const dd2 = String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
     t1 += '<th style="' + thS + 'min-width:130px;">' + ALL_DAY_LABELS[di] + '<br><span style="font-weight:400;font-size:10px;color:#666;">' + dd2 + '</span></th>';
   }
   t1 += '</tr></thead><tbody>';
@@ -5753,7 +5754,7 @@ function renderCalendar() {
   for (let di = 0; di < nDays; di++) {
     const dayStr = addDays(currentWeek, di);
     const d = new Date(dayStr + 'T00:00:00');
-    const dd2 = String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0');
+    const dd2 = String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
     t2 += '<th style="' + thS + 'min-width:130px;background:#e8d5f5;">' + ALL_DAY_LABELS[di] + '<br><span style="font-weight:400;font-size:10px;color:#666;">' + dd2 + '</span></th>';
   }
   t2 += '</tr></thead><tbody>';
@@ -5895,7 +5896,9 @@ function extractTableToArray(table) {
       const rs = td.rowSpan || 1;
       const clone = td.cloneNode(true);
       clone.querySelectorAll('br').forEach(br => br.replaceWith(' / '));
-      const text = clone.textContent.replace(/\s+/g, ' ').trim();
+      let text = clone.textContent.replace(/\s+/g, ' ').trim();
+      // Prefisso apostrofo per date dd/mm/yyyy → forza Excel a trattarle come testo
+      if (/^\d{2}\/\d{2}\/\d{4}$/.test(text)) text = '\'' + text;
       for (let r = 0; r < rs; r++) {
         for (let c = 0; c < cs; c++) {
           if (!grid[ri + r]) grid[ri + r] = [];
@@ -6311,7 +6314,7 @@ function renderRiepilogo() {
   const thDisp   = thS + `background:#dce6f1;`;
   const thConf   = thS + `background:#d6ecd2;`;
   const tdDayS   = `border:${brd};padding:3px 6px;font-weight:700;font-size:12px;background:#f2f2f2;white-space:nowrap;vertical-align:middle;text-align:center;color:#000;font-family:'Inter','Segoe UI',sans-serif;`;
-  const tdDateS  = `border:${brd};padding:2px 6px;font-size:11px;color:#000;text-align:center;vertical-align:middle;background:#fafafa;white-space:nowrap;font-family:'Inter','Segoe UI',sans-serif;`;
+  const tdDateS  = `border:${brd};padding:2px 6px;font-size:11px;color:#000;text-align:center;vertical-align:middle;background:#fafafa;white-space:nowrap;font-family:'Inter','Segoe UI',sans-serif;mso-number-format:'\\@';`;
   const tdContS  = `border:${brd};padding:3px 6px;font-size:12px;vertical-align:middle;min-width:280px;white-space:normal;word-wrap:break-word;word-break:break-word;line-height:1.4;color:#000;font-family:'Inter','Segoe UI',sans-serif;`;
   const tdSmS    = `border:${brd};padding:3px 4px;width:30px;min-width:30px;vertical-align:middle;text-align:center;font-size:12px;white-space:normal;word-break:break-word;line-height:1.4;color:#000;font-family:'Inter','Segoe UI',sans-serif;`;
 
@@ -6434,7 +6437,7 @@ function copyRiepilogoTable(tableId) {
       // Riga 2: solo data
       h += '<tr>';
       dateRow.querySelectorAll('td').forEach(td => {
-        h += '<td colspan="' + td.colSpan + '" style="border:1px solid #999;padding:4px;text-align:center;background:#fafafa;">' +
+        h += '<td colspan="' + td.colSpan + '" style="border:1px solid #999;padding:4px;text-align:center;background:#fafafa;mso-number-format:\'\\@\';">' +
              plainText(td) + '</td>';
       });
       h += '</tr>';
