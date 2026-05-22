@@ -8969,6 +8969,10 @@ function _aiLoadAlwaysConfirm(cb) {
     _aiAlwaysConfirm = new Set(Array.isArray(arr) ? arr : []);
     _aiAlwaysLoaded = true;
     if (cb) cb();
+  }).catch(function(e) {
+    console.warn('_aiLoadAlwaysConfirm error:', e);
+    _aiAlwaysLoaded = true;
+    if (cb) cb();
   });
 }
 
@@ -8982,6 +8986,10 @@ function _aiLoadMinConfPerDay(cb) {
   firebase.database().ref('cardio_ai_config/minConfPerDay').once('value').then(snap => {
     const arr = snap.val();
     _aiMinConfPerDay = new Set(Array.isArray(arr) ? arr : []);
+    _aiMinConfPerDayLoaded = true;
+    if (cb) cb();
+  }).catch(function(e) {
+    console.warn('_aiLoadMinConfPerDay error:', e);
     _aiMinConfPerDayLoaded = true;
     if (cb) cb();
   });
