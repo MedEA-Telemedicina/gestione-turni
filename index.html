@@ -1080,6 +1080,8 @@
   [data-theme="dark"] .ai-tag.mincpd { color: #6ee7b7; }
   .ai-tag.rule { background: rgba(220,38,38,.1); border-color: rgba(220,38,38,.25); }
   [data-theme="dark"] .ai-tag.rule { color: #fca5a5; }
+  .ai-tag.bonus { background: rgba(5,150,105,.08); border-color: rgba(5,150,105,.25); }
+  [data-theme="dark"] .ai-tag.bonus { color: #86efac; }
 
   /* AI draft table – tooltip servizi specialista */
   #ai-tooltip-box {
@@ -1754,7 +1756,8 @@
     <!-- MEDICI DA CONFERMARE SEMPRE (admin-only) -->
     <div class="card admin-only" id="ai-always-card">
       <div class="card-title">👑 Medici da Confermare Sempre</div>
-      <p style="font-size:11px;color:var(--muted);margin-bottom:12px;">Medici che la generazione AI assegna automaticamente a <strong>tutti</strong> i turni per cui si sono resi disponibili. Impostazione persistente, non legata alla settimana.</p>
+      <p style="font-size:11px;color:var(--muted);margin-bottom:10px;">Medici che la generazione AI assegna automaticamente a <strong>tutti</strong> i turni per cui si sono resi disponibili. Impostazione persistente, non legata alla settimana.</p>
+      <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(124,58,237,.1);border:1px solid rgba(124,58,237,.3);border-radius:20px;padding:4px 12px;margin-bottom:12px;font-size:11px;font-weight:700;color:#7c3aed;">🔒 Salvati globalmente — validi per tutte le settimane</div>
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
         <select id="cfg-always-select" class="styled" style="flex:1;min-width:140px;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:7px 10px;border-radius:6px;font-size:12px;"></select>
         <button class="btn btn-sm" style="background:#7c3aed;color:#fff;border:none;font-weight:700;" onclick="_cfgAddAlways()">+ Aggiungi</button>
@@ -1765,7 +1768,8 @@
     <!-- MIN 1 CONFERMA AL GIORNO (admin-only) -->
     <div class="card admin-only" id="ai-mincpd-card">
       <div class="card-title">📅 Min. 1 Conferma al Giorno</div>
-      <p style="font-size:11px;color:var(--muted);margin-bottom:12px;">Medici per cui la generazione AI garantisce <strong>almeno una conferma al giorno</strong> nei giorni in cui hanno disponibilità. Impostazione persistente.</p>
+      <p style="font-size:11px;color:var(--muted);margin-bottom:10px;">Medici per cui la generazione AI garantisce <strong>almeno una conferma al giorno</strong> nei giorni in cui hanno disponibilità. Impostazione persistente.</p>
+      <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(5,150,105,.1);border:1px solid rgba(5,150,105,.3);border-radius:20px;padding:4px 12px;margin-bottom:12px;font-size:11px;font-weight:700;color:#059669;">🔒 Salvati globalmente — validi per tutte le settimane</div>
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
         <select id="cfg-mincpd-select" class="styled" style="flex:1;min-width:140px;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:7px 10px;border-radius:6px;font-size:12px;"></select>
         <button class="btn btn-sm" style="background:#059669;color:#fff;border:none;font-weight:700;" onclick="_cfgAddMinConf()">+ Aggiungi</button>
@@ -1795,7 +1799,7 @@
 <div class="tab-content admin-only" id="tab-turniai">
   <div style="margin-bottom:16px;">
     <h3 style="margin:0 0 4px;font-size:16px;font-weight:700;color:#6366f1;">🤖 Generazione Bozza Turni AI</h3>
-    <p style="color:var(--muted);font-size:12px;margin:0;">Genera automaticamente una bozza dei turni basata su disponibilità, rating affidabilità e regole configurate. Ogni settimana è indipendente.<br><span style="font-size:11px;">👑 = sempre confermato · 🎯 = unica disponibilità (auto-inserito) · 📅 = min 1 conf/giorno · <span style="color:#b91c1c;font-weight:700;">⚠️ rosso = doppio turno</span></span></p>
+    <p style="color:var(--muted);font-size:12px;margin:0;">Genera automaticamente una bozza dei turni basata su disponibilità, <strong>storico settimane precedenti</strong>, rating affidabilità e regole. L'AI apprende da ogni bozza che applichi.<br><span style="font-size:11px;">👑 = sempre confermato · 🎯 = unica disponibilità · 📅 = min 1/giorno · 🟢 = aggiunto bonus pass · <span style="color:#b91c1c;font-weight:700;">⚠️ rosso = doppio turno</span></span></p>
   </div>
   <div id="ai-turni-content"></div>
 </div>
@@ -4605,8 +4609,8 @@ ${msg}`;
     holterSlots: (parsed.holterSlots || []).map(s => { const d = _dayToIdx(s.key); return d !== null ? { key: String(d) } : null; }).filter(Boolean),
     hcSlots:     (parsed.hcSlots || []).map(s => { const d = _dayToIdx(s.key); return d !== null ? { key: d, ...(s.num != null ? { num: s.num } : { val: 'x' }) } : null; }).filter(Boolean),
     hpSlots:     (parsed.hpSlots || []).map(s => { const d = _dayToIdx(s.key); return d !== null ? { key: d, ...(s.num != null ? { num: s.num } : { val: 'x' }) } : null; }).filter(Boolean),
-    spiroSlots:  (parsed.spiroSlots || []).map(s => { const d = _dayToIdx(s.key); return d !== null ? { key: d, ...(s.num != null ? { num: s.num } : { val: 'x' }) } : null; }).filter(Boolean),
-    plsSlots:    (parsed.plsSlots || []).map(s => { const d = _dayToIdx(s.key); return d !== null ? { key: d, ...(s.num != null ? { num: s.num } : { val: 'x' }) } : null; }).filter(Boolean),
+    spiroSlots:  (parsed.spiroSlots || []).map(s => { const d = _dayToIdx(s.key); const isX = s.num == null || String(s.num).toLowerCase() === 'x'; return d !== null ? { key: d, ...(isX ? { val: 'x' } : { num: s.num }) } : null; }).filter(Boolean),
+    plsSlots:    (parsed.plsSlots || []).map(s => { const d = _dayToIdx(s.key); const isX = s.num == null || String(s.num).toLowerCase() === 'x'; return d !== null ? { key: d, ...(isX ? { val: 'x' } : { num: s.num }) } : null; }).filter(Boolean),
     ferie:       parsed.ferie || false
   };
 
@@ -5156,7 +5160,7 @@ function applyParsedResult() {
   if (spiroSl.length > 0) {
     const spDoc = getSpiroDoctorData(pendingWaDoctor);
     if (!spDoc.slots) spDoc.slots = {};
-    spiroSl.forEach(s => { spDoc.slots[s.key] = s.val === 'x' ? { val: 'x', conf: false } : { num: s.num, conf: false }; });
+    spiroSl.forEach(s => { const isX = s.val === 'x' || String(s.num).toLowerCase() === 'x'; spDoc.slots[s.key] = isX ? { val: 'x', conf: false } : { num: s.num, conf: false }; });
   }
 
   // ── Applica slot consuntivo PLS ─────────────────────────────────────
@@ -5164,7 +5168,7 @@ function applyParsedResult() {
   if (plsSl.length > 0) {
     const plDoc = getPlsDoctorData(pendingWaDoctor);
     if (!plDoc.slots) plDoc.slots = {};
-    plsSl.forEach(s => { plDoc.slots[s.key] = s.val === 'x' ? { val: 'x', conf: false } : { num: s.num, conf: false }; });
+    plsSl.forEach(s => { const isX = s.val === 'x' || String(s.num).toLowerCase() === 'x'; plDoc.slots[s.key] = isX ? { val: 'x', conf: false } : { num: s.num, conf: false }; });
   }
 
   const n  = pendingWaResult.slots.length;
@@ -6265,7 +6269,8 @@ function renderRiepilogo() {
     for (let di = 0; di < 7; di++) {
       const s = dd.slots && dd.slots[di];
       if (!s) continue;
-      const label = s.val === 'x' ? displayName : `${displayName} (${s.num})`;
+      const isX = s.val === 'x' || String(s.num).toLowerCase() === 'x';
+      const label = isX ? displayName : `${displayName} (${s.num})`;
       spiroData[di].push(label);
     }
   });
@@ -6281,7 +6286,8 @@ function renderRiepilogo() {
     for (let di = 0; di < 7; di++) {
       const s = dd.slots && dd.slots[di];
       if (!s) continue;
-      const label = s.val === 'x' ? displayName : `${displayName} (${s.num})`;
+      const isX = s.val === 'x' || String(s.num).toLowerCase() === 'x';
+      const label = isX ? displayName : `${displayName} (${s.num})`;
       plsData[di].push(label);
     }
   });
@@ -8956,6 +8962,11 @@ function _aiPersistInputCounts() {
   saved['h_6'] = parseInt((document.getElementById('ai-ho-6') || {}).value) || 0;
   _aiSavedCounts[currentWeek] = saved;
 }
+let _aiHistory = {};           // { weekKey: { slotKey: [docs] } } — storico conferme AI
+let _aiHistoryLoaded = false;  // flag caricamento storico
+const _AI_HISTORY_WEEKS = 8;   // settimane di storia da considerare
+let _aiMaximizeConfirmed = false; // toggle: massimizza medici confermati
+
 let _aiAlwaysConfirm = new Set();
 let _aiAlwaysLoaded = false;
 let _aiMinConfPerDay = new Set();
@@ -8969,8 +8980,7 @@ function _aiLoadAlwaysConfirm(cb) {
     _aiAlwaysConfirm = new Set(Array.isArray(arr) ? arr : []);
     _aiAlwaysLoaded = true;
     if (cb) cb();
-  }).catch(function(e) {
-    console.warn('_aiLoadAlwaysConfirm error:', e);
+  }).catch(function() {
     _aiAlwaysLoaded = true;
     if (cb) cb();
   });
@@ -8988,8 +8998,7 @@ function _aiLoadMinConfPerDay(cb) {
     _aiMinConfPerDay = new Set(Array.isArray(arr) ? arr : []);
     _aiMinConfPerDayLoaded = true;
     if (cb) cb();
-  }).catch(function(e) {
-    console.warn('_aiLoadMinConfPerDay error:', e);
+  }).catch(function() {
     _aiMinConfPerDayLoaded = true;
     if (cb) cb();
   });
@@ -8998,6 +9007,63 @@ function _aiLoadMinConfPerDay(cb) {
 function _aiSaveMinConfPerDay() {
   const arr = Array.from(_aiMinConfPerDay);
   firebase.database().ref('cardio_ai_config/minConfPerDay').set(arr.length > 0 ? arr : null);
+}
+
+// ── AI History: salva conferme quando si applica la bozza ──
+function _aiSaveHistory(weekKey, draft) {
+  var _safeWk = weekKey.replace(/\//g, '_');
+  var _entry = {};
+  for (var _sk in draft.slots) {
+    var _sdocs = (draft.slots[_sk] || []).map(function(item) { return item.doc; });
+    if (_sdocs.length > 0) _entry[_sk] = _sdocs;
+  }
+  for (var _hdi = 0; _hdi < 7; _hdi++) {
+    var _hdocs = draft.holter[_hdi] || [];
+    if (_hdocs.length > 0) _entry['h_' + _hdi] = _hdocs;
+  }
+  if (Object.keys(_entry).length > 0) {
+    firebase.database().ref('cardio_ai_history/' + _safeWk).set(_entry);
+  }
+}
+
+// ── AI History: carica storico ultime N settimane ──
+function _aiLoadHistory(cb) {
+  var _refs = [];
+  for (var _lw = 1; _lw <= _AI_HISTORY_WEEKS; _lw++) {
+    _refs.push(addDays(currentWeek, -7 * _lw));
+  }
+  var _lLoaded = 0;
+  var _lResult = {};
+  if (_refs.length === 0) { _aiHistory = _lResult; _aiHistoryLoaded = true; if (cb) cb(); return; }
+  _refs.forEach(function(_wk) {
+    var _sk2 = _wk.replace(/\//g, '_');
+    firebase.database().ref('cardio_ai_history/' + _sk2).once('value').then(function(snap) {
+      if (snap.val()) _lResult[_wk] = snap.val();
+      _lLoaded++;
+      if (_lLoaded === _refs.length) { _aiHistory = _lResult; _aiHistoryLoaded = true; if (cb) cb(); }
+    }).catch(function() {
+      _lLoaded++;
+      if (_lLoaded === _refs.length) { _aiHistory = _lResult; _aiHistoryLoaded = true; if (cb) cb(); }
+    });
+  });
+}
+
+// ── AI History: punteggio storico per un medico ──
+// Più alto = confermato più spesso di recente
+function _aiGetHistoryScore(doc) {
+  var _hScore = 0;
+  for (var _hw = 1; _hw <= _AI_HISTORY_WEEKS; _hw++) {
+    var _hwk = addDays(currentWeek, -7 * _hw);
+    var _hEntry = _aiHistory[_hwk];
+    if (!_hEntry) continue;
+    var _found = false;
+    for (var _hek in _hEntry) {
+      var _harr = _hEntry[_hek];
+      if (Array.isArray(_harr) && _harr.indexOf(doc) !== -1) { _found = true; break; }
+    }
+    if (_found) _hScore += (_AI_HISTORY_WEEKS - _hw + 1); // settimane recenti pesano di più
+  }
+  return _hScore;
 }
 
 function _aiAddMinConfFromDropdown() {
@@ -9216,8 +9282,11 @@ function _aiCountPrevWeek() {
 
 // ── Main render ──
 function renderTurniAI() {
+  _aiHistoryLoaded = false;
   _aiLoadAlwaysConfirm(function() {
-    _aiLoadMinConfPerDay(function() { _aiRenderInner(); });
+    _aiLoadMinConfPerDay(function() {
+      _aiLoadHistory(function() { _aiRenderInner(); });
+    });
   });
 }
 
@@ -9353,6 +9422,32 @@ function _aiRenderInner() {
     h += '</div>';
   }
 
+  // ── Card: Apprendimento & Ottimizzazione AI ──
+  var _histWCount = Object.keys(_aiHistory).length;
+  var _histBar = '';
+  for (var _hbw = _AI_HISTORY_WEEKS; _hbw >= 1; _hbw--) {
+    var _hbwk = addDays(currentWeek, -7 * _hbw);
+    var _hbHas = !!_aiHistory[_hbwk];
+    var _hbColor = _hbHas ? '#6366f1' : 'var(--surface2)';
+    var _hbBorder = _hbHas ? '#4f46e5' : 'var(--border)';
+    _histBar += '<span title="Sett. -' + _hbw + ': ' + (_hbHas ? 'dati\u00a0presenti' : 'nessun\u00a0dato') + '" style="display:inline-block;width:20px;height:20px;border-radius:4px;margin:1px;background:' + _hbColor + ';border:1px solid ' + _hbBorder + ';cursor:default;"></span>';
+  }
+  h += '<div class="ai-card" style="border-color:rgba(99,102,241,.3);background:linear-gradient(135deg,rgba(99,102,241,.05),rgba(37,99,235,.03));">';
+  h += '<h4 style="color:#6366f1;margin:0 0 8px;">\u{1F9E0} Apprendimento & Ottimizzazione AI</h4>';
+  h += '<p style="font-size:11px;color:var(--muted);margin-bottom:12px;line-height:1.5;">L\'AI impara dalle bozze che applichi. I medici confermati di recente hanno precedenza nelle future generazioni (memoria: ' + _AI_HISTORY_WEEKS + ' settimane).</p>';
+  h += '<div style="margin-bottom:12px;">';
+  h += '<div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px;">' + '\u{1F4CA}' + ' Storico disponibile (' + _histWCount + '/' + _AI_HISTORY_WEEKS + ' settimane):</div>';
+  h += '<div style="display:flex;align-items:center;gap:2px;flex-wrap:wrap;">' + _histBar + '</div>';
+  h += '<div style="font-size:10px;color:var(--muted);margin-top:4px;">\u25c4 pi\u00f9 vecchio &nbsp;&nbsp; pi\u00f9 recente \u25ba</div>';
+  h += '</div>';
+  h += '<label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:10px;background:rgba(5,150,105,.06);border:1px solid rgba(5,150,105,.2);border-radius:8px;">';
+  h += '<input type="checkbox" id="ai-maximize-toggle" style="margin-top:2px;accent-color:#059669;width:16px;height:16px;flex-shrink:0;" ' + (_aiMaximizeConfirmed ? 'checked' : '') + ' onchange="_aiMaximizeConfirmed=this.checked">';
+  h += '<div>';
+  h += '<div style="font-size:13px;font-weight:700;color:#059669;">\u{1F3AF} Conferma quanti pi\u00f9 medici possibile</div>';
+  h += '<div style="font-size:11px;color:var(--muted);margin-top:2px;line-height:1.4;">Dopo aver coperto i target, inserisce tutti i medici disponibili non ancora confermati. Obiettivo: lasciarne fuori il minimo.</div>';
+  h += '</div></label>';
+  h += '</div>';
+
   // ── Generate button ──
   h += '<button class="ai-gen-btn" onclick="generateAIDraft()">🤖 Genera Bozza Turni</button>';
 
@@ -9485,6 +9580,13 @@ function _selectEcgWithCoverage(candidates, count, alreadyEcgDocs, currentPlaced
 // ═══════════════════════════════════════════════════════
 function generateAIDraft() {
   _aiPersistInputCounts(); // salva i contatori prima di generare
+  var _btnAI = document.querySelector('.ai-gen-btn');
+  if (_btnAI) { _btnAI.disabled = true; _btnAI.innerHTML = '<span class="ai-dots">⏳</span> Carico storico...'; }
+  _aiHistoryLoaded = false;
+  _aiLoadHistory(function() { _generateAIDraftCore(); });
+}
+
+function _generateAIDraftCore() {
   var weekData = state.weeks[currentWeek] || {};
   var holterData = state.holterWeeks[currentWeek] || {};
   var prevWeek = addDays(currentWeek, -7);
@@ -9616,11 +9718,15 @@ function generateAIDraft() {
           var aBelowMin = (_ruleMinMap[a] !== undefined && (assignCount[a] || 0) < _ruleMinMap[a]) ? 1 : 0;
           var bBelowMin = (_ruleMinMap[b] !== undefined && (assignCount[b] || 0) < _ruleMinMap[b]) ? 1 : 0;
           if (aBelowMin !== bBelowMin) return bBelowMin - aBelowMin;
-          // Priority 1: rating stelle affidabilità → prefer higher
+          // Priority 1: storico AI — medici confermati di recente hanno precedenza
+          var aHist = _aiGetHistoryScore(a);
+          var bHist = _aiGetHistoryScore(b);
+          if (aHist !== bHist) return bHist - aHist;
+          // Priority 2: rating stelle affidabilità → prefer higher
           var aRating = (state.doctorRatings && state.doctorRatings[a]) || 3;
           var bRating = (state.doctorRatings && state.doctorRatings[b]) || 3;
           if (aRating !== bRating) return bRating - aRating;
-          // Priority 2: fewer total assignments → prefer
+          // Priority 3: fewer total assignments → prefer
           return (assignCount[a] || 0) - (assignCount[b] || 0);
         });
       };
@@ -9868,7 +9974,53 @@ function generateAIDraft() {
     }
   });
 
+  // ── BONUS PASS: massimizza medici confermati ──
+  // Se attivo, inserisce i medici disponibili non ancora confermati nel primo slot possibile
+  if (_aiMaximizeConfirmed) {
+    (state.doctors || []).forEach(function(bonusDoc) {
+      var _alreadyInDraft = false;
+      for (var _bkC in draft.slots) {
+        if ((draft.slots[_bkC] || []).some(function(p) { return p.doc === bonusDoc; })) {
+          _alreadyInDraft = true; break;
+        }
+      }
+      if (_alreadyInDraft) return;
+      if (_aiAlwaysConfirm.has(bonusDoc) || _aiMinConfPerDay.has(bonusDoc)) return;
+      var _bTipo = state.doctorTypes[bonusDoc] || 'completo';
+      if (_bTipo === 'nessuno') return;
+      var _bDd = weekData[bonusDoc];
+      if (!_bDd || _bDd.ferie) return;
+      if (_ruleMaxMap[bonusDoc] !== undefined && (assignCount[bonusDoc] || 0) >= _ruleMaxMap[bonusDoc]) return;
+      var _bSl = _bDd.slots || {};
+      var _bPlacedBonus = false;
+      for (var _bdi = 0; _bdi < 6 && !_bPlacedBonus; _bdi++) {
+        if (!_aiAlwaysConfirm.has(bonusDoc) && usedOnDay[bonusDoc] && usedOnDay[bonusDoc].has(_bdi)) continue;
+        for (var _bsi = 0; _bsi < 2 && !_bPlacedBonus; _bsi++) {
+          var _bKey = _bdi + '_' + _bsi;
+          var _bVal = _bSl[_bKey] || '';
+          if (_bVal !== 'disponibile' && _bVal !== 'solo-ecg') continue;
+          var _bType = _bVal === 'solo-ecg' ? 'ecg' : 'completo';
+          var _bPlacedArr = draft.slots[_bKey] || [];
+          if (_aiConflictsWithList(bonusDoc, _bPlacedArr)) continue;
+          _bPlacedArr.push({ doc: bonusDoc, type: _bType, always: false, single: false, bonus: true });
+          draft.slots[_bKey] = _bPlacedArr;
+          assignCount[bonusDoc] = (assignCount[bonusDoc] || 0) + 1;
+          if (!usedOnDay[bonusDoc]) usedOnDay[bonusDoc] = new Set();
+          usedOnDay[bonusDoc].add(_bdi);
+          var _bSkip = draft.skipped[_bKey];
+          if (_bSkip) {
+            if (_bType === 'ecg') _bSkip.ecg = (_bSkip.ecg || []).filter(function(d) { return d !== bonusDoc; });
+            else _bSkip.completo = (_bSkip.completo || []).filter(function(d) { return d !== bonusDoc; });
+          }
+          _bPlacedBonus = true;
+        }
+      }
+    });
+  }
+
   _aiDraft = draft;
+  var _btnAI2 = document.querySelector('.ai-gen-btn');
+  if (_btnAI2) { _btnAI2.disabled = false; _btnAI2.innerHTML = '🤖 Genera Bozza Turni'; }
   _aiRenderDraftTable();
   showToast('🤖 Bozza turni generata!');
 }
@@ -10122,6 +10274,7 @@ function _aiRenderSlotCell(di, si) {
     if (item.single) cls += ' single';
     if (item.mincpd) cls += ' mincpd';
     if (item.rule) cls += ' rule';
+    if (item.bonus) cls += ' bonus';
     var isDouble = !item.always && otherDocs.indexOf(item.doc) !== -1;
     var extraStyle = isDouble ? ' style="background:#fee2e2;border-color:#ef4444;color:#b91c1c;font-weight:700;"' : '';
     var label = item.doc;
@@ -10451,9 +10604,12 @@ function _aiApplyDraft() {
     });
   }
 
+  // Salva storico per apprendimento AI
+  _aiSaveHistory(currentWeek, _aiDraft);
+
   autoSave();
   logAudit('Applicata bozza AI: ' + applied + ' turni confermati per settimana ' + formatDate(currentWeek));
-  showToast('✅ Bozza applicata! ' + applied + ' turni confermati.');
+  showToast('✅ Bozza applicata! ' + applied + ' turni confermati. 🧠 Storico AI aggiornato.');
 
   // Refresh tables
   renderTable();
