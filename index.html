@@ -2574,6 +2574,7 @@ function onWeekChange() {
   renderSpiroTable();
   renderPlsTable();
   renderStats();
+  if (_currentActiveTab === 'turniai') renderTurniAI(); // FIX: aggiorna storico AI al cambio settimana
 }
 
 function prevWeek() {
@@ -2589,6 +2590,7 @@ function prevWeek() {
   renderSpiroTable();
   renderPlsTable();
   renderStats();
+  if (_currentActiveTab === 'turniai') renderTurniAI(); // FIX: aggiorna storico AI al cambio settimana
 }
 
 function nextWeek() {
@@ -2604,6 +2606,7 @@ function nextWeek() {
   renderSpiroTable();
   renderPlsTable();
   renderStats();
+  if (_currentActiveTab === 'turniai') renderTurniAI(); // FIX: aggiorna storico AI al cambio settimana
 }
 
 function updateHeaderWeek() {
@@ -9041,7 +9044,8 @@ function _aiLoadHistory(cb) {
       if (snap.val()) _lResult[_wk] = snap.val();
       _lLoaded++;
       if (_lLoaded === _refs.length) { _aiHistory = _lResult; _aiHistoryLoaded = true; if (cb) cb(); }
-    }).catch(function() {
+    }).catch(function(err) {
+      console.error('[AI History] Errore lettura Firebase per settimana ' + _wk + ':', err);
       _lLoaded++;
       if (_lLoaded === _refs.length) { _aiHistory = _lResult; _aiHistoryLoaded = true; if (cb) cb(); }
     });
@@ -9436,8 +9440,8 @@ function _aiRenderInner() {
   h += '<h4 style="color:#6366f1;margin:0 0 8px;">\u{1F9E0} Apprendimento & Ottimizzazione AI</h4>';
   h += '<p style="font-size:11px;color:var(--muted);margin-bottom:12px;line-height:1.5;">L\'AI impara dalle bozze che applichi. I medici confermati di recente hanno precedenza nelle future generazioni (memoria: ' + _AI_HISTORY_WEEKS + ' settimane).</p>';
   h += '<div style="margin-bottom:12px;">';
-  h += '<div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px;">' + '\u{1F4CA}' + ' Storico disponibile (' + _histWCount + '/' + _AI_HISTORY_WEEKS + ' settimane):</div>';
-  h += '<div style="display:flex;align-items:center;gap:2px;flex-wrap:wrap;">' + _histBar + '</div>';
+  h += '<div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px;">' + '\u{1F4CA}' + ' Storico disponibile (<span id="ai-hist-count">' + _histWCount + '/' + _AI_HISTORY_WEEKS + ' settimane</span>):</div>';
+  h += '<div id="ai-hist-bar" style="display:flex;align-items:center;gap:2px;flex-wrap:wrap;">' + _histBar + '</div>';
   h += '<div style="font-size:10px;color:var(--muted);margin-top:4px;">\u25c4 pi\u00f9 vecchio &nbsp;&nbsp; pi\u00f9 recente \u25ba</div>';
   h += '</div>';
   h += '<label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:10px;background:rgba(5,150,105,.06);border:1px solid rgba(5,150,105,.2);border-radius:8px;">';
@@ -10614,6 +10618,28 @@ function _aiApplyDraft() {
   // Refresh tables
   renderTable();
   renderHolterTable();
+
+  // FIX: ricarica lo storico AI così il contatore si aggiorna immediatamente
+  _aiHistoryLoaded = false;
+  _aiLoadHistory(function() {
+    var histCount = document.getElementById('ai-hist-count');
+    var histBar   = document.getElementById('ai-hist-bar');
+    if (histCount) {
+      var _c = Object.keys(_aiHistory).length;
+      histCount.textContent = _c + '/' + _AI_HISTORY_WEEKS + ' settimane';
+    }
+    if (histBar) {
+      var _bar = '';
+      for (var _hbw2 = _AI_HISTORY_WEEKS; _hbw2 >= 1; _hbw2--) {
+        var _hbwk2 = addDays(currentWeek, -7 * _hbw2);
+        var _hbHas2 = !!_aiHistory[_hbwk2];
+        var _col = _hbHas2 ? '#6366f1' : 'var(--surface2)';
+        var _brd = _hbHas2 ? '#4f46e5' : 'var(--border)';
+        _bar += '<span title="Sett. -' + _hbw2 + ': ' + (_hbHas2 ? 'dati\u00a0presenti' : 'nessun\u00a0dato') + '" style="display:inline-block;width:20px;height:20px;border-radius:4px;margin:1px;background:' + _col + ';border:1px solid ' + _brd + ';cursor:default;"></span>';
+      }
+      histBar.innerHTML = _bar;
+    }
+  });
 }
 
 </script>
