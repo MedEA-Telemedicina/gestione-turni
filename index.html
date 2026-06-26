@@ -1894,7 +1894,7 @@ function initTheme() {
 let currentUser = null; // { username, role, fullName }
 
 function initAuth() {
-  const saved = sessionStorage.getItem('loggedUser');
+  const saved = localStorage.getItem('loggedUser');
   if (saved) {
     try { currentUser = JSON.parse(saved); } catch(e) { currentUser = null; }
   }
@@ -1962,7 +1962,7 @@ function doLogin() {
       return;
     }
     currentUser = { username: username, role: user.role || 'user', fullName: user.fullName || username, gender: user.gender || 'M', viewOnly: !!user.viewOnly };
-    sessionStorage.setItem('loggedUser', JSON.stringify(currentUser));
+    localStorage.setItem('loggedUser', JSON.stringify(currentUser));
     // Salva timestamp ultimo accesso
     firebase.database().ref('cardio_users/' + fbKey(username) + '/lastLogin').set(new Date().toISOString());
     onLoginSuccess();
@@ -2104,7 +2104,7 @@ function doLogout() {
   
   // 14. Clear user state
   currentUser = null;
-  sessionStorage.removeItem('loggedUser');
+  localStorage.removeItem('loggedUser');
   
   // 15. Hide UI elements
   const userInfo = document.getElementById('user-info');
@@ -7062,7 +7062,7 @@ function toggleUserGender(username, currentGender) {
     // Update currentUser gender if it's the logged-in user
     if (currentUser && currentUser.username === username) {
       currentUser.gender = newGender;
-      sessionStorage.setItem('loggedUser', JSON.stringify(currentUser));
+      localStorage.setItem('loggedUser', JSON.stringify(currentUser));
     }
   });
 }
