@@ -1,8 +1,3 @@
-
-
-
-
-
 <!DOCTYPE html>
 <html lang="it">
 <head>
@@ -2183,6 +2178,7 @@ let state = {
   customRules: [], // [{doctor, operator, value, description}] custom rules for warnings
   doctorPhones: {}, // { [doctorName]: phoneNumber }
   doctorRatings: {}, // { [doctorName]: 1..5 } — affidabilità (default 3)
+  doctorPaused: {}, // { [doctorName]: true } — medici in pausa: esclusi da tabelle e invii WhatsApp
   requestTemplate: "Buongiorno Dott. [NOME],\npotrebbe indicarci le sue disponibilità per la settimana del [DATA]?\nGrazie mille!",
   confirmTemplate: "Salve, per la prossima settimana Le confermiamo i seguenti turni:\n[TURNI]\nGrazie!"
 };
@@ -2414,23 +2410,31 @@ function getConsuntivoDisplayName(doc, tableType) {
 // Liste dinamiche medici per ogni tabella consuntivo (derivate da doctorExtra)
 function getHcDoctorsList() {
   return state.doctors
-    .filter(d => state.doctorExtra?.[d]?.hcCons)
+    .filter(d => !isDoctorPaused(d) && state.doctorExtra?.[d]?.hcCons)
     .sort((a, b) => a.localeCompare(b));
 }
 function getHpDoctorsList() {
   return state.doctors
-    .filter(d => state.doctorExtra?.[d]?.hpCons)
+    .filter(d => !isDoctorPaused(d) && state.doctorExtra?.[d]?.hpCons)
     .sort((a, b) => a.localeCompare(b));
 }
 function getSpiroDoctorsList() {
   return state.doctors
-    .filter(d => state.doctorExtra?.[d]?.spiro)
+    .filter(d => !isDoctorPaused(d) && state.doctorExtra?.[d]?.spiro)
     .sort((a, b) => a.localeCompare(b));
 }
 function getPlsDoctorsList() {
   return state.doctors
-    .filter(d => state.doctorExtra?.[d]?.pls)
+    .filter(d => !isDoctorPaused(d) && state.doctorExtra?.[d]?.pls)
     .sort((a, b) => a.localeCompare(b));
+}
+
+// ── Pause helpers ──
+function isDoctorPaused(doc) {
+  return !!(state.doctorPaused && state.doctorPaused[doc]);
+}
+function getActiveDoctorsList() {
+  return (state.doctors || []).filter(d => !isDoctorPaused(d));
 }
 
 // Migra chiavi nelle tabelle settimanali da nome-con-suffisso a nome-base
@@ -2662,7 +2666,7 @@ function renderTable() {
 
   // Body
   let bodyHtml = '';
-  const _allTurniDocs = (state.doctors || []).filter(d => (state.doctorTypes[d] || 'completo') !== 'nessuno');
+  const _allTurniDocs = (state.doctors || []).filter(d => !isDoctorPaused(d) && (state.doctorTypes[d] || 'completo') !== 'nessuno');
   const docs = _allTurniDocs.filter(d => d.toLowerCase().includes(filter)).sort((a, b) => a.localeCompare(b));
   // Sbiadisci sezione se filtro attivo e nessun medico trovato
   const _turniSection = document.getElementById('turni-section');
@@ -2745,7 +2749,7 @@ function renderTable() {
     const _bw = getWeekData();
     DAYS.forEach((_, di) => {
       let nConfMat = 0, nEcgMat = 0, nConfPom = 0, nEcgPom = 0;
-      for (const doc of (state.doctors || [])) {
+      for (const doc of getActiveDoctorsList()) {
         const dd = _bw[doc];
         if (!dd || !dd.slots) continue;
         const matV = dd.slots[`${di}_0`] || '';
@@ -2847,7 +2851,7 @@ function toggleFerie(doc, val) {
 
 function renderStats() {
   const w = getWeekData();
-  const _allTurniDocs = (state.doctors || []).filter(d => (state.doctorTypes[d] || 'completo') !== 'nessuno');
+  const _allTurniDocs = (state.doctors || []).filter(d => !isDoctorPaused(d) && (state.doctorTypes[d] || 'completo') !== 'nessuno');
   let docsWithAvail = new Set();
   let docsWithConf = new Set();
   let docsWithEcg = new Set();
@@ -3196,7 +3200,7 @@ function renderHolterTable() {
   // Body
   let bodyHtml = '';
   const _hFv = (document.getElementById('filter-input')?.value || '').toLowerCase().trim();
-  const _allHolterDocs = (state.doctors || []).filter(d => state.holterEnabled[d]).sort((a, b) => a.localeCompare(b));
+  const _allHolterDocs = (state.doctors || []).filter(d => !isDoctorPaused(d) && state.holterEnabled[d]).sort((a, b) => a.localeCompare(b));
   const docs = _hFv ? _allHolterDocs.filter(d => d.toLowerCase().includes(_hFv)) : _allHolterDocs;
   const SLOT_LABELS_H = { '': '—', 'disponibile': 'X', 'confermato': 'C' };
   const SLOT_CSS_H = { '': '', 'disponibile': 'disponibile', 'confermato': 'confermato' };
@@ -3254,7 +3258,7 @@ function renderHolterTable() {
     const _hw = state.holterWeeks[currentWeek] || {};
     HOLTER_DAYS.forEach((_, di) => {
       let nConf = 0;
-      for (const doc of (state.doctors || []).filter(d => state.holterEnabled[d])) {
+      for (const doc of (state.doctors || []).filter(d => !isDoctorPaused(d) && state.holterEnabled[d])) {
         const dd = _hw[doc];
         if (dd && dd.slots && dd.slots[di] === 'confermato') nConf++;
       }
@@ -5246,6 +5250,7 @@ function generateRequestMsg() {
 
   // Conta medici unici con numero di telefono, esclusi quelli che hanno già dato disponibilità in QUALSIASI tabella
   const docsWithPhone = [...new Set(state.doctors)].filter(d => {
+    if (isDoctorPaused(d)) return false;
     if (!state.doctorPhones || !state.doctorPhones[d] || !state.doctorPhones[d].trim()) return false;
     return !_docHasAnyAvail(d);
   });
@@ -5279,6 +5284,7 @@ function startBulkWhatsApp() {
   const seen = new Set();
   const queue = [];
   for (const doc of state.doctors) {
+    if (isDoctorPaused(doc)) continue;
     if (!seen.has(doc) && state.doctorPhones && state.doctorPhones[doc] && state.doctorPhones[doc].trim()) {
       if (!_docHasAnyAvail(doc)) {
         seen.add(doc);
@@ -5408,6 +5414,7 @@ function renderConferma() {
   const HNAMES_FULL = ['Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato','Domenica'];
 
   state.doctors.forEach(doc => {
+    if (isDoctorPaused(doc)) return;
     const dd = w[doc];
     const hw = state.holterWeeks[currentWeek];
     const hdoc = hw && hw[doc];
@@ -5706,6 +5713,7 @@ function renderCalendar() {
   // Collect confirmed doctors (turni completi)
   const turniDoctors = [];
   state.doctors.forEach(doc => {
+    if (isDoctorPaused(doc)) return;
     const dd = w[doc];
     if (!dd || !dd.slots || dd.ferie) return;
     let hasConfirm = false;
@@ -5760,7 +5768,7 @@ function renderCalendar() {
   const holterColor = '#d6bbeb';
   const holterW = state.holterWeeks[currentWeek] || {};
   const holterDoctors = [];
-  state.doctors.filter(d => state.holterEnabled[d]).forEach(doc => {
+  state.doctors.filter(d => !isDoctorPaused(d) && state.holterEnabled[d]).forEach(doc => {
     const hdoc = holterW[doc];
     if (!hdoc || hdoc.ferie) return;
     let hasConfirm = false;
@@ -6076,6 +6084,7 @@ async function doSyncCalendar() {
 
     // --- TABELLA 1: Turni normali confermati ---
     for (const doc of state.doctors) {
+      if (isDoctorPaused(doc)) continue;
       const dd = w[doc];
       if (!dd || !dd.slots || dd.ferie) continue;
       const isGregori = doc.toUpperCase().indexOf('GREGORI') !== -1;
@@ -6106,7 +6115,7 @@ async function doSyncCalendar() {
 
     // --- TABELLA 2: Holter confermati ---
     const holterW = state.holterWeeks[currentWeek] || {};
-    for (const doc of state.doctors.filter(d => state.holterEnabled[d])) {
+    for (const doc of state.doctors.filter(d => !isDoctorPaused(d) && state.holterEnabled[d])) {
       const hdoc = holterW[doc];
       if (!hdoc || hdoc.ferie) continue;
       for (let di = 0; di < 7; di++) {
@@ -6136,12 +6145,13 @@ function syncGoogleCalendar() {
   const w = getWeekData();
   let hasConfirmed = false;
   state.doctors.forEach(doc => {
+    if (isDoctorPaused(doc)) return;
     const dd = w[doc];
     if (!dd || !dd.slots) return;
     Object.values(dd.slots).forEach(v => { if (v === 'confermato' || v === 'confermato-ecg') hasConfirmed = true; });
   });
   const holterW = state.holterWeeks[currentWeek] || {};
-  state.doctors.filter(d => state.holterEnabled[d]).forEach(doc => {
+  state.doctors.filter(d => !isDoctorPaused(d) && state.holterEnabled[d]).forEach(doc => {
     const hdoc = holterW[doc];
     if (!hdoc) return;
     for (let di = 0; di < 7; di++) { if ((hdoc.slots && hdoc.slots[di]) === 'confermato') hasConfirmed = true; }
@@ -6194,7 +6204,7 @@ function renderRiepilogo() {
   }
   // Conta disponibilità per dottore (per evidenziare chi ne ha solo 1)
   const docDispCount = {};  // { docName: { total: N, ecgOnly: bool } }
-  state.doctors.forEach(doc => {
+  getActiveDoctorsList().forEach(doc => {
     const dd = w[doc];
     if (!dd || !dd.slots || dd.ferie) return;
     let total = 0, allEcg = true;
@@ -6206,7 +6216,7 @@ function renderRiepilogo() {
     if (total > 0) docDispCount[doc] = { total, ecgOnly: allEcg };
   });
 
-  state.doctors.forEach(doc => {
+  getActiveDoctorsList().forEach(doc => {
     const dd = w[doc];
     if (!dd || !dd.slots || dd.ferie) return;
     Object.entries(dd.slots).forEach(([key, val]) => {
@@ -6300,7 +6310,7 @@ function renderRiepilogo() {
   const holterConfR = {};
   for (let di = 0; di < 7; di++) { holterDispR[di] = []; holterConfR[di] = []; }
   const holterWR = state.holterWeeks[currentWeek] || {};
-  state.doctors.filter(d => state.holterEnabled[d]).forEach(doc => {
+  state.doctors.filter(d => !isDoctorPaused(d) && state.holterEnabled[d]).forEach(doc => {
     const hdoc = holterWR[doc];
     if (!hdoc || hdoc.ferie) return;
     for (let di = 0; di < 7; di++) {
@@ -6704,6 +6714,7 @@ function renderSettings() {
   };
 
   list.innerHTML = sorted.map(({ doc, i }) => {
+    const paused = isDoctorPaused(doc);
     const caps = getDoctorCaps(doc);
     // Badge visivo
     const tipo = state.doctorTypes[doc] || 'completo';
@@ -6723,12 +6734,12 @@ function renderSettings() {
     ].join('');
 
     return `
-    <div style="padding:8px 4px;border-bottom:1px solid var(--border);">
+    <div style="padding:8px 4px;border-bottom:1px solid var(--border);${paused ? 'opacity:0.55;background:rgba(217,119,6,0.06);' : ''}">
       <!-- Riga nome -->
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:9px;">
         <span style="color:var(--muted);font-size:11px;font-weight:600;min-width:22px;">${i+1}.</span>
         <input type="text" value="${doc}" placeholder="Cognome N." onfocus="this.style.borderBottom='1px solid #93c5fd'" onblur="this.style.borderBottom='none';updateDoctor(${i}, this.value)" style="flex:1;font-size:13px;font-weight:700;letter-spacing:.3px;border:none;border-bottom:none;outline:none;background:transparent;padding:0;">
-        <div style="display:flex;align-items:center;gap:2px;flex-shrink:0;">${badge}${holterBadge}${extraBadges}</div>
+        <div style="display:flex;align-items:center;gap:2px;flex-shrink:0;">${badge}${holterBadge}${extraBadges}${paused ? '<span style="background:#fef3c7;color:#92400e;font-weight:700;font-size:9px;border-radius:4px;padding:1px 6px;margin-left:4px;border:1px solid #fde68a;">⏸️ IN PAUSA</span>' : ''}</div>
         <button onclick="removeDoctor(${i})" style="background:none;border:none;color:#ef4444;font-size:15px;cursor:pointer;padding:2px 6px;border-radius:6px;line-height:1;" title="Rimuovi" onmouseenter="this.style.background='#fee2e2'" onmouseleave="this.style.background='none'">✕</button>
       </div>
       <!-- Gruppi chip -->
@@ -6781,6 +6792,15 @@ function renderSettings() {
         <div style="display:flex;flex-direction:column;gap:4px;">
           <span style="font-size:9px;font-weight:700;color:#cbd5e1;text-transform:uppercase;letter-spacing:.5px;">📱 Telefono</span>
           <input type="tel" value="${state.doctorPhones[doc] || ''}" placeholder="3xx xxx xxxx" onblur="saveDoctorPhone('${doc.replace(/'/g,"\\'")}', this.value)" style="width:140px;min-width:140px;font-size:11px;font-family:var(--font-mono);border-radius:6px;padding:5px 8px;${state.doctorPhones[doc] ? 'border:2px solid #25d366;background:rgba(37,211,102,0.08);color:var(--text);' : 'border:1px solid var(--border);background:var(--surface2);color:var(--text);'}">
+        </div>
+        <!-- Separatore -->
+        <div style="width:1px;background:var(--border);align-self:stretch;margin:0 2px;"></div>
+        <!-- Stato -->
+        <div style="display:flex;flex-direction:column;gap:4px;">
+          <span style="font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;">Stato</span>
+          <button onclick="toggleDoctorPause('${doc.replace(/'/g,"\\'")}')" style="display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:20px;cursor:pointer;font-size:12px;font-weight:700;transition:all .15s;border:1.5px solid ${paused ? '#f59e0b' : '#22c55e'};background:${paused ? '#fef3c7' : '#dcfce7'};color:${paused ? '#92400e' : '#166534'};" title="${paused ? 'Riattiva medico' : 'Metti in pausa'}">
+            ${paused ? '⏸️ In pausa' : '▶️ Attivo'}
+          </button>
         </div>
       </div>
     </div>
@@ -6848,6 +6868,7 @@ function updateDoctor(i, val) {
   if (state.doctorExtra[oldName] !== undefined) { state.doctorExtra[newName] = state.doctorExtra[oldName]; delete state.doctorExtra[oldName]; }
   if (state.doctorPhones[oldName] !== undefined) { state.doctorPhones[newName] = state.doctorPhones[oldName]; delete state.doctorPhones[oldName]; }
   if (state.doctorRatings[oldName] !== undefined) { state.doctorRatings[newName] = state.doctorRatings[oldName]; delete state.doctorRatings[oldName]; }
+  if (state.doctorPaused && state.doctorPaused[oldName]) { state.doctorPaused[newName] = state.doctorPaused[oldName]; delete state.doctorPaused[oldName]; }
   // I campi servizi sono dentro doctorExtra, già migrato sopra
   logAudit('Rinominato medico: ' + oldName + ' → ' + newName);
   renderSettings();
@@ -6913,6 +6934,30 @@ function saveDoctorPhone(doc, phone) {
     }
   }
   saveData(true);
+}
+
+function toggleDoctorPause(doc) {
+  if (!state.doctorPaused) state.doctorPaused = {};
+  if (state.doctorPaused[doc]) {
+    delete state.doctorPaused[doc];
+    logAudit('Riattivato medico: ' + doc);
+    showToast('▶️ ' + doc + ' riattivato');
+  } else {
+    state.doctorPaused[doc] = true;
+    logAudit('Messo in pausa medico: ' + doc);
+    showToast('⏸️ ' + doc + ' messo in pausa', 'warn');
+  }
+  renderSettings();
+  if (typeof renderTable === 'function') renderTable();
+  if (typeof renderHolterTable === 'function') renderHolterTable();
+  if (typeof renderHcTable === 'function') renderHcTable();
+  if (typeof renderHpTable === 'function') renderHpTable();
+  if (typeof renderSpiroTable === 'function') renderSpiroTable();
+  if (typeof renderPlsTable === 'function') renderPlsTable();
+  if (typeof renderRiepilogo === 'function') renderRiepilogo();
+  if (typeof renderStats === 'function') renderStats();
+  if (typeof renderRatingsSection === 'function') renderRatingsSection();
+  saveData();
 }
 
 // =============================================
@@ -8348,6 +8393,7 @@ function init() {
       if (data.doctorExtra) state.doctorExtra = data.doctorExtra;
       if (data.doctorPhones) state.doctorPhones = data.doctorPhones;
       if (data.doctorRatings) state.doctorRatings = data.doctorRatings;
+      if (data.doctorPaused) state.doctorPaused = data.doctorPaused; else state.doctorPaused = {};
       if (data.doctorTypes) state.doctorTypes = data.doctorTypes;
       if (data.holterEnabled) state.holterEnabled = data.holterEnabled;
       if (data.requestTemplate) state.requestTemplate = data.requestTemplate;
@@ -9253,7 +9299,7 @@ function _aiCountWeek(weekKey) {
   var pd = state.weeks[weekKey] || {};
   var ph = state.holterWeeks[weekKey] || {};
   var counts = {};
-  (state.doctors || []).forEach(function(doc) {
+  getActiveDoctorsList().forEach(function(doc) {
     var dd = pd[doc];
     if (!dd || dd.ferie) return;
     var sl = dd.slots || {};
@@ -9268,7 +9314,7 @@ function _aiCountWeek(weekKey) {
     }
   });
   // Holter (inclusa domenica, di=6)
-  (state.doctors || []).filter(function(d) { return state.holterEnabled[d]; }).forEach(function(doc) {
+  getActiveDoctorsList().filter(function(d) { return state.holterEnabled[d]; }).forEach(function(doc) {
     var hd = ph[doc];
     if (!hd || hd.ferie) return;
     for (var di = 0; di < 7; di++) {
@@ -9304,7 +9350,7 @@ function _aiRenderInner() {
   var DAYSL = ['LUN','MAR','MER','GIO','VEN','SAB'];
 
   // Doctors with any availability this week
-  var availDocs = (state.doctors || []).filter(function(doc) {
+  var availDocs = getActiveDoctorsList().filter(function(doc) {
     var tipo = state.doctorTypes[doc] || 'completo';
     if (tipo === 'nessuno') return false;
     var dd = weekData[doc];
@@ -9315,7 +9361,7 @@ function _aiRenderInner() {
 
   // Holter docs with availability
   var holterWeekData = state.holterWeeks[currentWeek] || {};
-  var holterDocs = (state.doctors || []).filter(function(d) {
+  var holterDocs = getActiveDoctorsList().filter(function(d) {
     if (!state.holterEnabled[d]) return false;
     var hd = holterWeekData[d];
     if (!hd || hd.ferie) return false;
@@ -9599,7 +9645,7 @@ function _generateAIDraftCore() {
 
   // Track total assignments for fairness balancing
   var assignCount = {};
-  (state.doctors || []).forEach(function(d) { assignCount[d] = 0; });
+  getActiveDoctorsList().forEach(function(d) { assignCount[d] = 0; });
 
   // ── Custom rules from Impostazioni (min/max/exact turni) ──
   var _ruleMinMap = {}; // doc -> min shifts required
@@ -9619,7 +9665,7 @@ function _generateAIDraftCore() {
 
   // ── Pre-compute: doctors with a single availability across the week ──
   var _singleSlotMap = {}; // doc → { key, type } only if exactly 1 slot available
-  (state.doctors || []).forEach(function(doc) {
+  getActiveDoctorsList().forEach(function(doc) {
     var tipo = state.doctorTypes[doc] || 'completo';
     if (tipo === 'nessuno') return;
     if (_aiAlwaysConfirm.has(doc)) return; // already handled
@@ -9640,7 +9686,7 @@ function _generateAIDraftCore() {
 
   // Same for holter
   var _singleHolterMap = {}; // doc → dayIndex only if exactly 1 holter day available
-  (state.doctors || []).filter(function(d) { return state.holterEnabled[d]; }).forEach(function(doc) {
+  getActiveDoctorsList().filter(function(d) { return state.holterEnabled[d]; }).forEach(function(doc) {
     if (_aiAlwaysConfirm.has(doc)) return;
     var hd = holterData[doc];
     if (!hd || hd.ferie) return;
@@ -9663,7 +9709,7 @@ function _generateAIDraftCore() {
       // Available doctors for this slot
       var availCompleto = [];
       var availEcg = [];
-      (state.doctors || []).forEach(function(doc) {
+      getActiveDoctorsList().forEach(function(doc) {
         var tipo = state.doctorTypes[doc] || 'completo';
         if (tipo === 'nessuno') return;
         var dd = weekData[doc];
@@ -9828,7 +9874,7 @@ function _generateAIDraftCore() {
     // ── Holter ──
     var targetHolter = parseInt((document.getElementById('ai-ho-' + di) || {}).value) || 0;
     var availHolter = [];
-    (state.doctors || []).filter(function(d) { return state.holterEnabled[d]; }).forEach(function(doc) {
+    getActiveDoctorsList().filter(function(d) { return state.holterEnabled[d]; }).forEach(function(doc) {
       var hd = holterData[doc];
       if (!hd || hd.ferie) return;
       if ((hd.slots || {})[di] === 'disponibile') availHolter.push(doc);
@@ -9869,7 +9915,7 @@ function _generateAIDraftCore() {
     var di6 = 6;
     var targetHolterDom = parseInt((document.getElementById('ai-ho-6') || {}).value) || 0;
     var availHolterDom = [];
-    (state.doctors || []).filter(function(d) { return state.holterEnabled[d]; }).forEach(function(doc) {
+    getActiveDoctorsList().filter(function(d) { return state.holterEnabled[d]; }).forEach(function(doc) {
       var hd = holterData[doc];
       if (!hd || hd.ferie) return;
       if ((hd.slots || {})[di6] === 'disponibile') availHolterDom.push(doc);
@@ -9981,7 +10027,7 @@ function _generateAIDraftCore() {
   // ── BONUS PASS: massimizza medici confermati ──
   // Se attivo, inserisce i medici disponibili non ancora confermati nel primo slot possibile
   if (_aiMaximizeConfirmed) {
-    (state.doctors || []).forEach(function(bonusDoc) {
+    getActiveDoctorsList().forEach(function(bonusDoc) {
       var _alreadyInDraft = false;
       for (var _bkC in draft.slots) {
         if ((draft.slots[_bkC] || []).some(function(p) { return p.doc === bonusDoc; })) {
@@ -10297,7 +10343,7 @@ function _aiRenderSlotCell(di, si) {
   // Ricalcola live chi è disponibile per questo slot ma non ancora inserito
   var placedDocs = items.map(function(item) { return item.doc; });
   var weekData = state.weeks[currentWeek] || {};
-  var hasLiveAvail = (state.doctors || []).some(function(doc) {
+  var hasLiveAvail = getActiveDoctorsList().some(function(doc) {
     var tipo = state.doctorTypes[doc] || 'completo';
     if (tipo === 'nessuno') return false;
     if (placedDocs.includes(doc)) return false;
@@ -10336,7 +10382,7 @@ function _aiRenderHolterCell(di) {
 
   // Ricalcola live chi è disponibile per holter in questo giorno ma non ancora inserito
   var holterWeekData = state.holterWeeks[currentWeek] || {};
-  var hasLiveHolterAvail = (state.doctors || []).some(function(doc) {
+  var hasLiveHolterAvail = getActiveDoctorsList().some(function(doc) {
     if (!state.holterEnabled[doc]) return false;
     if (items.includes(doc)) return false;
     var hd = holterWeekData[doc];
@@ -10387,7 +10433,7 @@ function _aiShowAddPopup(evt, di, si) {
   var weekData = state.weeks[currentWeek] || {};
   var liveCompleto = [];
   var liveEcg = [];
-  (state.doctors || []).forEach(function(doc) {
+  getActiveDoctorsList().forEach(function(doc) {
     var tipo = state.doctorTypes[doc] || 'completo';
     if (tipo === 'nessuno') return;
     if (placedDocs.includes(doc)) return;
@@ -10433,7 +10479,7 @@ function _aiShowHolterPopup(evt, di) {
   var placedDocs = _aiDraft.holter[di] || [];
   var holterWeekData = state.holterWeeks[currentWeek] || {};
   var liveAvail = [];
-  (state.doctors || []).forEach(function(doc) {
+  getActiveDoctorsList().forEach(function(doc) {
     if (!state.holterEnabled[doc]) return;
     if (placedDocs.includes(doc)) return;
     var hd = holterWeekData[doc];
