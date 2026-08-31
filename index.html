@@ -1,3 +1,8 @@
+
+
+
+
+
 <!DOCTYPE html>
 <html lang="it">
 <head>
@@ -4442,7 +4447,10 @@ let _pendingSource  = 'regex'; // 'regex' o 'ai'
 // =============================================
 const _m = ['4LFK','39MS','gt0K','4Mjz','GFHJ','lrov','vv6c','k8dI'];
 const MISTRAL_API_KEY = _m.join('');
-const MISTRAL_MODEL = 'mistral-large-latest';
+// Modelli disponibili nel piano gratuito Mistral (in ordine di preferenza).
+// "mistral-large-latest" richiede un abbonamento a pagamento e non è più usato come primario.
+const MISTRAL_MODELS = ['mistral-small-latest', 'open-mistral-nemo', 'open-mixtral-8x7b'];
+const MISTRAL_MODEL = MISTRAL_MODELS[0];
 
 async function aiParseMessage(msg, docSel) {
   // ── Profilo medico ──
@@ -4499,17 +4507,28 @@ ${msg}`;
 
   // ── Fetch con retry automatico (max 3 tentativi) ──
   let _retries = 0;
+  let _modelIdx = 0;
   async function _mistralFetch() {
+    const model = MISTRAL_MODELS[_modelIdx] || MISTRAL_MODEL;
     const resp = await fetch('https://api.mistral.ai/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${MISTRAL_API_KEY}` },
-      body: JSON.stringify({ model: MISTRAL_MODEL, messages: [{ role: 'user', content: prompt }], temperature: 0.1, max_tokens: 512 })
+      body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }], temperature: 0.1, max_tokens: 512 })
     });
     if (resp.status === 429 && _retries < 3) {
       _retries++;
       const wait = Math.min(10, parseFloat((await resp.text()).match(/try again in ([\d.]+)s/)?.[1] || '4'));
       await new Promise(r => setTimeout(r, wait * 1000));
       return _mistralFetch();
+    }
+    // Modello non incluso nel piano attuale → prova il modello successivo della lista
+    if (resp.status === 403 && _modelIdx < MISTRAL_MODELS.length - 1) {
+      const errTxt = await resp.text();
+      if (/tier_not_allowed|not available in your subscription/i.test(errTxt)) {
+        _modelIdx++;
+        return _mistralFetch();
+      }
+      throw new Error(`Mistral API error 403: ${errTxt}`);
     }
     if (!resp.ok) { const err = await resp.text(); throw new Error(`Mistral API error ${resp.status}: ${err}`); }
     return resp;
