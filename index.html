@@ -4449,8 +4449,9 @@ let _pendingSource  = 'regex'; // 'regex' o 'ai'
 const _m = ['gsk_Qk1','FMSMOT0','yxNDcO9','5W3WGdy','b3FY9SJ','FeGwE9K','3RHXIin','clP1t2g'];
 const GROQ_API_KEY = _m.join('');
 // Modelli disponibili nel piano gratuito Groq (in ordine di preferenza).
-// 70b-versatile = miglior comprensione istruzioni complesse; gli altri sono fallback.
-const GROQ_MODELS = ['llama-3.3-70b-versatile', 'meta-llama/llama-4-maverick-17b-128e-instruct', 'llama-3.1-8b-instant'];
+// llama-3.3-70b-versatile e llama-3.1-8b-instant sono stati deprecati da Groq il 16/08/2026;
+// sostituiti con i modelli raccomandati ufficialmente da Groq.
+const GROQ_MODELS = ['openai/gpt-oss-120b', 'meta-llama/llama-4-maverick-17b-128e-instruct', 'openai/gpt-oss-20b'];
 const GROQ_MODEL = GROQ_MODELS[0];
 
 async function aiParseMessage(msg, docSel) {
