@@ -3,6 +3,7 @@
 
 
 
+
 <!DOCTYPE html>
 <html lang="it">
 <head>
@@ -4443,14 +4444,14 @@ let _pendingSource  = 'regex'; // 'regex' o 'ai'
 
 
   // =============================================
-// AI Parser via Mistral (Mistral Large - 1B token/mese gratis)
+// AI Parser via Groq (free tier: 30 richieste/min, ~14.400/giorno sui modelli 70B)
 // =============================================
-const _m = ['4LFK','39MS','gt0K','4Mjz','GFHJ','lrov','vv6c','k8dI'];
-const MISTRAL_API_KEY = _m.join('');
-// Modelli disponibili nel piano gratuito Mistral (in ordine di preferenza).
-// "mistral-large-latest" richiede un abbonamento a pagamento e non è più usato come primario.
-const MISTRAL_MODELS = ['mistral-small-latest', 'open-mistral-nemo', 'open-mixtral-8x7b'];
-const MISTRAL_MODEL = MISTRAL_MODELS[0];
+const _m = ['gsk_Qk1','FMSMOT0','yxNDcO9','5W3WGdy','b3FY9SJ','FeGwE9K','3RHXIin','clP1t2g'];
+const GROQ_API_KEY = _m.join('');
+// Modelli disponibili nel piano gratuito Groq (in ordine di preferenza).
+// 70b-versatile = miglior comprensione istruzioni complesse; gli altri sono fallback.
+const GROQ_MODELS = ['llama-3.3-70b-versatile', 'meta-llama/llama-4-maverick-17b-128e-instruct', 'llama-3.1-8b-instant'];
+const GROQ_MODEL = GROQ_MODELS[0];
 
 async function aiParseMessage(msg, docSel) {
   // ── Profilo medico ──
@@ -4508,32 +4509,33 @@ ${msg}`;
   // ── Fetch con retry automatico (max 3 tentativi) ──
   let _retries = 0;
   let _modelIdx = 0;
-  async function _mistralFetch() {
-    const model = MISTRAL_MODELS[_modelIdx] || MISTRAL_MODEL;
-    const resp = await fetch('https://api.mistral.ai/v1/chat/completions', {
+  async function _groqFetch() {
+    const model = GROQ_MODELS[_modelIdx] || GROQ_MODEL;
+    const resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${MISTRAL_API_KEY}` },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${GROQ_API_KEY}` },
       body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }], temperature: 0.1, max_tokens: 512 })
     });
     if (resp.status === 429 && _retries < 3) {
       _retries++;
-      const wait = Math.min(10, parseFloat((await resp.text()).match(/try again in ([\d.]+)s/)?.[1] || '4'));
+      const retryAfter = resp.headers.get('retry-after');
+      const wait = Math.min(10, parseFloat(retryAfter || '4') || 4);
       await new Promise(r => setTimeout(r, wait * 1000));
-      return _mistralFetch();
+      return _groqFetch();
     }
-    // Modello non incluso nel piano attuale → prova il modello successivo della lista
-    if (resp.status === 403 && _modelIdx < MISTRAL_MODELS.length - 1) {
+    // Modello non disponibile/decommissionato → prova il modello successivo della lista
+    if ((resp.status === 400 || resp.status === 404) && _modelIdx < GROQ_MODELS.length - 1) {
       const errTxt = await resp.text();
-      if (/tier_not_allowed|not available in your subscription/i.test(errTxt)) {
+      if (/model_not_found|decommissioned|does not exist/i.test(errTxt)) {
         _modelIdx++;
-        return _mistralFetch();
+        return _groqFetch();
       }
-      throw new Error(`Mistral API error 403: ${errTxt}`);
+      throw new Error(`Groq API error ${resp.status}: ${errTxt}`);
     }
-    if (!resp.ok) { const err = await resp.text(); throw new Error(`Mistral API error ${resp.status}: ${err}`); }
+    if (!resp.ok) { const err = await resp.text(); throw new Error(`Groq API error ${resp.status}: ${err}`); }
     return resp;
   }
-  const response = await _mistralFetch();
+  const response = await _groqFetch();
 
   const data = await response.json();
   let text = data.choices[0].message.content;
@@ -4808,7 +4810,7 @@ function parseWaMessage() {
   }
 }
 
-// ── Parser AI (Gemini) ──
+// ── Parser AI (Groq) ──
 async function parseWaMessageAI() {
   const docSel = document.getElementById('wa-doctor-select').value;
   const msg = document.getElementById('wa-msg-input').value.trim();
