@@ -4512,10 +4512,15 @@ ${msg}`;
   let _modelIdx = 0;
   async function _groqFetch() {
     const model = GROQ_MODELS[_modelIdx] || GROQ_MODEL;
+    // I modelli gpt-oss sono "reasoning": consumano token per il ragionamento interno prima
+    // di scrivere la risposta, quindi serve più budget e un effort basso per non troncare il JSON.
+    const _isReasoning = /gpt-oss/i.test(model);
+    const _body = { model, messages: [{ role: 'user', content: prompt }], temperature: 0.1, max_tokens: _isReasoning ? 2048 : 512 };
+    if (_isReasoning) _body.reasoning_effort = 'low';
     const resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${GROQ_API_KEY}` },
-      body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }], temperature: 0.1, max_tokens: 512 })
+      body: JSON.stringify(_body)
     });
     if (resp.status === 429 && _retries < 3) {
       _retries++;
