@@ -3,7 +3,6 @@
 
 
 
-
 <!DOCTYPE html>
 <html lang="it">
 <head>
@@ -531,6 +530,9 @@
   .slot-btn.solo-ecg { background: rgba(217,119,6,0.12); border-color: var(--warn); color: var(--warn); font-weight:700; }
   .slot-btn.confermato { background: rgba(37,99,235,0.14); border-color: var(--accent); color: var(--accent); font-weight:700; }
   .slot-btn.confermato-ecg { background: rgba(124,58,237,0.14); border-color: var(--accent2); color: var(--accent2); font-weight:700; }
+  .slot-btn.disp16 { background: rgba(217,119,6,0.12); border-color: var(--warn); color: var(--warn); font-weight:700; }
+  .slot-btn.disp-both { background: rgba(5,150,105,0.12); border-color: var(--warn); color: var(--success); font-weight:700; border-style:dashed; }
+  .slot-btn.conf16 { background: rgba(124,58,237,0.14); border-color: var(--accent2); color: var(--accent2); font-weight:700; }
   .slot-btn.ferie { background: rgba(220,38,38,0.12); border-color: var(--danger); color: var(--danger); font-weight:700; }
 
   .ferie-td { padding: 4px 6px; }
@@ -1485,6 +1487,7 @@
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
       <div style="display:flex;align-items:center;gap:8px;">
         <span style="font-weight:700;font-size:15px;color:#6366f1;">Disponibilità Turno Holter</span>
+        <span style="font-size:11px;color:var(--muted);">X = standard · 16 = turno da 16hc · X+16 = entrambi · C / C16 = confermato</span>
       </div>
       <button onclick="toggleHolterTableVis()" id="toggle-holter-btn" title="Riduci/Espandi" style="background:none;border:1px solid var(--border);border-radius:4px;cursor:pointer;color:var(--muted);font-size:15px;font-weight:700;line-height:1;padding:1px 8px;user-select:none;">−</button>
     </div>
@@ -1572,7 +1575,7 @@
         <label style="color:var(--muted);font-size:11px;">Medico:</label>
         <select class="styled" id="wa-doctor-select"></select>
       </div>
-      <textarea class="wa-input" id="wa-msg-input" placeholder="Incolla il messaggio WhatsApp qui...&#10;Es: 'Disponibile lunedì mattina, martedì e venerdì'"></textarea>
+      <textarea class="wa-input" id="wa-msg-input" placeholder="Incolla il messaggio WhatsApp qui...&#10;Es: 'Disponibile lunedì mattina, martedì e venerdì'&#10;Holter: 'lunedì holter, martedì turno da 16hc, giovedì holter e anche 16'"></textarea>
       <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center;">
         <button class="btn btn-primary btn-sm" onclick="parseWaMessage()">🔍 Interpreta</button>
         <button class="btn btn-sm" id="btn-ai-parse" onclick="parseWaMessageAI()" style="background:linear-gradient(135deg,#6366f1,#a855f7);color:#fff;border:none;">🤖 AI</button>
@@ -3138,6 +3141,17 @@ function showFeriePopup() {
 const HOLTER_DAYS = ['LUN','MAR','MER','GIO','VEN','SAB','DOM'];
 const CONS_DAYS  = ['LUN','MAR','MER','GIO','VEN','SAB','DOM'];
 
+// Stati cella Holter: '' → X → 16 → X+16 → C → C16 → ''
+const HOLTER_STATES = ['', 'disponibile', 'disponibile16', 'disponibile-entrambi', 'confermato', 'confermato16'];
+const HOLTER_16_TAG = 'TURNO DA 16HC';
+function isHolterAvail(v) { return v === 'disponibile' || v === 'disponibile16' || v === 'disponibile-entrambi'; }
+function isHolterConf(v)  { return v === 'confermato' || v === 'confermato16'; }
+function holterNameLabel(doc, v) {
+  if (v === 'confermato16' || v === 'disponibile16') return doc + ' (' + HOLTER_16_TAG + ')';
+  if (v === 'disponibile-entrambi') return doc + ' (ANCHE ' + HOLTER_16_TAG + ')';
+  return doc;
+}
+
 function getHolterWeekData() {
   if (!state.holterWeeks[currentWeek]) state.holterWeeks[currentWeek] = {};
   return state.holterWeeks[currentWeek];
@@ -3153,21 +3167,22 @@ function getHolterDoctorData(name) {
 function cycleHolterSlot(doc, dayIdx) {
   const dd = getHolterDoctorData(doc);
   const cur = dd.slots[dayIdx] || '';
-  const next = cur === '' ? 'disponibile' : cur === 'disponibile' ? 'confermato' : '';
+  const _hi = HOLTER_STATES.indexOf(cur);
+  const next = HOLTER_STATES[(_hi + 1) % HOLTER_STATES.length];
 
   if (next === '') delete dd.slots[dayIdx];
   else dd.slots[dayIdx] = next;
   const dayNames = ['LUN','MAR','MER','GIO','VEN','SAB','DOM'];
   logSlotChange('Holter', doc, dayNames[dayIdx] || dayIdx, next || 'vuoto');
   // Check conflicts when confirming holter
-  if (next === 'confermato') {
+  if (isHolterConf(next)) {
     const warnings = [];
     const hw = getHolterWeekData();
     for (const otherDoc of state.doctors) {
       if (otherDoc === doc) continue;
       const odd = hw[otherDoc];
       if (!odd || !odd.slots) continue;
-      if (odd.slots[dayIdx] === 'confermato' && doctorsConflict(doc, otherDoc)) {
+      if (isHolterConf(odd.slots[dayIdx]) && doctorsConflict(doc, otherDoc)) {
         warnings.push(doc + ' e ' + otherDoc + ' sono in conflitto per Holter ' + (dayNames[dayIdx] || dayIdx) + '!');
       }
     }
@@ -3208,14 +3223,14 @@ function renderHolterTable() {
   const _hFv = (document.getElementById('filter-input')?.value || '').toLowerCase().trim();
   const _allHolterDocs = (state.doctors || []).filter(d => !isDoctorPaused(d) && state.holterEnabled[d]).sort((a, b) => a.localeCompare(b));
   const docs = _hFv ? _allHolterDocs.filter(d => d.toLowerCase().includes(_hFv)) : _allHolterDocs;
-  const SLOT_LABELS_H = { '': '—', 'disponibile': 'X', 'confermato': 'C' };
-  const SLOT_CSS_H = { '': '', 'disponibile': 'disponibile', 'confermato': 'confermato' };
+  const SLOT_LABELS_H = { '': '—', 'disponibile': 'X', 'disponibile16': '16', 'disponibile-entrambi': 'X+16', 'confermato': 'C', 'confermato16': 'C16' };
+  const SLOT_CSS_H = { '': '', 'disponibile': 'disponibile', 'disponibile16': 'disp16', 'disponibile-entrambi': 'disp-both', 'confermato': 'confermato', 'confermato16': 'conf16' };
 
   docs.forEach(doc => {
     const dd = getHolterDoctorData(doc);
     const slots = Object.values(dd.slots || {});
-    const nDisp = slots.filter(v => v === 'disponibile').length;
-    const nConf = slots.filter(v => v === 'confermato').length;
+    const nDisp = slots.filter(v => isHolterAvail(v)).length;
+    const nConf = slots.filter(v => isHolterConf(v)).length;
     let nameBg, nameColor, nameBorder;
     if (dd.ferie) {
       nameBg = 'rgba(220,38,38,0.18)'; nameColor = 'var(--danger)'; nameBorder = '3px solid var(--danger)';
@@ -3266,7 +3281,7 @@ function renderHolterTable() {
       let nConf = 0;
       for (const doc of (state.doctors || []).filter(d => !isDoctorPaused(d) && state.holterEnabled[d])) {
         const dd = _hw[doc];
-        if (dd && dd.slots && dd.slots[di] === 'confermato') nConf++;
+        if (dd && dd.slots && isHolterConf(dd.slots[di])) nConf++;
       }
       const el = document.getElementById(`holter-badge-${di}`);
       if (el) {
@@ -3903,6 +3918,58 @@ function buildDateMap(mondayStr) {
 
 // ── low-level helpers ──────────────────────────────────────────────────
 
+
+// ── HOLTER: tipi di disponibilità (X standard / 16 = turno da 16hc / X+16 = entrambi) ──
+const HOLTER_KIND_TO_STATE = { std: 'disponibile', '16': 'disponibile16', both: 'disponibile-entrambi' };
+const HOLTER_KIND_LABEL    = { std: 'X', '16': '16', both: 'X+16' };
+const HOLTER_KIND_ORDER    = ['std', '16', 'both'];
+function mergeHolterKind(a, b) {
+  a = a || 'std'; b = b || 'std';
+  if (a === b) return a;
+  return 'both'; // std+16 (o qualunque combinazione diversa) = entrambi
+}
+// Sostituisce le espressioni "turno da 16hc" con token neutri (tagsedici / tagboth) PRIMA di cercare
+// giorni e numeri, così "16" non viene scambiato per una data o per un numero consuntivo.
+function tokenizeHolter16(low, docName) {
+  if (docName && !(state.holterEnabled && state.holterEnabled[docName])) return low;
+  let t = ' ' + low + ' ';
+  const MESI = '(?:gen|feb|mar|apr|mag|giu|lug|ago|set|ott|nov|dic)';
+  const NOTDATE = '(?![\\/\\-]\\s*\\d|\\s*[\\/\\-]\\s*\\d|\\s+' + MESI + ')';
+  const H16 = '(?:turno\\s+)?(?:holter\\s+)?(?:da\\s+|di\\s+)?16(?:\\s*hc|\\s*h\\b|\\s*ore)?' + NOTDATE;
+  const R = (re, tok) => { t = t.replace(new RegExp(re, 'gi'), ' ' + tok + ' '); };
+  // ── ENTRAMBI (X+16) ──
+  R('\\bx\\s*\\+\\s*16(?:\\s*hc)?\\b', 'tagboth');
+  R('\\b(?:standard|normale|holter)\\s*\\+\\s*(?:turno\\s+)?(?:da\\s+)?16(?:\\s*hc)?' + NOTDATE, 'tagboth');
+  R('\\b(?:holter|standard|normale)(?:\\s+(?:standard|normale))?\\s*(?:,|e|ed|o|oppure|/)\\s*(?:anche\\s+)?(?:il\\s+)?(?:turno\\s+)?(?:holter\\s+)?(?:da\\s+)?16(?:\\s*hc|\\s*h\\b)?' + NOTDATE, 'tagboth');
+  R('\\b(?:entrambi|entrambe|tutti\\s+e\\s+due|sia)\\b[^,;\\n.]{0,40}?\\b16(?:\\s*hc|\\s*h\\b)?' + NOTDATE, 'tagboth');
+  R('\\banche\\s+(?:il\\s+|lo\\s+)?(?:turno\\s+)?(?:holter\\s+)?(?:da\\s+)?16(?:\\s*hc|\\s*h\\b)?' + NOTDATE, 'tagboth');
+  R('\\b16(?:\\s*hc)?\\s*(?:e|ed|o|oppure|\\+|/)\\s*(?:anche\\s+)?(?:il\\s+)?(?:holter|standard|normale)\\b', 'tagboth');
+  R('\\+\\s*16(?:\\s*hc)?\\b', 'tagboth');
+  // ── SOLO 16 ──
+  R('\\bx\\s*16\\b', 'tagsedici');
+  R('\\bsedici(?:\\s*hc)?\\b', 'tagsedici');
+  R('\\b(?:turno|holter)\\s+(?:holter\\s+)?(?:lungo|16)\\b(?:\\s*hc|\\s*h\\b|\\s*ore)?' + NOTDATE, 'tagsedici');
+  R('\\b(?:turno|holter|hc)\\s+(?:holter\\s+)?(?:da\\s+|di\\s+)?16(?:\\s*hc|\\s*h\\b|\\s*ore)?' + NOTDATE, 'tagsedici');
+  R('\\bda\\s+16\\s*(?:hc|h\\b|ore)', 'tagsedici');
+  R('\\b16\\s*(?:hc|h|ore)\\b', 'tagsedici');
+  // "16" nudo: solo se NON è una data della settimana e non è seguito da parole consuntivo/mese
+  try {
+    const dm = buildDateMap(currentWeek);
+    if (!dm.hasOwnProperty(16)) {
+      R('(?<![\\d/.:-])\\b16\\b(?![\\d/.:-])(?!\\s*(?:spiro|hp|pls|psg|pol|abpm|polisonn|pressori|' + MESI + '))', 'tagsedici');
+    }
+  } catch (e) {}
+  return t.replace(/\s+/g, ' ').trim();
+}
+// Tipo holter di un frammento di testo: null | 'std' | '16' | 'both'
+function holterKindOf(s) {
+  if (/\btagboth\b/.test(s)) return 'both';
+  if (/\btagsedici\b/.test(s))   return '16';
+  if (/\bholter\b/.test(s) && !/holter\s+press/.test(s)) return 'std';
+  return null;
+}
+function hasHolterTag(s) { return /\btagsedici\b|\btagboth\b/.test(s); }
+
 // ── Normalizza abbreviazioni e typo comuni prima del parsing ───────────
 function normalizeMsg(s) {
   return s
@@ -3960,7 +4027,7 @@ function getFerieCategories(s) {
 }
 // holter CARDIACO = "holter" senza "pressori"
 function hasHolter(s) {
-  return /\bholter\b/.test(s) && !/holter\s+press/.test(s);
+  return (/\bholter\b/.test(s) && !/holter\s+press/.test(s)) || hasHolterTag(s);
 }
 // holter PRESSORI / ABPM / HP
 function hasHolterPressori(s) {
@@ -4123,13 +4190,15 @@ function detectConsuntivoSections(raw) {
 
 // ── main parser ────────────────────────────────────────────────────────
 
-function interpretMessage(msg) {
+function interpretMessage(msg, docName) {
   const result = { slots: [], holterSlots: [], hcSlots: [], hpSlots: [], spiroSlots: [], plsSlots: [], ferie: false };
-  const low = normalizeMsg(
+  let low = normalizeMsg(
     msg.toLowerCase()
        .replace(/[''`´]/g, "'")
        .replace(/\r\n/g, '\n')
   );
+  // Holter 16 / X+16: sostituisce i tag con token neutri (dopo il controllo ferie, sotto)
+  const _lowNoTok = low;
 
   const _ferieCats = getFerieCategories(low);
   if (_ferieCats.length > 0) {
@@ -4165,6 +4234,9 @@ function interpretMessage(msg) {
     return dedupSlotsAll(result);
   }
 
+  // Da qui in poi: tokenizza "turno da 16hc" / "X+16" (solo flusso non-consuntivo)
+  low = tokenizeHolter16(low, docName);
+
   // ── STEP 1: "tutti i giorni / tutti i gg / tutta la settimana" ──────
   if (/tutti\s+i\s+gg|tutti\s+i\s+giorni|tutta\s+la\s+settimana|ogni\s+giorno/.test(low)) {
     const ctx = slotCtx(low);
@@ -4175,15 +4247,19 @@ function interpretMessage(msg) {
     });
     const globalEcg    = hasEcg(low) && ecgDays.size === 0; // ECG applies globally only if not per-day
     const globalHolter = hasHolter(low);
+    const globalHolterKind = holterKindOf(low) || 'std';
     const globalHolterP = hasHolterPressori(low);
     const globalSpiro  = /spirometr|\bspiro\b/.test(low);
     const globalPls    = /polisonno|\bpls\b|\bpsg\b/.test(low);
     const _gConsNum    = extractConsuntivoNum(low) || 1;
     for (let di = 0; di < 6; di++) {
       const type = (globalEcg || ecgDays.has(di)) ? 'solo-ecg' : 'disponibile';
-      if (ctx !== 'pom') result.slots.push({ key: `${di}_0`, type });
-      if (ctx !== 'mat') result.slots.push({ key: `${di}_1`, type });
-      if (globalHolter) result.holterSlots.push({ key: String(di) });
+      const _onlyTag = hasHolterTag(low) && !/\b(?:mattina|pomeriggio)\b/.test(low);
+      if (!_onlyTag) {
+        if (ctx !== 'pom') result.slots.push({ key: `${di}_0`, type });
+        if (ctx !== 'mat') result.slots.push({ key: `${di}_1`, type });
+      }
+      if (globalHolter) result.holterSlots.push({ key: String(di), kind: globalHolterKind });
       if (globalHolterP) {
         result.hpSlots = result.hpSlots || [];
         result.hpSlots.push({ key: di, num: _gConsNum });
@@ -4212,9 +4288,12 @@ function interpretMessage(msg) {
       const tp   = hasEcg(low) ? 'solo-ecg' : 'disponibile';
       const _consNum = extractConsuntivoNum(low);
       for (let di = from; di <= Math.min(to, 5); di++) {
-        if (ctx !== 'pom') result.slots.push({ key: `${di}_0`, type: tp });
-        if (ctx !== 'mat') result.slots.push({ key: `${di}_1`, type: tp });
-        if (hasHolter(low)) result.holterSlots.push({ key: String(di) });
+        const _rOnlyTag = hasHolterTag(low) && !/\b(?:mattina|pomeriggio)\b/.test(low);
+        if (!_rOnlyTag) {
+          if (ctx !== 'pom') result.slots.push({ key: `${di}_0`, type: tp });
+          if (ctx !== 'mat') result.slots.push({ key: `${di}_1`, type: tp });
+        }
+        if (hasHolter(low)) result.holterSlots.push({ key: String(di), kind: holterKindOf(low) || 'std' });
         if (_consNum) {
           result.hcSlots.push({ key: di, num: _consNum });
           result.hpSlots.push({ key: di, num: _consNum });
@@ -4255,6 +4334,7 @@ function interpretMessage(msg) {
     const parentCtx = slotCtx(seg);
     const parentEcg    = hasEcg(seg);
     const parentHolter = hasHolter(seg);
+    const parentKind   = holterKindOf(seg);
 
     // Split the segment into per-day sub-segments
     const subSegs = splitByDayTokens(seg, dateMap);
@@ -4270,7 +4350,11 @@ function interpretMessage(msg) {
       const type     = (hasEcg(sub) || (!subHasSlotWords && parentEcg)) ? 'solo-ecg' : 'disponibile';
       const isHolterPressori = hasHolterPressori(sub) || (hasHolterPressori(seg) && !subHasSlotWords);
       const isHolter = (hasHolter(sub) || parentHolter) && !isHolterPressori;
-      const isTurnoHolter = hasTurnoHolter(sub) || hasTurnoHolter(seg); // solo holter, niente turni
+      // Tipo holter: proprio del sotto-segmento, altrimenti (se non ha slot/parole holter proprie) ereditato dal segmento
+      const subKind = holterKindOf(sub);
+      const holterKind = subKind || ((!subHasSlotWords && parentKind) ? parentKind : (parentKind || 'std'));
+      const subOwnTag = hasHolterTag(sub) || (hasHolterTag(seg) && !subHasSlotWords && !/\bholter\b/.test(sub));
+      const isTurnoHolter = hasTurnoHolter(sub) || hasTurnoHolter(seg) || subOwnTag; // solo holter, niente turni
       const isTurnoCompleto = hasTurnoCompleto(sub) && !isTurnoHolter;
       const isSpiro = /spirometr|\bspiro\b/.test(sub) || /spirometr|\bspiro\b/.test(seg);
       const isPls   = /polisonno|\bpls\b|\bpsg\b|\bpol\b/.test(sub) || /polisonno|\bpls\b|\bpsg\b|\bpol\b/.test(seg);
@@ -4282,7 +4366,7 @@ function interpretMessage(msg) {
           if (ctx !== 'mat') result.slots.push({ key: `${di}_1`, type });
         }
         if (isHolter || isTurnoHolter) {
-          result.holterSlots.push({ key: String(di) });
+          result.holterSlots.push({ key: String(di), kind: holterKind });
         }
         if (isHolterPressori) {
           result.hpSlots = result.hpSlots || [];
@@ -4301,18 +4385,20 @@ function interpretMessage(msg) {
   });
 
   // ── STEP 3: fallback — nothing found, try whole message ─────────────
-  if (result.slots.length === 0) {
+  if (result.slots.length === 0 && result.holterSlots.length === 0) {
     const days      = findDays(low, dateMap);
     const ctx       = slotCtx(low);
     const type      = hasEcg(low) ? 'solo-ecg' : 'disponibile';
     const isHolter  = hasHolter(low);
+    const _fbKind   = holterKindOf(low) || 'std';
+    const _fbOnlyTag = hasHolterTag(low) && !/\b(?:mattina|pomeriggio)\b/.test(low);
     days.forEach(di => {
-      if (di < 6) {
+      if (di < 6 && !_fbOnlyTag) {
         if (ctx !== 'pom') result.slots.push({ key: `${di}_0`, type });
         if (ctx !== 'mat') result.slots.push({ key: `${di}_1`, type });
       }
       if (isHolter) {
-        result.holterSlots.push({ key: String(di) });
+        result.holterSlots.push({ key: String(di), kind: _fbKind });
       }
     });
   }
@@ -4377,11 +4463,13 @@ function dedupSlots(result) {
     if (seen.has(s.key)) return false;
     seen.add(s.key); return true;
   });
-  const seenH = new Set();
-  result.holterSlots = (result.holterSlots || []).filter(s => {
-    if (seenH.has(s.key)) return false;
-    seenH.add(s.key); return true;
+  const _hMap = new Map();
+  (result.holterSlots || []).forEach(s => {
+    const k = String(s.key);
+    if (_hMap.has(k)) { const e = _hMap.get(k); e.kind = mergeHolterKind(e.kind, s.kind); }
+    else _hMap.set(k, { ...s, key: k, kind: s.kind || 'std' });
   });
+  result.holterSlots = [..._hMap.values()];
   return result;
 }
 
@@ -4492,7 +4580,7 @@ Genera SOLO campi abilitati. Rispondi SOLO JSON valido.
 ${_canTurni ? 'Regole slots: mattina=slot 0, pomeriggio=slot 1. Se non specifica matt/pom→entrambi. key="INDICE_SLOT" (es "2_0"=mercoledì mattina).' + (_onlyEcg ? ' Questo medico fa SOLO ECG: usa SEMPRE type:"solo-ecg" per OGNI turno.' : _canEcg ? ' type:"disponibile" default. "turno ecg"/"solo ecg"→type:"solo-ecg".' : ' type:"disponibile" SEMPRE. MAI type "solo-ecg".') : 'NON generare slots.'}
 REGOLA ALTERNATIVE: "X o Y o Z"/"X oppure Y"=ALTERNATIVE, genera UN SOLO slot per giorno/fascia. Se c'è "normale"/"completo"→"disponibile". MAI duplicare.
 Regole ferie: "ferie"/"non disponibile"→ferie:true
-${_holter ? 'holterSlots: key=STRINGA indice ("0","1",...). "holter"/"solo holter"→aggiungi. Giorno con SOLO holter→holterSlots senza slots.' : ''}
+${_holter ? 'holterSlots: key=STRINGA indice ("0","1",...) + kind. kind="x" = holter standard (default: "holter"/"solo holter"/"X"). kind="16" = turno da 16hc ("turno da 16", "16hc", "16 hc", "solo 16", "turno lungo", "holter 16"). kind="x+16" = disponibile ad ENTRAMBI i tipi ("x+16", "anche 16", "anche il turno da 16", "standard e 16", "holter o 16", "entrambi"). Giorno con SOLO holter (di qualunque kind)→holterSlots senza slots. ATTENZIONE: "16" è il turno da 16hc SOLO se riferito a turno/holter; NON se è la data del giorno (es. "Gio 16/4") né un numero di consuntivo (HC/HP/spiro/PLS).' : ''}
 ${_canHc ? 'hcSlots: "holter cardiaco"/"holter ecg"/"HC"/"N holter"→key=indice(num),num:N.' : ''}
 ${_canHp ? 'hpSlots: "holter pressori"/"HP"/"ABPM"→key=indice(num),num:N.' : ''}
 ${_canSpiro ? 'spiroSlots: "spirometrie"/"spiro"→key=indice(num),num:N.' : ''}
@@ -4501,7 +4589,8 @@ ${(_canHc||_canHp||_canSpiro||_canPls) ? '"N al giorno"/"N ogni giorno"→genera
 Se num assente→"val":"x". Ometti array vuoti e ferie:false.
 ${!_canTurni && (_canHc||_canHp||_canSpiro||_canPls) ? 'Medico SOLO consuntivo. NON generare slots.' : ''}
 
-Es: msg "Lun Holter, Mar matt normale o ecg o Holter, Mer matt solo Holter"→{"slots":[{"key":"1_0","type":"disponibile"}],"holterSlots":[{"key":"0"},{"key":"1"},{"key":"2"}]}
+Es: msg "Lun Holter, Mar matt normale o ecg o Holter, Mer matt solo Holter"→{"slots":[{"key":"1_0","type":"disponibile"}],"holterSlots":[{"key":"0","kind":"x"},{"key":"1","kind":"x"},{"key":"2","kind":"x"}]}
+${_holter ? 'Es: msg "Lun turno da 16hc, Mar holter e anche 16, Mer x+16, Gio solo holter"→{"holterSlots":[{"key":"0","kind":"16"},{"key":"1","kind":"x+16"},{"key":"2","kind":"x+16"},{"key":"3","kind":"x"}]}' : ''}
 Es: msg "10 holter al giorno"→{"hcSlots":[{"key":0,"num":10},{"key":1,"num":10},{"key":2,"num":10},{"key":3,"num":10},{"key":4,"num":10},{"key":5,"num":10},{"key":6,"num":10}]}
 
 Messaggio:
@@ -4640,7 +4729,15 @@ ${msg}`;
   // Normalizza al formato interno dell'app
   const result = {
     slots:       (parsed.slots || []).map(s => ({ key: _normSlotKey(s.key), type: s.type || 'disponibile' })).filter(s => s.key !== null),
-    holterSlots: (parsed.holterSlots || []).map(s => { const d = _dayToIdx(s.key); return d !== null ? { key: String(d) } : null; }).filter(Boolean),
+    holterSlots: (parsed.holterSlots || []).map(s => {
+      const d = _dayToIdx(s.key);
+      if (d === null) return null;
+      const _k = String(s.kind == null ? 'x' : s.kind).toLowerCase().replace(/\s+/g, '');
+      const kind = (_k === '16' || _k === 'x16' || _k === 'solo16') ? '16'
+                 : (/^(x\+16|x\+|both|entrambi|std\+16|16\+x|x&16)$/.test(_k) || (_k.includes('16') && _k.includes('x'))) ? 'both'
+                 : 'std';
+      return { key: String(d), kind };
+    }).filter(Boolean),
     hcSlots:     (parsed.hcSlots || []).map(s => { const d = _dayToIdx(s.key); return d !== null ? { key: d, ...(s.num != null ? { num: s.num } : { val: 'x' }) } : null; }).filter(Boolean),
     hpSlots:     (parsed.hpSlots || []).map(s => { const d = _dayToIdx(s.key); return d !== null ? { key: d, ...(s.num != null ? { num: s.num } : { val: 'x' }) } : null; }).filter(Boolean),
     spiroSlots:  (parsed.spiroSlots || []).map(s => { const d = _dayToIdx(s.key); const isX = s.num == null || String(s.num).toLowerCase() === 'x'; return d !== null ? { key: d, ...(isX ? { val: 'x' } : { num: s.num }) } : null; }).filter(Boolean),
@@ -4675,8 +4772,23 @@ ${msg}`;
   result.slots = [..._slotMap.values()];
 
   // 5) Dedup holter (keys già normalizzate sopra)
-  const _hSet = new Set();
-  result.holterSlots = result.holterSlots.filter(s => { if (_hSet.has(s.key)) return false; _hSet.add(s.key); return true; });
+  const _hMapAI = new Map();
+  result.holterSlots.forEach(s => {
+    if (_hMapAI.has(s.key)) { const e = _hMapAI.get(s.key); e.kind = mergeHolterKind(e.kind, s.kind); }
+    else _hMapAI.set(s.key, { ...s });
+  });
+  result.holterSlots = [..._hMapAI.values()];
+  // Rete di sicurezza: se il testo contiene un tag 16/X+16 chiaro e l'AI ha detto "x", correggi col parser regex
+  try {
+    const _tk = tokenizeHolter16(_msgLow.replace(/\r\n/g, '\n'), null);
+    if (/\btagsedici\b|\btagboth\b/.test(_tk) && result.holterSlots.length > 0) {
+      const _rx = interpretMessage(msg, docSel);
+      (_rx.holterSlots || []).forEach(rs => {
+        const t = result.holterSlots.find(x => x.key === String(rs.key));
+        if (t && t.kind === 'std' && rs.kind && rs.kind !== 'std') t.kind = rs.kind;
+      });
+    }
+  } catch (e) {}
 
   // 6) Correggi numeri consuntivo: estrai numeri dal messaggio e correggile val:"x" → num:N
   const _consFields = [
@@ -4731,8 +4843,9 @@ ${msg}`;
     // Anche per holterSlots
     if (result.holterSlots.length > 0) {
       const _hExist = new Set(result.holterSlots.map(s => s.key));
+      const _hKind0 = result.holterSlots[0].kind || 'std';
       for (let _d = 0; _d < 7; _d++) {
-        if (!_hExist.has(String(_d))) result.holterSlots.push({key: String(_d)});
+        if (!_hExist.has(String(_d))) result.holterSlots.push({key: String(_d), kind: _hKind0});
       }
       result.holterSlots.sort((a,b) => parseInt(a.key) - parseInt(b.key));
     }
@@ -4767,10 +4880,11 @@ function _applyDoctorFilters(docSel, msg) {
   {
     const _numConsTypes = [_hcList,_hpList,_spiroList,_plsList].filter(l => l.includes(docSel)).length;
     const _noConsParsed = ['hcSlots','hpSlots','spiroSlots','plsSlots'].every(k => (pendingWaResult[k]||[]).length === 0);
-    if (_inAnyList && _numConsTypes >= 1 && _noConsParsed) {
+    const _holterOnlyNew = (pendingWaResult.holterSlots||[]).some(s => s.kind && s.kind !== 'std') && pendingWaResult.slots.length === 0;
+    if (_inAnyList && _numConsTypes >= 1 && _noConsParsed && !_holterOnlyNew) {
       const _autoDays = new Set();
       pendingWaResult.slots.forEach(s => _autoDays.add(parseInt(s.key.split('_')[0], 10)));
-      const _origLow = msg.toLowerCase().replace(/[''`´]/g,"'");
+      const _origLow = tokenizeHolter16(msg.toLowerCase().replace(/[''`´]/g,"'"), docSel);
       const _normLow = normalizeMsg(_origLow);
       DAY_MAP.forEach(([name, idx]) => {
         if (idx < 6 && _normLow.includes(name)) _autoDays.add(idx);
@@ -4797,7 +4911,7 @@ function parseWaMessage() {
   const msg = document.getElementById('wa-msg-input').value.trim();
   if (!docSel || !msg) { showToast('Seleziona medico e inserisci messaggio', 'danger'); return; }
 
-  pendingWaResult = interpretMessage(msg);
+  pendingWaResult = interpretMessage(msg, docSel);
   pendingWaDoctor = docSel;
   pendingWaMsg    = msg;
   _pendingSource  = 'regex';
@@ -4911,8 +5025,15 @@ function renderPendingResult() {
     hSlots.forEach(s => {
       const di = parseInt(s.key, 10);
       const dayName = HNAMES_FULL[di] || s.key;
-      html += `<span class="badge" style="display:inline-flex;align-items:center;gap:5px;padding:3px 8px 3px 10px;background:#6366f1;color:#fff;">
-        💓 ${dayName} <em style="opacity:0.75;">(X)</em>
+      const _hk = s.kind || 'std';
+      const _hStyle = _hk === '16' ? 'background:#f97316;color:#fff;'
+                    : _hk === 'both' ? 'background:#16a34a;color:#fff;border:2px dashed #bbf7d0;'
+                    : 'background:#6366f1;color:#fff;';
+      html += `<span class="badge" style="display:inline-flex;align-items:center;gap:5px;padding:3px 8px 3px 10px;${_hStyle}">
+        💓 ${dayName} <em style="opacity:0.85;font-weight:700;">(${HOLTER_KIND_LABEL[_hk] || 'X'})</em>
+        <button onclick="cycleHolterKindPending('${s.key}')"
+          style="background:none;border:none;cursor:pointer;color:inherit;font-size:12px;line-height:1;padding:0;opacity:0.75;"
+          title="Cambia tipo: X → 16 → X+16">✏️</button>
         <button onclick="removeHolterSlotFromPending('${s.key}')"
           style="background:none;border:none;cursor:pointer;color:inherit;font-size:14px;line-height:1;padding:0 0 0 2px;opacity:0.65;"
           title="Rimuovi slot holter">✕</button>
@@ -4981,6 +5102,15 @@ function renderPendingResult() {
 function removeSlotFromPending(key) {
   if (!pendingWaResult) return;
   pendingWaResult.slots = pendingWaResult.slots.filter(s => s.key !== key);
+  renderPendingResult();
+}
+
+function cycleHolterKindPending(key) {
+  if (!pendingWaResult) return;
+  const sl = (pendingWaResult.holterSlots || []).find(s => String(s.key) === String(key));
+  if (!sl) return;
+  const i = HOLTER_KIND_ORDER.indexOf(sl.kind || 'std');
+  sl.kind = HOLTER_KIND_ORDER[(i + 1) % HOLTER_KIND_ORDER.length];
   renderPendingResult();
 }
 
@@ -5169,7 +5299,8 @@ function applyParsedResult() {
     if (!hdoc.slots) hdoc.slots = {};
     hSlots.forEach(s => {
       const di = parseInt(s.key, 10);
-      hdoc.slots[di] = 'disponibile';
+      const _newState = HOLTER_KIND_TO_STATE[s.kind || 'std'] || 'disponibile';
+      hdoc.slots[di] = _newState;
     });
   }
 
@@ -5466,8 +5597,8 @@ function renderConferma() {
     const allHolterSlots = (!holterFerie && hdoc && hdoc.slots)
       ? Object.entries(hdoc.slots).filter(([k,v]) => v && v !== '')
       : [];
-    const holterConfSlots = allHolterSlots.filter(([k,v]) => v === 'confermato');
-    const holterDispSlots = allHolterSlots.filter(([k,v]) => v === 'disponibile');
+    const holterConfSlots = allHolterSlots.filter(([k,v]) => isHolterConf(v));
+    const holterDispSlots = allHolterSlots.filter(([k,v]) => isHolterAvail(v));
 
     const hasAnyAvail = allMainSlots.length > 0 || allHolterSlots.length > 0;
     const hasAnyConf  = confSlots.length > 0  || holterConfSlots.length > 0;
@@ -5492,10 +5623,10 @@ function renderConferma() {
       return `${DAYS[di]} ${dayNum} ${si === 0 ? 'mattina' : 'pomeriggio'}${ecgLabel}`;
     });
 
-    const holterNames = holterConfSlots.map(([di]) => {
+    const holterNames = holterConfSlots.map(([di, hv]) => {
       const idx = parseInt(di, 10);
       const dayNum = parseLocalDate(addDays(currentWeek, idx)).getDate();
-      return { label: `${HNAMES_FULL[idx]} ${dayNum}`, idx };
+      return { label: `${HNAMES_FULL[idx]} ${dayNum}` + (hv === 'confermato16' ? ' (turno da 16hc)' : ''), idx };
     });
     holterNames.sort((a,b) => a.idx - b.idx);
     const holterNamesLabels = holterNames.map(h => h.label);
@@ -5800,7 +5931,7 @@ function renderCalendar() {
     if (!hdoc || hdoc.ferie) return;
     let hasConfirm = false;
     for (let di = 0; di < 7; di++) {
-      if ((hdoc.slots && hdoc.slots[di]) === 'confermato') hasConfirm = true;
+      if (isHolterConf(hdoc.slots && hdoc.slots[di])) hasConfirm = true;
     }
     if (hasConfirm) holterDoctors.push(doc);
   });
@@ -5823,7 +5954,7 @@ function renderCalendar() {
       t2 += '<tr>';
       for (let di = 0; di < nDays; di++) {
         const val = (hdoc.slots && hdoc.slots[di]) || null;
-        const cellText = (val === 'confermato') ? doc : '';
+        const cellText = isHolterConf(val) ? holterNameLabel(doc, val) : '';
         const cellBg = cellText ? holterColor : '#ffffff';
         t2 += '<td style="' + tdEmptyS + 'background:' + cellBg + ';">' + cellText + '</td>';
       }
@@ -6147,7 +6278,7 @@ async function doSyncCalendar() {
       if (!hdoc || hdoc.ferie) continue;
       for (let di = 0; di < 7; di++) {
         const val = (hdoc.slots && hdoc.slots[di]) || null;
-        if (val === 'confermato') {
+        if (isHolterConf(val)) {
           const dateStr = addDays(currentWeek, di);
           try { await gcalCreateEvent(GCAL_TURNO_ID, doc, dateStr, '3'); created++; }
           catch(e) { errors++; errorList.push('Holter ' + doc + ': ' + e.message); }
@@ -6181,7 +6312,7 @@ function syncGoogleCalendar() {
   state.doctors.filter(d => !isDoctorPaused(d) && state.holterEnabled[d]).forEach(doc => {
     const hdoc = holterW[doc];
     if (!hdoc) return;
-    for (let di = 0; di < 7; di++) { if ((hdoc.slots && hdoc.slots[di]) === 'confermato') hasConfirmed = true; }
+    for (let di = 0; di < 7; di++) { if (isHolterConf(hdoc.slots && hdoc.slots[di])) hasConfirmed = true; }
   });
 
   if (!hasConfirmed) {
@@ -6343,8 +6474,8 @@ function renderRiepilogo() {
     for (let di = 0; di < 7; di++) {
       const val = hdoc.slots && hdoc.slots[di];
       if (!val) continue;
-      holterDispR[di].push(doc);
-      if (val === 'confermato') holterConfR[di].push(doc);
+      holterDispR[di].push(holterNameLabel(doc, val));
+      if (isHolterConf(val)) holterConfR[di].push(holterNameLabel(doc, val));
     }
   });
 
@@ -7288,7 +7419,7 @@ function checkCustomRulesForDoc(doc) {
   if (!dd || !dd.slots) return warnings;
   const _holterSlotsForDoc = (state.holterWeeks[currentWeek] && state.holterWeeks[currentWeek][doc] && state.holterWeeks[currentWeek][doc].slots) || {};
   const confCount = Object.values(dd.slots).filter(v => v === 'confermato' || v === 'confermato-ecg').length
-                  + Object.values(_holterSlotsForDoc).filter(v => v === 'confermato').length;
+                  + Object.values(_holterSlotsForDoc).filter(v => isHolterConf(v)).length;
   const opLabels = { min: 'almeno', max: 'massimo', exact: 'esattamente' };
   for (const r of rules) {
     let violated = false;
@@ -7315,7 +7446,7 @@ function checkAllCustomRules() {
     if (dd && dd.ferie) continue;
     const _holterSlotsAll = (state.holterWeeks[currentWeek] && state.holterWeeks[currentWeek][r.doctor] && state.holterWeeks[currentWeek][r.doctor].slots) || {};
     const confCount = (dd && dd.slots ? Object.values(dd.slots).filter(v => v === 'confermato' || v === 'confermato-ecg').length : 0)
-                    + Object.values(_holterSlotsAll).filter(v => v === 'confermato').length;
+                    + Object.values(_holterSlotsAll).filter(v => isHolterConf(v)).length;
     let violated = false;
     if (r.operator === 'min' && confCount < r.value) violated = true;
     if (r.operator === 'max' && confCount > r.value) violated = true;
@@ -9345,7 +9476,7 @@ function _aiCountWeek(weekKey) {
     var hd = ph[doc];
     if (!hd || hd.ferie) return;
     for (var di = 0; di < 7; di++) {
-      if ((hd.slots || {})[di] === 'confermato') {
+      if (isHolterConf((hd.slots || {})[di])) {
         counts['h_' + di] = (counts['h_' + di] || 0) + 1;
       }
     }
@@ -9392,7 +9523,7 @@ function _aiRenderInner() {
     if (!state.holterEnabled[d]) return false;
     var hd = holterWeekData[d];
     if (!hd || hd.ferie) return false;
-    return Object.values(hd.slots || {}).some(function(v) { return v === 'disponibile'; });
+    return Object.values(hd.slots || {}).some(function(v) { return isHolterAvail(v); });
   }).sort();
 
   var h = '<div class="ai-config">';
@@ -9904,7 +10035,7 @@ function _generateAIDraftCore() {
     getActiveDoctorsList().filter(function(d) { return state.holterEnabled[d]; }).forEach(function(doc) {
       var hd = holterData[doc];
       if (!hd || hd.ferie) return;
-      if ((hd.slots || {})[di] === 'disponibile') availHolter.push(doc);
+      if (isHolterAvail((hd.slots || {})[di])) availHolter.push(doc);
     });
 
     var placedH = [];
@@ -9945,7 +10076,7 @@ function _generateAIDraftCore() {
     getActiveDoctorsList().filter(function(d) { return state.holterEnabled[d]; }).forEach(function(doc) {
       var hd = holterData[doc];
       if (!hd || hd.ferie) return;
-      if ((hd.slots || {})[di6] === 'disponibile') availHolterDom.push(doc);
+      if (isHolterAvail((hd.slots || {})[di6])) availHolterDom.push(doc);
     });
     var placedHDom = [];
     _aiAlwaysConfirm.forEach(function(doc) {
@@ -10414,7 +10545,7 @@ function _aiRenderHolterCell(di) {
     if (items.includes(doc)) return false;
     var hd = holterWeekData[doc];
     if (!hd || hd.ferie) return false;
-    return (hd.slots || {})[di] === 'disponibile';
+    return isHolterAvail((hd.slots || {})[di]);
   });
 
   if (hasLiveHolterAvail) {
@@ -10511,7 +10642,7 @@ function _aiShowHolterPopup(evt, di) {
     if (placedDocs.includes(doc)) return;
     var hd = holterWeekData[doc];
     if (!hd || hd.ferie) return;
-    if ((hd.slots || {})[di] === 'disponibile') liveAvail.push(doc);
+    if (isHolterAvail((hd.slots || {})[di])) liveAvail.push(doc);
   });
   liveAvail.sort(function(a, b) { return a.localeCompare(b, 'it'); });
   if (liveAvail.length === 0) return;
@@ -10674,8 +10805,9 @@ function _aiApplyDraft() {
     hDocs.forEach(function(doc) {
       if (!holterWeek[doc]) holterWeek[doc] = { slots: {}, ferie: false };
       if (!holterWeek[doc].slots) holterWeek[doc].slots = {};
-      if (holterWeek[doc].slots[di] === 'disponibile' || !holterWeek[doc].slots[di]) {
-        holterWeek[doc].slots[di] = 'confermato';
+      var _cv = holterWeek[doc].slots[di];
+      if (isHolterAvail(_cv) || !_cv) {
+        holterWeek[doc].slots[di] = (_cv === 'disponibile16') ? 'confermato16' : 'confermato';
         applied++;
       }
     });
