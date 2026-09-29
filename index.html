@@ -527,6 +527,7 @@
   }
   .slot-btn:hover { border-color: var(--accent); color: var(--accent); }
   .slot-btn.disponibile { background: rgba(5,150,105,0.12); border-color: var(--success); color: var(--success); font-weight:700; }
+  .slot-btn.disponibile-entrambi { background: linear-gradient(135deg, rgba(5,150,105,0.14), rgba(217,119,6,0.14)); border-color: var(--warn); color: var(--success); font-weight:700; border-style:dashed; }
   .slot-btn.solo-ecg { background: rgba(217,119,6,0.12); border-color: var(--warn); color: var(--warn); font-weight:700; }
   .slot-btn.confermato { background: rgba(37,99,235,0.14); border-color: var(--accent); color: var(--accent); font-weight:700; }
   .slot-btn.confermato-ecg { background: rgba(124,58,237,0.14); border-color: var(--accent2); color: var(--accent2); font-weight:700; }
@@ -1456,6 +1457,7 @@
   <div class="legend">
     <div class="legend-item"><div class="legend-dot" style="background:var(--success)"></div> Disponibile (X)</div>
     <div class="legend-item"><div class="legend-dot" style="background:var(--warn)"></div> Solo ECG (Y)</div>
+    <div class="legend-item"><div class="legend-dot" style="background:linear-gradient(135deg,var(--success),var(--warn))"></div> Entrambi (X+Y)</div>
     <div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div> Confermato (C)</div>
     <div class="legend-item"><div class="legend-dot" style="background:var(--accent2)"></div> Conf. Solo ECG (CY)</div>
     <div class="legend-item"><div class="legend-dot" style="background:var(--danger)"></div> Ferie</div>
@@ -1819,13 +1821,18 @@
 const DAYS = ['Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato'];
 const SLOTS = ['Mattina','Pomeriggio'];
 // Cycle: vuoto → disponibile(X) → solo-ecg(Y) → confermato(C) → confermato-ecg(CY) → vuoto
-const SLOT_STATES = ['','disponibile','solo-ecg','confermato','confermato-ecg'];
-const SLOT_LABELS = {'': '—', 'disponibile': 'X', 'solo-ecg': 'Y', 'confermato': 'C', 'confermato-ecg': 'CY'};
+const SLOT_STATES = ['','disponibile','solo-ecg','disponibile-entrambi','confermato','confermato-ecg'];
+const SLOT_LABELS = {'': '—', 'disponibile': 'X', 'solo-ecg': 'Y', 'disponibile-entrambi': 'X+Y', 'confermato': 'C', 'confermato-ecg': 'CY'};
+// Disponibilità: X = solo completo, Y = solo ECG, X+Y = disponibile per entrambi (la conferma resta comunque su UNO SOLO dei due: C oppure CY)
+function isAvailCompleto(v) { return v === 'disponibile' || v === 'disponibile-entrambi'; }
+function isAvailEcg(v)      { return v === 'solo-ecg' || v === 'disponibile-entrambi'; }
+function isAvailSlot(v)     { return v === 'disponibile' || v === 'solo-ecg' || v === 'disponibile-entrambi'; }
+function isConfSlot(v)      { return v === 'confermato' || v === 'confermato-ecg'; }
 
 function getSlotStatesForDoctor(doc) {
   const tipo = state.doctorTypes[doc] || 'completo';
   if (tipo === 'ecg75' || tipo === 'ecg100')       return ['','solo-ecg','confermato-ecg'];
-  if (tipo === 'completo+ecg75' || tipo === 'completo+ecg100') return ['','disponibile','solo-ecg','confermato','confermato-ecg'];
+  if (tipo === 'completo+ecg75' || tipo === 'completo+ecg100') return ['','disponibile','solo-ecg','disponibile-entrambi','confermato','confermato-ecg'];
   return ['','disponibile','confermato']; // completo
 }
 
@@ -2689,7 +2696,7 @@ function renderTable() {
     const dd = getDoctorData(doc);
     const slots = Object.values(dd.slots || {});
     // Contatori
-    const nDisp = slots.filter(v => v === 'disponibile' || v === 'solo-ecg').length;
+    const nDisp = slots.filter(v => isAvailSlot(v)).length;
     const nConf = slots.filter(v => v === 'confermato' || v === 'confermato-ecg').length;
     // Colore cella nome: ferie > verde (≥1 conf) > blu (solo dispo) > grigio
     let nameBg, nameColor, nameBorder;
@@ -2818,7 +2825,7 @@ function cycleSlot(doc, key) {
   const idx = states.indexOf(current);
   const newVal = states[(idx + 1) % states.length];
   dd.slots[key] = newVal;
-  const LABELS = {'': 'vuoto', 'disponibile': 'X', 'solo-ecg': 'Y', 'confermato': 'C', 'confermato-ecg': 'CY'};
+  const LABELS = {'': 'vuoto', 'disponibile': 'X', 'solo-ecg': 'Y', 'disponibile-entrambi': 'X+Y', 'confermato': 'C', 'confermato-ecg': 'CY'};
   const _dayL = ['lunedì','martedì','mercoledì','giovedì','venerdì','sabato','domenica'];
   const _slotL = ['mattina','pomeriggio'];
   const _kp = key.split('_');
@@ -2870,9 +2877,9 @@ function renderStats() {
     if (dd.ferie) { ferie++; ferieSet.add(name); }
     if (!dd.slots) return;
     Object.values(dd.slots).forEach(v => {
-      if (v === 'disponibile' || v === 'solo-ecg') docsWithAvail.add(name);
-      if (v === 'solo-ecg') docsWithEcg.add(name);
-      if (v === 'confermato' || v === 'confermato-ecg') { docsWithConf.add(name); docsWithAvail.add(name); }
+      if (isAvailSlot(v)) docsWithAvail.add(name);
+      if (isAvailEcg(v)) docsWithEcg.add(name);
+      if (isConfSlot(v)) { docsWithConf.add(name); docsWithAvail.add(name); }
     });
   });
   // Dottori senza nessuna disponibilità (né ferie) 
@@ -2886,8 +2893,8 @@ function renderStats() {
     if (!dd || !dd.slots) return false;
     let hasAvail = false, hasConf = false;
     Object.values(dd.slots).forEach(v => {
-      if (v === 'disponibile' || v === 'solo-ecg') hasAvail = true;
-      if (v === 'confermato' || v === 'confermato-ecg') hasConf = true;
+      if (isAvailSlot(v)) hasAvail = true;
+      if (isConfSlot(v)) hasConf = true;
     });
     return hasAvail && !hasConf;
   }).sort((a,b) => a.localeCompare(b));
@@ -2900,11 +2907,12 @@ function renderStats() {
     if (!dd || !dd.slots) { noConfDetail[doc] = []; return; }
     const avail = [];
     Object.entries(dd.slots).forEach(([key, val]) => {
-      if (val === 'disponibile' || val === 'solo-ecg') {
+      if (isAvailSlot(val)) {
         const parts = key.split('_');
         const dayLbl = _dayLabels[parseInt(parts[0])] || '?';
         const slotLbl = _slotLabels[parseInt(parts[1])] || '';
-        avail.push(dayLbl + ' ' + slotLbl + (val === 'solo-ecg' ? ' (ECG)' : ''));
+        const _tag = val === 'solo-ecg' ? ' (ECG)' : val === 'disponibile-entrambi' ? ' (X+Y)' : '';
+        avail.push(dayLbl + ' ' + slotLbl + _tag);
       }
     });
     noConfDetail[doc] = avail;
@@ -5141,8 +5149,8 @@ function editSlotType(key) {
     return;
   }
   // Mostra un mini-dialog inline per cambiare il tipo
-  const SLOT_LABELS = { 'disponibile': 'X — Disponibile', 'solo-ecg': 'Y — Solo ECG' };
-  const types = ['disponibile', 'solo-ecg'];
+  const SLOT_LABELS = { 'disponibile': 'X — Disponibile', 'solo-ecg': 'Y — Solo ECG', 'disponibile-entrambi': 'X+Y — Entrambi' };
+  const types = ['disponibile', 'solo-ecg', 'disponibile-entrambi'];
   const current = slot.type;
   const options = types.map(t =>
     `<option value="${t}"${t === current ? ' selected' : ''}>${SLOT_LABELS[t] || t}</option>`
@@ -5281,7 +5289,9 @@ function applyParsedResult() {
     const docTipo = state.doctorTypes[pendingWaDoctor] || 'completo';
     if (tipo === 'disponibile' && (docTipo === 'ecg75' || docTipo === 'ecg100')) tipo = 'solo-ecg';
     if (tipo === 'solo-ecg' && docTipo === 'completo') tipo = 'disponibile';
-    if (tipo === 'disponibile' && (docTipo === 'completo+ecg75' || docTipo === 'completo+ecg100')) tipo = 'disponibile'; // mantieni
+    if (tipo === 'disponibile-entrambi' && docTipo !== 'completo+ecg75' && docTipo !== 'completo+ecg100') {
+      tipo = (docTipo === 'ecg75' || docTipo === 'ecg100') ? 'solo-ecg' : 'disponibile'; // il medico non può avere entrambi
+    }
     dd.slots[s.key] = tipo;
   });
 
