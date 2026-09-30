@@ -2318,10 +2318,14 @@ function getItalianHolidayName(dateStr) {
   return null;
 }
 
-// ── Finestra 3 settimane: precedente, corrente, successiva ──
+// ── Finestra settimane conservate su Firebase: N precedenti + corrente + successiva ──
+const WEEKS_BACK = 2;    // quante settimane precedenti conservare (storico)
+const WEEKS_AHEAD = 1;   // quante settimane future conservare
 function getAllowedWeeks() {
   const today = getMondayStr(new Date());
-  return [addDays(today, -7), today, addDays(today, 7)];
+  const out = [];
+  for (let i = -WEEKS_BACK; i <= WEEKS_AHEAD; i++) out.push(addDays(today, i * 7));
+  return out;   // ordinate dalla più vecchia alla più futura
 }
 function pruneToAllowedWeeks(obj) {
   if (!obj || typeof obj !== 'object') return obj;
@@ -2405,7 +2409,7 @@ function saveData(silent) {
   }
   // ── Salvataggio su Firebase (unica fonte dati) ──
   try {
-    // Clona state, mantieni solo le 3 settimane consentite, sanifica chiavi per Firebase
+    // Clona state, mantieni solo le settimane consentite (getAllowedWeeks), sanifica chiavi per Firebase
     const cloned = JSON.parse(JSON.stringify(state));
     cloned.weeks = pruneToAllowedWeeks(cloned.weeks);
     cloned.holterWeeks = pruneToAllowedWeeks(cloned.holterWeeks);
@@ -2903,7 +2907,7 @@ function onWeekChange() {
   const allowed = getAllowedWeeks();
   let week = getMondayStr(parseLocalDate(val));
   if (week < allowed[0]) week = allowed[0];
-  if (week > allowed[2]) week = allowed[2];
+  if (week > allowed[allowed.length - 1]) week = allowed[allowed.length - 1];
   currentWeek = week;
   document.getElementById('week-picker').value = currentWeek;
   updateHeaderWeek();
@@ -2935,7 +2939,7 @@ function prevWeek() {
 
 function nextWeek() {
   const allowed = getAllowedWeeks();
-  if (currentWeek >= allowed[2]) return; // già alla settimana più futura consentita
+  if (currentWeek >= allowed[allowed.length - 1]) return; // già alla settimana più futura consentita
   currentWeek = addDays(currentWeek, 7);
   document.getElementById('week-picker').value = currentWeek;
   updateHeaderWeek();
@@ -8888,7 +8892,7 @@ function init() {
   const _aw = getAllowedWeeks();
   _wp.value = currentWeek;
   _wp.min = _aw[0];
-  _wp.max = _aw[2];
+  _wp.max = _aw[_aw.length - 1];
   updateHeaderWeek();
   try { renderTable(); } catch(e) { console.warn('renderTable:', e); }
   try { renderHolterTable(); } catch(e) { console.warn('renderHolterTable:', e); }
@@ -8920,7 +8924,7 @@ function init() {
       _seenRemoteData = true;
       // Decodifica le chiavi (i "." erano stati codificati con "·" al salvataggio)
       data = decodeKeys(data);
-      // Applica i dati remoti allo state (solo le 3 settimane consentite)
+      // Applica i dati remoti allo state (solo le settimane consentite)
       if (data.removedDoctors) state.removedDoctors = data.removedDoctors;
       state.doctors = mergeDoctors(data.doctors, state.removedDoctors);
       if (data.weeks) state.weeks = pruneToAllowedWeeks(data.weeks);
