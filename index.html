@@ -2331,7 +2331,38 @@ function decodeKeys(obj) {
   return out;
 }
 
+// ── PROTEZIONE DATI ─────────────────────────────────────────────
+// 1) Nessun salvataggio finché la pagina non ha letto cardio_state da Firebase
+// 2) Prima di scrivere, si rilegge lo stato remoto: se quello locale è molto più
+//    povero (es. pagina con stato vuoto/di default) il salvataggio viene bloccato
+// 3) Copia di sicurezza oraria dello stato remoto in cardio_state_backup/<AAAAMMGG_HH>
+//    (le ultime 72 ore), fatta PRIMA di ogni sovrascrittura
+let _remoteLoaded = false;   // true solo dopo la prima lettura riuscita da Firebase
+let _seenRemoteData = false; // true se in questa sessione Firebase ha mai fornito dati
+let _lastBackupSlot = '';
+
+function _countLeaves(o) {
+  if (o === null || o === undefined) return 0;
+  if (typeof o !== 'object') return 1;
+  let n = 0;
+  for (const k in o) {
+    if (k === '_lastModifiedBy' || k === '_lastModifiedAt') continue;
+    n += _countLeaves(o[k]);
+  }
+  return n;
+}
+function _backupSlotKey(d) {
+  const p = x => String(x).padStart(2, '0');
+  return d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '_' + p(d.getHours());
+}
+
 function saveData(silent) {
+  // ── PROTEZIONE 1: dati remoti non ancora caricati → non scrivere MAI ──
+  if (!_remoteLoaded) {
+    console.warn('saveData bloccato: cardio_state non ancora letto da Firebase');
+    showToast('⏳ Dati non ancora caricati da Firebase: salvataggio annullato per sicurezza', 'danger');
+    return;
+  }
   // ── Salvataggio su Firebase (unica fonte dati) ──
   try {
     // Clona state, mantieni solo le 3 settimane consentite, sanifica chiavi per Firebase
@@ -2349,7 +2380,39 @@ function saveData(silent) {
     }
     const stateToSave = encodeKeys(cloned);
     _isSaving = true;
-    db.ref('cardio_state').set(stateToSave)
+    db.ref('cardio_state').once('value')
+      .then(snap => {
+        const remote = snap.val();
+        const remoteN = _countLeaves(remote);
+        const localN = _countLeaves(cloned);
+        // ── PROTEZIONE 2: lo stato locale è molto più povero di quello remoto ──
+        let shrink = false;
+        if (remoteN >= 40 && localN < remoteN * 0.5) {
+          shrink = true;
+          const ok = confirm('⚠️ ATTENZIONE: stai per sovrascrivere il database con MOLTI MENO dati.\n\n' +
+            'Su Firebase: ' + remoteN + ' valori\nIn questa pagina: ' + localN + ' valori\n\n' +
+            'Probabilmente questa pagina non ha caricato i dati correttamente.\n' +
+            'Premi ANNULLA per NON salvare (consigliato), OK solo se hai cancellato tu i dati di proposito.');
+          if (!ok) { const e = new Error('SAVE_ABORTED'); e.aborted = true; throw e; }
+        }
+        // ── PROTEZIONE 3: copia di sicurezza dello stato remoto prima di sovrascrivere ──
+        let pre = Promise.resolve();
+        if (remote && remoteN > 0) {
+          const now = new Date();
+          const slot = shrink ? ('pre_' + now.toISOString().replace(/[^0-9]/g, '').slice(0, 14)) : _backupSlotKey(now);
+          if (shrink || slot !== _lastBackupSlot) {
+            pre = db.ref('cardio_state_backup/' + slot).set(remote)
+              .then(() => {
+                if (!shrink) {
+                  _lastBackupSlot = slot;
+                  return db.ref('cardio_state_backup/' + _backupSlotKey(new Date(now.getTime() - 72 * 3600 * 1000))).remove();
+                }
+              })
+              .catch(err => console.warn('Backup non riuscito (il salvataggio prosegue):', err));
+          }
+        }
+        return pre.then(() => db.ref('cardio_state').set(stateToSave));
+      })
       .then(() => {
         const now = new Date();
         const hh = String(now.getHours()).padStart(2,'0');
@@ -2363,6 +2426,10 @@ function saveData(silent) {
         }
       })
       .catch(e => {
+        if (e && e.aborted) {
+          showToast('Salvataggio annullato: dati di Firebase non toccati', 'danger');
+          return;
+        }
         console.error('⚠️ Errore Firebase:', e);
         const msg = `ERRORE FIREBASE:\nCodice: ${e.code || 'N/A'}\nMessaggio: ${e.message || JSON.stringify(e)}`;
         alert(msg);
@@ -2370,6 +2437,7 @@ function saveData(silent) {
       })
       .finally(() => { setTimeout(() => { _isSaving = false; }, 1000); });
   } catch(e) {
+    _isSaving = false;
     console.error('⚠️ Errore salvataggio:', e);
     alert('ERRORE SALVATAGGIO:\n' + (e.message || JSON.stringify(e)));
     showToast('⚠️ Errore: ' + (e.message || e), 'danger');
@@ -3156,7 +3224,7 @@ function isHolterAvail(v) { return v === 'disponibile' || v === 'disponibile16' 
 function isHolterConf(v)  { return v === 'confermato' || v === 'confermato16'; }
 function holterNameLabel(doc, v) {
   if (v === 'confermato16' || v === 'disponibile16') return doc + ' (' + HOLTER_16_TAG + ')';
-  if (v === 'disponibile-entrambi') return doc + ' (ANCHE ' + HOLTER_16_TAG + ')';
+  if (v === 'disponibile-entrambi') return doc + ' (x o 16)';
   return doc;
 }
 
@@ -4020,6 +4088,28 @@ function normalizeMsg(s) {
 function hasMat(s)    { return /\bmattina\b/.test(s); }
 function hasPom(s)    { return /\bpomeriggio\b/.test(s); }
 function hasEcg(s)    { return /solo\s*ecg|\becg\b/.test(s); }
+// Disponibilità a entrambi i tipi di turno ("completo o ecg", "normale + ecg", "x+y") → X+Y
+const _COMP_W = '(?:completo|completi|completa|normale|normali|x)';
+const _CONN_W = '(?:\\s+(?:o|oppure|e|ed|anche|pure)\\s+|\\s*[+/&]\\s*)';
+const _BOTH_RE_1 = new RegExp('\\b' + _COMP_W + '\\b(?:\\s+turno)?' + _CONN_W + '(?:turno\\s+)?(?:solo\\s+)?ecg\\b');
+const _BOTH_RE_2 = new RegExp('\\becg\\b' + _CONN_W + '(?:turno\\s+)?(?:solo\\s+)?' + _COMP_W + '\\b');
+function hasCompletoWord(s) { return /\b(?:completo|completi|completa|normale|normali)\b/.test(s); }
+function hasBoth(s) {
+  if (/\bx\s*[+\/&]\s*y\b|\bx\s+(?:o|e|oppure)\s+y\b/.test(s)) return true;
+  return _BOTH_RE_1.test(s) || _BOTH_RE_2.test(s);
+}
+// Tipo di slot per un sotto-segmento (dflt 'solo-ecg' = sezione ECG dedicata → mai X+Y)
+function slotTypeFor(sub, subHasSlotWords, parentEcg, parentBoth, dflt) {
+  const canBoth = dflt !== 'solo-ecg';
+  if (canBoth && hasBoth(sub)) return 'disponibile-entrambi';
+  if (hasEcg(sub)) return 'solo-ecg';
+  if (!subHasSlotWords) {
+    if (hasCompletoWord(sub)) return dflt || 'disponibile';
+    if (canBoth && parentBoth) return 'disponibile-entrambi';
+    if (parentEcg) return 'solo-ecg';
+  }
+  return dflt || 'disponibile';
+}
 function hasFerie(s)  { return /\bferie\b|vacanz|nessuna\s+disponi|non\s+ho\s+disponi|non\s+sono\s+disponib|non\s+disponib|indisponibile/.test(s); }
 function getFerieCategories(s) {
   // Restituisce [] se no ferie, ['all'] se ferie generica, o array specifico ['hc','hp'...]
@@ -4250,10 +4340,13 @@ function interpretMessage(msg, docName) {
     const ctx = slotCtx(low);
     // Detect per-day ECG overrides in sub-clauses
     const ecgDays = new Set();
+    const bothDays = new Set();
     low.split(/[,;\n]/).forEach(seg => {
-      if (hasEcg(seg)) findDays(seg, dateMap).forEach(d => ecgDays.add(d));
+      if (hasBoth(seg)) findDays(seg, dateMap).forEach(d => bothDays.add(d));
+      else if (hasEcg(seg)) findDays(seg, dateMap).forEach(d => ecgDays.add(d));
     });
-    const globalEcg    = hasEcg(low) && ecgDays.size === 0; // ECG applies globally only if not per-day
+    const globalBoth   = hasBoth(low) && bothDays.size === 0;
+    const globalEcg    = hasEcg(low) && ecgDays.size === 0 && !hasBoth(low); // ECG applies globally only if not per-day
     const globalHolter = hasHolter(low);
     const globalHolterKind = holterKindOf(low) || 'std';
     const globalHolterP = hasHolterPressori(low);
@@ -4261,7 +4354,9 @@ function interpretMessage(msg, docName) {
     const globalPls    = /polisonno|\bpls\b|\bpsg\b/.test(low);
     const _gConsNum    = extractConsuntivoNum(low) || 1;
     for (let di = 0; di < 6; di++) {
-      const type = (globalEcg || ecgDays.has(di)) ? 'solo-ecg' : 'disponibile';
+      const type = ecgDays.has(di) ? 'solo-ecg'
+                 : (bothDays.has(di) || globalBoth) ? 'disponibile-entrambi'
+                 : globalEcg ? 'solo-ecg' : 'disponibile';
       const _onlyTag = hasHolterTag(low) && !/\b(?:mattina|pomeriggio)\b/.test(low);
       if (!_onlyTag) {
         if (ctx !== 'pom') result.slots.push({ key: `${di}_0`, type });
@@ -4293,7 +4388,7 @@ function interpretMessage(msg, docName) {
       const from = Math.min(...fromD);
       const to   = Math.max(...toD);
       const ctx  = slotCtx(low);
-      const tp   = hasEcg(low) ? 'solo-ecg' : 'disponibile';
+      const tp   = hasBoth(low) ? 'disponibile-entrambi' : (hasEcg(low) ? 'solo-ecg' : 'disponibile');
       const _consNum = extractConsuntivoNum(low);
       for (let di = from; di <= Math.min(to, 5); di++) {
         const _rOnlyTag = hasHolterTag(low) && !/\b(?:mattina|pomeriggio)\b/.test(low);
@@ -4341,6 +4436,7 @@ function interpretMessage(msg, docName) {
     // Determine the slot context of this entire hard-segment
     const parentCtx = slotCtx(seg);
     const parentEcg    = hasEcg(seg);
+    const parentBoth   = hasBoth(seg);
     const parentHolter = hasHolter(seg);
     const parentKind   = holterKindOf(seg);
 
@@ -4355,7 +4451,7 @@ function interpretMessage(msg, docName) {
       // Otherwise inherit from the parent segment.
       const subHasSlotWords = hasMat(sub) || hasPom(sub);
       const ctx      = subHasSlotWords ? slotCtx(sub) : parentCtx;
-      const type     = (hasEcg(sub) || (!subHasSlotWords && parentEcg)) ? 'solo-ecg' : 'disponibile';
+      const type     = slotTypeFor(sub, subHasSlotWords, parentEcg, parentBoth);
       const isHolterPressori = hasHolterPressori(sub) || (hasHolterPressori(seg) && !subHasSlotWords);
       const isHolter = (hasHolter(sub) || parentHolter) && !isHolterPressori;
       // Tipo holter: proprio del sotto-segmento, altrimenti (se non ha slot/parole holter proprie) ereditato dal segmento
@@ -4396,7 +4492,7 @@ function interpretMessage(msg, docName) {
   if (result.slots.length === 0 && result.holterSlots.length === 0) {
     const days      = findDays(low, dateMap);
     const ctx       = slotCtx(low);
-    const type      = hasEcg(low) ? 'solo-ecg' : 'disponibile';
+    const type      = hasBoth(low) ? 'disponibile-entrambi' : (hasEcg(low) ? 'solo-ecg' : 'disponibile');
     const isHolter  = hasHolter(low);
     const _fbKind   = holterKindOf(low) || 'std';
     const _fbOnlyTag = hasHolterTag(low) && !/\b(?:mattina|pomeriggio)\b/.test(low);
@@ -4501,7 +4597,7 @@ function interpretMessageText(low, dateMap, defaultType) {
   if (ALL_DAYS_RE.test(low)) {
     const ctx = slotCtx(low);
     for (let di = 0; di < 6; di++) {
-      const type = hasEcg(low) ? 'solo-ecg' : (defaultType || 'disponibile');
+      const type = (defaultType !== 'solo-ecg' && hasBoth(low)) ? 'disponibile-entrambi' : (hasEcg(low) ? 'solo-ecg' : (defaultType || 'disponibile'));
       if (ctx !== 'pom') result.slots.push({ key: `${di}_0`, type });
       if (ctx !== 'mat') result.slots.push({ key: `${di}_1`, type });
     }
@@ -4511,13 +4607,14 @@ function interpretMessageText(low, dateMap, defaultType) {
   hardSegs.forEach(seg => {
     const parentCtx = slotCtx(seg);
     const parentEcg = hasEcg(seg);
+    const parentBoth = hasBoth(seg);
     const subSegs = splitByDayTokens(seg, dateMap);
     subSegs.forEach(sub => {
       const days = findDays(sub, dateMap);
       if (days.length === 0) return;
       const subHasSlotWords = hasMat(sub) || hasPom(sub);
       const ctx  = subHasSlotWords ? slotCtx(sub) : parentCtx;
-      const type = (hasEcg(sub) || (!subHasSlotWords && parentEcg)) ? 'solo-ecg' : (defaultType || 'disponibile');
+      const type = slotTypeFor(sub, subHasSlotWords, parentEcg, parentBoth, defaultType);
       days.forEach(di => {
         if (di < 6) {
           if (ctx !== 'pom') result.slots.push({ key: `${di}_0`, type });
@@ -4550,12 +4647,20 @@ const GROQ_API_KEY = _m.join('');
 const GROQ_MODELS = ['openai/gpt-oss-120b', 'meta-llama/llama-4-maverick-17b-128e-instruct', 'openai/gpt-oss-20b'];
 const GROQ_MODEL = GROQ_MODELS[0];
 
+function _normAiSlotType(t) {
+  const x = String(t || '').toLowerCase().replace(/\s+/g, '');
+  if (/entrambi|both|x\+y|disponibile\+/.test(x)) return 'disponibile-entrambi';
+  if (/ecg/.test(x)) return 'solo-ecg';
+  return 'disponibile';
+}
+
 async function aiParseMessage(msg, docSel) {
   // ── Profilo medico ──
   const _tipo = state.doctorTypes[docSel] || 'completo';
   const _holter = state.holterEnabled?.[docSel] || false;
   const _extra = state.doctorExtra?.[docSel] || {};
   const _canEcg = _tipo.includes('ecg');
+  const _canBoth = _tipo === 'completo+ecg75' || _tipo === 'completo+ecg100'; // può dare X+Y
   const _onlyEcg = (_tipo === 'ecg75' || _tipo === 'ecg100');
   const _canTurni = _tipo !== 'nessuno';
   const _canHc = !!_extra.hcCons;
@@ -4585,8 +4690,8 @@ Medico: ${docSel} | Campi ABILITATI: [${allow.join(',')}]
 Genera SOLO campi abilitati. Rispondi SOLO JSON valido.
 ⚠️ CHIAVI: usa SEMPRE INDICI NUMERICI 0-6. MAI usare date, nomi giorni, o formati tipo "6/4". Riferisciti al mapping: ${dates.join(', ')}
 
-${_canTurni ? 'Regole slots: mattina=slot 0, pomeriggio=slot 1. Se non specifica matt/pom→entrambi. key="INDICE_SLOT" (es "2_0"=mercoledì mattina).' + (_onlyEcg ? ' Questo medico fa SOLO ECG: usa SEMPRE type:"solo-ecg" per OGNI turno.' : _canEcg ? ' type:"disponibile" default. "turno ecg"/"solo ecg"→type:"solo-ecg".' : ' type:"disponibile" SEMPRE. MAI type "solo-ecg".') : 'NON generare slots.'}
-REGOLA ALTERNATIVE: "X o Y o Z"/"X oppure Y"=ALTERNATIVE, genera UN SOLO slot per giorno/fascia. Se c'è "normale"/"completo"→"disponibile". MAI duplicare.
+${_canTurni ? 'Regole slots: mattina=slot 0, pomeriggio=slot 1. Se non specifica matt/pom→entrambi. key="INDICE_SLOT" (es "2_0"=mercoledì mattina).' + (_onlyEcg ? ' Questo medico fa SOLO ECG: usa SEMPRE type:"solo-ecg" per OGNI turno.' : _canEcg ? (' type:"disponibile" default. "turno ecg"/"solo ecg"→type:"solo-ecg".' + (_canBoth ? ' "completo o ecg"/"normale o ecg"/"completo + ecg"/"x+y"→type:"disponibile-entrambi" (disponibile a entrambi i tipi di turno).' : '')) : ' type:"disponibile" SEMPRE. MAI type "solo-ecg".') : 'NON generare slots.'}
+REGOLA ALTERNATIVE: "X o Y o Z"/"X oppure Y"=ALTERNATIVE, genera UN SOLO slot per giorno/fascia. ${_canBoth ? `Se tra le alternative ci sono sia "normale"/"completo" sia "ecg"→"disponibile-entrambi". Se c'è solo "normale"/"completo"→"disponibile".` : `Se c'è "normale"/"completo"→"disponibile".`} MAI duplicare.
 Regole ferie: "ferie"/"non disponibile"→ferie:true
 ${_holter ? 'holterSlots: key=STRINGA indice ("0","1",...) + kind. kind="x" = holter standard (default: "holter"/"solo holter"/"X"). kind="16" = turno da 16hc ("turno da 16", "16hc", "16 hc", "solo 16", "turno lungo", "holter 16"). kind="x+16" = disponibile ad ENTRAMBI i tipi ("x+16", "anche 16", "anche il turno da 16", "standard e 16", "holter o 16", "entrambi"). Giorno con SOLO holter (di qualunque kind)→holterSlots senza slots. ATTENZIONE: "16" è il turno da 16hc SOLO se riferito a turno/holter; NON se è la data del giorno (es. "Gio 16/4") né un numero di consuntivo (HC/HP/spiro/PLS).' : ''}
 ${_canHc ? 'hcSlots: "holter cardiaco"/"holter ecg"/"HC"/"N holter"→key=indice(num),num:N.' : ''}
@@ -4597,7 +4702,7 @@ ${(_canHc||_canHp||_canSpiro||_canPls) ? '"N al giorno"/"N ogni giorno"→genera
 Se num assente→"val":"x". Ometti array vuoti e ferie:false.
 ${!_canTurni && (_canHc||_canHp||_canSpiro||_canPls) ? 'Medico SOLO consuntivo. NON generare slots.' : ''}
 
-Es: msg "Lun Holter, Mar matt normale o ecg o Holter, Mer matt solo Holter"→{"slots":[{"key":"1_0","type":"disponibile"}],"holterSlots":[{"key":"0","kind":"x"},{"key":"1","kind":"x"},{"key":"2","kind":"x"}]}
+Es: msg "Lun Holter, Mar matt normale o ecg o Holter, Mer matt solo Holter"→{"slots":[{"key":"1_0","type":"${_canBoth ? 'disponibile-entrambi' : 'disponibile'}"}],"holterSlots":[{"key":"0","kind":"x"},{"key":"1","kind":"x"},{"key":"2","kind":"x"}]}
 ${_holter ? 'Es: msg "Lun turno da 16hc, Mar holter e anche 16, Mer x+16, Gio solo holter"→{"holterSlots":[{"key":"0","kind":"16"},{"key":"1","kind":"x+16"},{"key":"2","kind":"x+16"},{"key":"3","kind":"x"}]}' : ''}
 Es: msg "10 holter al giorno"→{"hcSlots":[{"key":0,"num":10},{"key":1,"num":10},{"key":2,"num":10},{"key":3,"num":10},{"key":4,"num":10},{"key":5,"num":10},{"key":6,"num":10}]}
 
@@ -4736,7 +4841,7 @@ ${msg}`;
 
   // Normalizza al formato interno dell'app
   const result = {
-    slots:       (parsed.slots || []).map(s => ({ key: _normSlotKey(s.key), type: s.type || 'disponibile' })).filter(s => s.key !== null),
+    slots:       (parsed.slots || []).map(s => ({ key: _normSlotKey(s.key), type: _normAiSlotType(s.type) })).filter(s => s.key !== null),
     holterSlots: (parsed.holterSlots || []).map(s => {
       const d = _dayToIdx(s.key);
       if (d === null) return null;
@@ -4775,7 +4880,12 @@ ${msg}`;
   // 4) DEDUP SLOTS: un solo entry per giorno_fascia, preferisci "disponibile"
   const _slotMap = new Map();
   result.slots.forEach(s => {
-    if (!_slotMap.has(s.key) || s.type === 'disponibile') _slotMap.set(s.key, s);
+    const prev = _slotMap.get(s.key);
+    if (!prev) { _slotMap.set(s.key, s); return; }
+    if (prev.type === s.type) return;
+    // stesso giorno/fascia con X e Y → X+Y (solo medici completo+ecg), altrimenti prevale X
+    if (_canBoth) _slotMap.set(s.key, { ...s, type: 'disponibile-entrambi' });
+    else if (s.type === 'disponibile') _slotMap.set(s.key, s);
   });
   result.slots = [..._slotMap.values()];
 
@@ -5004,7 +5114,7 @@ function renderPendingResult() {
       const dayName  = DNAMES_FULL[di];
       const slotName = si === 0 ? 'Mat' : 'Pom';
       const cls = s.type === 'disponibile' ? 'badge-mat' : s.type === 'solo-ecg' ? 'badge-ecg' : 'badge-pom';
-      const typeLabel = s.type === 'disponibile' ? 'X' : 'Y';
+      const typeLabel = s.type === 'disponibile' ? 'X' : s.type === 'disponibile-entrambi' ? 'X+Y' : 'Y';
       // Mostra il pulsante ✏️ solo se il medico può avere sia X che Y
       const _docTipoForEdit = state.doctorTypes[pendingWaDoctor] || 'completo';
       const _canEditSlotType = _docTipoForEdit === 'completo+ecg75' || _docTipoForEdit === 'completo+ecg100';
@@ -5601,7 +5711,7 @@ function renderConferma() {
       ? Object.entries(dd.slots).filter(([k,v]) => v && v !== '')
       : [];
     const confSlots    = allMainSlots.filter(([k,v]) => v === 'confermato' || v === 'confermato-ecg');
-    const dispSlots    = allMainSlots.filter(([k,v]) => v === 'disponibile' || v === 'solo-ecg');
+    const dispSlots    = allMainSlots.filter(([k,v]) => isAvailSlot(v));
 
     // ── Holter: solo se NON in ferie Holter ──
     const allHolterSlots = (!holterFerie && hdoc && hdoc.slots)
@@ -6390,7 +6500,7 @@ function renderRiepilogo() {
     Object.entries(dd.slots).forEach(([key, val]) => {
       if (!val) return;
       const isEcg = val === 'solo-ecg' || val === 'confermato-ecg';
-      let label = doc + (isEcg ? ' (SOLO ECG)' : '');
+      let label = doc + (isEcg ? ' (SOLO ECG)' : val === 'disponibile-entrambi' ? ' (ecg o completo)' : '');
       // Evidenzia chi ha 1 sola disponibilità: giallo=turno completo, fucsia=ecg
       const info = docDispCount[doc];
       if (info && info.total === 1) {
@@ -8546,7 +8656,16 @@ function init() {
     if (_isSaving) return; // skip aggiornamenti generati da noi stessi
     try {
       let data = snapshot.val();
-      if (!data) return;
+      if (!data) {
+        // Database vuoto: si può salvare (primo uso / reinserimento manuale).
+        // La pagina NON viene svuotata: se prima c'erano dati restano visibili in memoria.
+        if (_seenRemoteData) {
+          showToast('⚠️ Il database Firebase risulta VUOTO. Non ricaricare questa pagina: premi Salva per ripristinare i dati che vedi.', 'danger');
+        }
+        _remoteLoaded = true;
+        return;
+      }
+      _seenRemoteData = true;
       // Decodifica le chiavi (i "." erano stati codificati con "·" al salvataggio)
       data = decodeKeys(data);
       // Applica i dati remoti allo state (solo le 3 settimane consentite)
@@ -8589,8 +8708,14 @@ function init() {
       populateDoctorSelects();
       const el = document.getElementById('save-indicator');
       if (el) el.textContent = '🔄 Sincronizzato';
+      _remoteLoaded = true; // solo ora i dati remoti sono stati applicati con successo
     } catch(e) {
+      console.error('Errore applicazione dati Firebase (salvataggio bloccato):', e);
+      showToast('⚠️ Errore nel caricamento dati: salvataggio disattivato, ricarica la pagina', 'danger');
     }
+  }, (err) => {
+    console.error('Lettura cardio_state fallita:', err);
+    showToast('⚠️ Impossibile leggere Firebase: salvataggio disattivato', 'danger');
   });
 
   // ── Dismiss splash screen ──
@@ -9524,7 +9649,7 @@ function _aiRenderInner() {
     var dd = weekData[doc];
     if (!dd || dd.ferie) return false;
     var sl = dd.slots || {};
-    return Object.values(sl).some(function(v) { return v === 'disponibile' || v === 'solo-ecg'; });
+    return Object.values(sl).some(function(v) { return isAvailSlot(v); });
   }).sort();
 
   // Holter docs with availability
@@ -9847,6 +9972,7 @@ function _generateAIDraftCore() {
         var _v = slots[_k] || '';
         if (_v === 'disponibile') avails.push({ key: _k, type: 'completo' });
         else if (_v === 'solo-ecg') avails.push({ key: _k, type: 'ecg' });
+        else if (_v === 'disponibile-entrambi') avails.push({ key: _k, type: 'entrambi' });
       }
     }
     if (avails.length === 1) _singleSlotMap[doc] = avails[0];
@@ -9883,8 +10009,8 @@ function _generateAIDraftCore() {
         var dd = weekData[doc];
         if (!dd || dd.ferie) return;
         var val = (dd.slots || {})[key] || '';
-        if (val === 'disponibile') availCompleto.push(doc);
-        else if (val === 'solo-ecg') availEcg.push(doc);
+        if (isAvailCompleto(val)) availCompleto.push(doc);
+        if (isAvailEcg(val)) availEcg.push(doc);
       });
 
       var placed = [];     // { doc, type: 'completo'|'ecg', always: bool, single: bool }
@@ -9917,7 +10043,14 @@ function _generateAIDraftCore() {
         if (allPlacedDocs().includes(doc)) return;
         if (_aiConflictsWithList(doc, placed)) return;
         if (usedOnDay[doc] && usedOnDay[doc].has(di)) return; // no double shift
-        placed.push({ doc: doc, type: info.type, always: false, single: true });
+        var _sType = info.type;
+        if (_sType === 'entrambi') {
+          // X+Y: sceglie completo se c'è posto (o se ECG è pieno), altrimenti ECG
+          var _pcN = placed.filter(function(p) { return p.type === 'completo'; }).length;
+          var _peN = placed.filter(function(p) { return p.type === 'ecg'; }).length;
+          _sType = (_pcN < targetCompleto || _peN >= targetEcg) ? 'completo' : 'ecg';
+        }
+        placed.push({ doc: doc, type: _sType, always: false, single: true });
         assignCount[doc] = (assignCount[doc] || 0) + 1;
         if (!usedOnDay[doc]) usedOnDay[doc] = new Set();
         usedOnDay[doc].add(di);
@@ -10129,7 +10262,7 @@ function _generateAIDraftCore() {
       for (var _si2 = 0; _si2 < 2; _si2++) {
         var _k2 = _di2 + '_' + _si2;
         var _v2 = sl[_k2] || '';
-        if (_v2 === 'disponibile' || _v2 === 'solo-ecg') { hasDayAvail = true; break; }
+        if (isAvailSlot(_v2)) { hasDayAvail = true; break; }
       }
       if (!hasDayAvail) continue; // nessuna disponibilità in questo giorno, skip
       // Controlla se è già assegnato in questo giorno
@@ -10145,7 +10278,7 @@ function _generateAIDraftCore() {
       for (var _si4 = 0; _si4 < 2; _si4++) {
         var _k4 = _di2 + '_' + _si4;
         var _v4 = sl[_k4] || '';
-        if (_v4 !== 'disponibile' && _v4 !== 'solo-ecg') continue;
+        if (!isAvailSlot(_v4)) continue;
         var _type4 = _v4 === 'solo-ecg' ? 'ecg' : 'completo';
         // Verifica conflitti con i medici già in questo slot
         var _placed4 = draft.slots[_k4] || [];
@@ -10177,7 +10310,7 @@ function _generateAIDraftCore() {
         if ((assignCount[doc] || 0) >= minTarget) break;
         var _k5 = _di5 + '_' + _si5;
         var _v5 = sl[_k5] || '';
-        if (_v5 !== 'disponibile' && _v5 !== 'solo-ecg') continue;
+        if (!isAvailSlot(_v5)) continue;
         var _type5 = _v5 === 'solo-ecg' ? 'ecg' : 'completo';
         var _placed5 = draft.slots[_k5] || [];
         if (_placed5.some(function(p) { return p.doc === doc; })) continue;
@@ -10216,7 +10349,7 @@ function _generateAIDraftCore() {
         for (var _bsi = 0; _bsi < 2 && !_bPlacedBonus; _bsi++) {
           var _bKey = _bdi + '_' + _bsi;
           var _bVal = _bSl[_bKey] || '';
-          if (_bVal !== 'disponibile' && _bVal !== 'solo-ecg') continue;
+          if (!isAvailSlot(_bVal)) continue;
           var _bType = _bVal === 'solo-ecg' ? 'ecg' : 'completo';
           var _bPlacedArr = draft.slots[_bKey] || [];
           if (_aiConflictsWithList(bonusDoc, _bPlacedArr)) continue;
@@ -10518,7 +10651,7 @@ function _aiRenderSlotCell(di, si) {
     var dd = weekData[doc];
     if (!dd || dd.ferie) return false;
     var val = (dd.slots || {})[key] || '';
-    return val === 'disponibile' || val === 'solo-ecg';
+    return isAvailSlot(val);
   });
 
   if (hasLiveAvail) {
@@ -10533,6 +10666,13 @@ function _aiRenderSlotCell(di, si) {
   return h;
 }
 
+// Tipo holter effettivo di un medico in bozza: '16' se scelto come 16 (o disponibile solo 16), altrimenti 'std'
+function _aiHolterKind(di, doc) {
+  if (_aiDraft && _aiDraft.holter16 && _aiDraft.holter16[di] && _aiDraft.holter16[di][doc]) return '16';
+  var hd = (state.holterWeeks[currentWeek] || {})[doc];
+  return (hd && hd.slots && hd.slots[di] === 'disponibile16') ? '16' : 'std';
+}
+
 function _aiRenderHolterCell(di) {
   var items = _aiDraft.holter[di] || [];
   items.sort(function(a, b) { return a.localeCompare(b, 'it'); });
@@ -10542,6 +10682,7 @@ function _aiRenderHolterCell(di) {
     var cls = 'ai-tag';
     if (_aiAlwaysConfirm.has(doc)) cls += ' crown';
     var label = _aiAlwaysConfirm.has(doc) ? '👑 ' + doc : doc;
+    if (_aiHolterKind(di, doc) === '16') label += ' <span style="font-size:9px;opacity:.7;">(16)</span>';
     var _htt = _aiGetServicesTooltip(doc).replace(/"/g, '&quot;');
     h += '<span class="' + cls + '" data-doc="' + doc.replace(/"/g,'&quot;') + '" data-ai-tooltip="' + _htt + '">' + label;
     h += ' <button class="x" onclick="_aiRemoveHolter(' + di + ',' + idx + ')" title="Rimuovi">✕</button>';
@@ -10587,6 +10728,7 @@ function _aiRemoveHolter(di, idx) {
   var items = _aiDraft.holter[di];
   if (!items || idx >= items.length) return;
   var removed = items.splice(idx, 1)[0];
+  if (_aiDraft.holter16 && _aiDraft.holter16[di]) delete _aiDraft.holter16[di][removed];
   if (!_aiDraft.holterSkipped[di]) _aiDraft.holterSkipped[di] = [];
   _aiDraft.holterSkipped[di].push(removed);
   _aiRenderDraftTable();
@@ -10608,8 +10750,8 @@ function _aiShowAddPopup(evt, di, si) {
     var dd = weekData[doc];
     if (!dd || dd.ferie) return;
     var val = (dd.slots || {})[key] || '';
-    if (val === 'disponibile') liveCompleto.push(doc);
-    else if (val === 'solo-ecg') liveEcg.push(doc);
+    if (isAvailCompleto(val)) liveCompleto.push(doc);
+    if (isAvailEcg(val)) liveEcg.push(doc);
   });
   liveCompleto.sort(function(a, b) { return a.localeCompare(b, 'it'); });
   liveEcg.sort(function(a, b) { return a.localeCompare(b, 'it'); });
@@ -10663,12 +10805,18 @@ function _aiShowHolterPopup(evt, di) {
   popup.style.left = Math.min(evt.clientX, window.innerWidth - 200) + 'px';
   popup.style.top = Math.min(evt.clientY, window.innerHeight - 240) + 'px';
 
+  var _hChoices = [];
   liveAvail.forEach(function(doc) {
+    var _v = ((holterWeekData[doc] || {}).slots || {})[di];
+    if (_v === 'disponibile-entrambi') { _hChoices.push({ doc: doc, kind: 'std' }); _hChoices.push({ doc: doc, kind: '16' }); }
+    else _hChoices.push({ doc: doc, kind: _v === 'disponibile16' ? '16' : 'std' });
+  });
+  _hChoices.forEach(function(ch) {
     var div = document.createElement('div');
     div.className = 'ai-popup-item';
-    div.textContent = doc;
+    div.textContent = ch.doc + (ch.kind === '16' ? ' (16)' : '');
     div.onclick = function() {
-      _aiAddHolter(di, doc);
+      _aiAddHolter(di, ch.doc, ch.kind);
       _aiClosePopup();
     };
     popup.appendChild(div);
@@ -10768,9 +10916,12 @@ function _aiAddToSlot(di, si, doc, type) {
   _aiRenderDraftTable();
 }
 
-function _aiAddHolter(di, doc) {
+function _aiAddHolter(di, doc, kind) {
   if (!_aiDraft.holter[di]) _aiDraft.holter[di] = [];
   _aiDraft.holter[di].push(doc);
+  if (!_aiDraft.holter16) _aiDraft.holter16 = {};
+  if (!_aiDraft.holter16[di]) _aiDraft.holter16[di] = {};
+  if (kind === '16') _aiDraft.holter16[di][doc] = true; else delete _aiDraft.holter16[di][doc];
   var sk = _aiDraft.holterSkipped[di] || [];
   var idx = sk.indexOf(doc);
   if (idx >= 0) sk.splice(idx, 1);
@@ -10797,10 +10948,10 @@ function _aiApplyDraft() {
       if (!weekData[item.doc].slots) weekData[item.doc].slots = {};
       var curVal = weekData[item.doc].slots[key] || '';
       // Only upgrade: disponibile → confermato, solo-ecg → confermato-ecg
-      if (item.type === 'ecg' && (curVal === 'solo-ecg' || curVal === '')) {
+      if (item.type === 'ecg' && (curVal === 'solo-ecg' || curVal === 'disponibile-entrambi' || curVal === '')) {
         weekData[item.doc].slots[key] = 'confermato-ecg';
         applied++;
-      } else if (item.type === 'completo' && (curVal === 'disponibile' || curVal === '')) {
+      } else if (item.type === 'completo' && (curVal === 'disponibile' || curVal === 'disponibile-entrambi' || curVal === '')) {
         weekData[item.doc].slots[key] = 'confermato';
         applied++;
       }
@@ -10817,7 +10968,7 @@ function _aiApplyDraft() {
       if (!holterWeek[doc].slots) holterWeek[doc].slots = {};
       var _cv = holterWeek[doc].slots[di];
       if (isHolterAvail(_cv) || !_cv) {
-        holterWeek[doc].slots[di] = (_cv === 'disponibile16') ? 'confermato16' : 'confermato';
+        holterWeek[doc].slots[di] = (_cv === 'disponibile16' || _aiHolterKind(di, doc) === '16') ? 'confermato16' : 'confermato';
         applied++;
       }
     });
