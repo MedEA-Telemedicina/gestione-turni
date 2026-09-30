@@ -1662,6 +1662,19 @@
 <div class="tab-content admin-only" id="tab-impostazioni">
   <div style="display:flex;flex-direction:column;gap:16px;max-width:900px;margin:0 auto;">
 
+    <!-- BACKUP DATABASE -->
+    <div class="card" id="backup-card">
+      <div class="card-title">💾 Backup Database</div>
+      <p style="font-size:11px;color:var(--muted);margin-bottom:12px;">
+        Scarica un file <strong>JSON</strong> con tutti i dati del database (turni, medici, utenti, regole, configurazione AI, storico AI, invii WhatsApp, audit, chat).
+        Un backup aggiornato viene scaricato in automatico anche ogni volta che premi <strong>«Applica come Turni Confermati»</strong> in Turni AI.
+      </p>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+        <button class="btn btn-primary" id="backup-btn" onclick="downloadBackup('manuale')">⬇️ Scarica backup</button>
+        <span id="backup-last" style="font-size:11px;color:var(--muted);"></span>
+      </div>
+    </div>
+
     <!-- GESTIONE CARDIOLOGI -->
     <div class="card" style="overflow:visible;">
       <div class="card-title">👨‍⚕️ Gestione Medici</div>
@@ -2361,7 +2374,7 @@ function saveData(silent) {
   if (!_remoteLoaded) {
     console.warn('saveData bloccato: cardio_state non ancora letto da Firebase');
     showToast('⏳ Dati non ancora caricati da Firebase: salvataggio annullato per sicurezza', 'danger');
-    return;
+    return Promise.resolve(false);
   }
   // ── Salvataggio su Firebase (unica fonte dati) ──
   try {
@@ -2380,7 +2393,7 @@ function saveData(silent) {
     }
     const stateToSave = encodeKeys(cloned);
     _isSaving = true;
-    db.ref('cardio_state').once('value')
+    return db.ref('cardio_state').once('value')
       .then(snap => {
         const remote = snap.val();
         const remoteN = _countLeaves(remote);
@@ -2424,16 +2437,18 @@ function saveData(silent) {
           showToast('✓ Salvato!');
           logAudit('Salvati dati settimana ' + formatDate(currentWeek));
         }
+        return true;
       })
       .catch(e => {
         if (e && e.aborted) {
           showToast('Salvataggio annullato: dati di Firebase non toccati', 'danger');
-          return;
+          return false;
         }
         console.error('⚠️ Errore Firebase:', e);
         const msg = `ERRORE FIREBASE:\nCodice: ${e.code || 'N/A'}\nMessaggio: ${e.message || JSON.stringify(e)}`;
         alert(msg);
         showToast('⚠️ Errore Firebase', 'danger');
+        return false;
       })
       .finally(() => { setTimeout(() => { _isSaving = false; }, 1000); });
   } catch(e) {
@@ -2441,12 +2456,78 @@ function saveData(silent) {
     console.error('⚠️ Errore salvataggio:', e);
     alert('ERRORE SALVATAGGIO:\n' + (e.message || JSON.stringify(e)));
     showToast('⚠️ Errore: ' + (e.message || e), 'danger');
+    return Promise.resolve(false);
   }
 }
 
-// Auto-save silently after every slot change
+// Auto-save silently after every slot change (restituisce Promise<boolean>: true = salvato)
 function autoSave() {
-  if (isViewOnly()) return; saveData(true); }
+  if (isViewOnly()) return Promise.resolve(false);
+  return saveData(true);
+}
+
+// =============================================
+// BACKUP COMPLETO DEL DATABASE (download JSON)
+// =============================================
+// Nodi inclusi nel backup. Esclusi volutamente: cardio_presence e cardio_cursors
+// (dati effimeri di chi è online) e cardio_state_backup (copie orarie interne).
+const BACKUP_NODES = [
+  'cardio_state', 'cardio_users', 'cardio_conflicts', 'cardio_rules',
+  'cardio_ai_config', 'cardio_ai_history', 'cardio_wa_sent',
+  'cardio_wa_noavail_sent', 'cardio_cursor_colors', 'cardio_audit', 'cardio_chat'
+];
+let _backupRunning = false;
+
+async function downloadBackup(reason, auto) {
+  if (_backupRunning) return;
+  _backupRunning = true;
+  const btn = document.getElementById('backup-btn');
+  const oldLabel = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Preparazione backup...'; }
+  try {
+    const data = {}, errors = [];
+    await Promise.all(BACKUP_NODES.map(async n => {
+      try { data[n] = (await db.ref(n).once('value')).val(); }
+      catch (e) { errors.push(n + ' (' + (e.code || e.message || 'errore') + ')'); }
+    }));
+    if (errors.length === BACKUP_NODES.length) throw new Error('nessun nodo leggibile: ' + errors.join(', '));
+
+    const now = new Date();
+    const payload = {
+      _meta: {
+        exportedAt: now.toISOString(),
+        exportedBy: currentUser ? (currentUser.fullName || currentUser.username) : null,
+        reason: reason || 'manuale',
+        database: (firebaseConfig && firebaseConfig.databaseURL) || null,
+        nodes: Object.keys(data),
+        nodesNonLetti: errors
+      },
+      data: data
+    };
+    const p = x => String(x).padStart(2, '0');
+    const stamp = now.getFullYear() + '-' + p(now.getMonth() + 1) + '-' + p(now.getDate()) +
+                  '_' + p(now.getHours()) + '-' + p(now.getMinutes()) + '-' + p(now.getSeconds());
+    const fileName = 'backup_turni_' + stamp + '.json';
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = fileName;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+
+    const lbl = document.getElementById('backup-last');
+    if (lbl) lbl.textContent = 'Ultimo backup: ' + p(now.getHours()) + ':' + p(now.getMinutes()) + ' — ' + fileName;
+    if (errors.length) showToast('⚠️ Backup scaricato ma nodi non letti: ' + errors.join(', '), 'danger');
+    else showToast('💾 Backup scaricato: ' + fileName);
+    try { logAudit('Backup database scaricato (' + (reason || 'manuale') + ')'); } catch (e) {}
+  } catch (e) {
+    console.error('Backup fallito:', e);
+    showToast('⚠️ Backup non riuscito: ' + (e.message || e), 'danger');
+  } finally {
+    _backupRunning = false;
+    if (btn) { btn.disabled = false; btn.innerHTML = oldLabel; }
+  }
+}
 
 // =============================================
 // CONSUNTIVO DYNAMIC HELPERS
@@ -10977,9 +11058,15 @@ function _aiApplyDraft() {
   // Salva storico per apprendimento AI
   _aiSaveHistory(currentWeek, _aiDraft);
 
-  autoSave();
+  var _savePromise = autoSave();
   logAudit('Applicata bozza AI: ' + applied + ' turni confermati per settimana ' + formatDate(currentWeek));
   showToast('✅ Bozza applicata! ' + applied + ' turni confermati. 🧠 Storico AI aggiornato.');
+
+  // Backup aggiornato: parte solo dopo che il salvataggio su Firebase è terminato
+  Promise.resolve(_savePromise).then(function(ok) {
+    if (ok) downloadBackup('conferma-turni-ai', true);
+    else showToast('⚠️ Backup non scaricato: salvataggio dei turni non riuscito', 'danger');
+  });
 
   // Refresh tables
   renderTable();
