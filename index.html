@@ -1679,7 +1679,7 @@
     <div class="card" id="import-medici-card">
       <div class="card-title">📥 Importa proprietà medici da JSON</div>
       <p style="font-size:11px;color:var(--muted);margin-bottom:12px;">
-        Carica un backup medici (JSON) e importa <strong>tipologia turno</strong>, <strong>stato</strong>, <strong>SSR</strong>, <strong>pediatrico</strong>, <strong>virtuale</strong> e <strong>firma</strong>.
+        Carica un backup medici (JSON) e importa <strong>tipologia turno</strong>, <strong>stato</strong>, <strong>SSR</strong>, <strong>pediatrico</strong>, <strong>virtuale</strong>, <strong>firma</strong> e <strong>consuntivo</strong> (HC, HP, Spiro, PLS).
         I medici vengono abbinati per <strong>cognome + iniziale del nome</strong>. Il file è la fonte di verità: se un campo è selezionato nel db ma nel file non compare (o è "NO"), viene <strong>tolto</strong>. Vedrai un'anteprima delle differenze prima di applicare; i medici non presenti nel db vengono ignorati.
       </p>
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">
@@ -1693,6 +1693,7 @@
         <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="imp-ped" checked onchange="importMediciPreview()"> Pediatrico</label>
         <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="imp-virt" checked onchange="importMediciPreview()"> Virtuale</label>
         <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="imp-firma" checked onchange="importMediciPreview()"> Firma</label>
+        <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="imp-cons" checked onchange="importMediciPreview()"> Consuntivo (HC/HP/Spiro/PLS)</label>
       </div>
       <div id="imp-preview" style="font-size:12px;color:var(--muted);">Nessun file caricato.</div>
       <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:12px;">
@@ -2559,7 +2560,7 @@ async function downloadBackup(reason, auto) {
 // IMPORT PROPRIETÀ MEDICI DA JSON
 // =============================================
 // Campi importati: tipologia turno (doctorTypes + holterEnabled), stato (doctorPaused),
-// SSR, pediatrico, macchina virtuale e firma digitale (doctorExtra). Abbinamento per COGNOME + INIZIALE NOME.
+// SSR, pediatrico, macchina virtuale, firma digitale e consuntivo HC/HP/Spiro/PLS (doctorExtra). Abbinamento per COGNOME + INIZIALE NOME.
 // NB: il campo "vercelName" del file NON è affidabile (è sfasato) e non viene usato.
 let _impRecords = null;   // record letti dal file
 let _impChanges = [];     // modifiche calcolate (con funzione set())
@@ -2581,7 +2582,7 @@ function _impComputeChanges(records, opt) {
   (state.doctors || []).forEach(d => { idx[_impNorm(d)] = d; });
   const changes = [], unmatched = [], matchedDocs = new Set();
   const fileKeys = new Set(records.map(r => _impNorm(_impKey(r))));
-  const yes = v => String(v || '').trim().toUpperCase() === 'SI';   // assente / NO / false => non selezionato
+  const yes = v => v === true || String(v || '').trim().toUpperCase() === 'SI';   // assente / NO / false => non selezionato
 
   records.forEach(r => {
     const doc = idx[_impNorm(_impKey(r))];
@@ -2606,7 +2607,9 @@ function _impComputeChanges(records, opt) {
         set: () => { if (!state.doctorPaused) state.doctorPaused = {}; if (paused) state.doctorPaused[doc] = true; else delete state.doctorPaused[doc]; } });
     }
     [['ssr', 'ssr', 'SSR', r.ssr], ['ped', 'pediatrico', 'Pediatrico', r.pediatrici],
-     ['virt', 'macchinVirtuale', 'M. Virtuale', r.virtuale], ['firma', 'firmaDigitale', 'Firma digitale', r.firma]].forEach(([o, prop, label, raw]) => {
+     ['virt', 'macchinVirtuale', 'M. Virtuale', r.virtuale], ['firma', 'firmaDigitale', 'Firma digitale', r.firma],
+     ['cons', 'hcCons', 'HC Cons.', r.hc_consuntivo], ['cons', 'hpCons', 'HP Cons.', r.hp_consuntivo],
+     ['cons', 'spiro', 'SPIRO Cons.', r.spiro_consuntivo], ['cons', 'pls', 'PLS Cons.', r.polisonno_consuntivo]].forEach(([o, prop, label, raw]) => {
       const v = yes(raw);
       if (!opt[o]) return;
       const cur = !!(state.doctorExtra && state.doctorExtra[doc] && state.doctorExtra[doc][prop]);
@@ -2644,7 +2647,7 @@ function importMediciPreview() {
   const box = document.getElementById('imp-preview'), btn = document.getElementById('imp-apply-btn');
   if (!_impRecords) { box.textContent = 'Nessun file caricato.'; btn.disabled = true; return; }
   const chk = id => document.getElementById(id).checked;
-  const res = _impComputeChanges(_impRecords, { tipo: chk('imp-tipo'), stato: chk('imp-stato'), ssr: chk('imp-ssr'), ped: chk('imp-ped'), virt: chk('imp-virt'), firma: chk('imp-firma') });
+  const res = _impComputeChanges(_impRecords, { tipo: chk('imp-tipo'), stato: chk('imp-stato'), ssr: chk('imp-ssr'), ped: chk('imp-ped'), virt: chk('imp-virt'), firma: chk('imp-firma'), cons: chk('imp-cons') });
   _impChanges = res.changes;
   const nDocs = new Set(res.changes.map(c => c.doc)).size;
   const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;');
