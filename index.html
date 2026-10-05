@@ -6656,8 +6656,9 @@ async function doSyncCalendar() {
         const val = (hdoc.slots && hdoc.slots[di]) || null;
         if (isHolterConf(val)) {
           const dateStr = addDays(currentWeek, di);
-          try { await gcalCreateEvent(GCAL_TURNO_ID, doc, dateStr, '3'); created++; }
-          catch(e) { errors++; errorList.push('Holter ' + doc + ': ' + e.message); }
+          const holterTitle = holterNameLabel(doc, val); // es. "BARTOLI L. (TURNO DA 16HC)" come nella tabella
+          try { await gcalCreateEvent(GCAL_TURNO_ID, holterTitle, dateStr, '3'); created++; }
+          catch(e) { errors++; errorList.push('Holter ' + holterTitle + ': ' + e.message); }
         }
       }
     }
