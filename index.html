@@ -526,6 +526,11 @@
     box-sizing: border-box;
   }
   .slot-btn:hover { border-color: var(--accent); color: var(--accent); }
+  /* Nota orario sotto la cella (es. 16-18) */
+  .slot-note { display:block; margin:2px auto 0; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:9px; line-height:1.25; font-weight:700; color:#b45309; background:rgba(245,158,11,0.18); border-radius:3px; padding:0 3px; cursor:pointer; text-align:center; }
+  [data-theme="dark"] .slot-note { color:#fbbf24; background:rgba(245,158,11,0.22); }
+  .slot-note-add { background:none; color:var(--muted); opacity:0; }
+  td:hover > .slot-note-add { opacity:.7; }
   .slot-btn.disponibile { background: rgba(5,150,105,0.12); border-color: var(--success); color: var(--success); font-weight:700; }
   .slot-btn.disponibile-entrambi { background: linear-gradient(135deg, rgba(5,150,105,0.14), rgba(217,119,6,0.14)); border-color: var(--warn); color: var(--success); font-weight:700; border-style:dashed; }
   .slot-btn.solo-ecg { background: rgba(217,119,6,0.12); border-color: var(--warn); color: var(--warn); font-weight:700; }
@@ -2352,6 +2357,36 @@ function getDoctorData(name) {
   return w[name];
 }
 
+// ── Note orario su disponibilità/turni (es. "16-18") ──
+// Salvate in state.weeks[settimana][medico].notes["giorno_slot"] (es. "2_1" = mercoledì pomeriggio)
+function getSlotNote(dd, key) { return (dd && dd.notes && dd.notes[key]) || ''; }
+function noteLabel(note) {
+  const t = String(note || '').trim();
+  if (!t) return '';
+  return /^\d/.test(t) ? 'ore ' + t : t;   // "16-18" → "ore 16-18"; "dalle 16" resta com'è
+}
+function calNoteSuffix(dd, key) {            // suffisso per titoli/celle Calendar, es. " (ORE 16-18)"
+  const n = noteLabel(getSlotNote(dd, key));
+  return n ? ' (' + n.toUpperCase() + ')' : '';
+}
+function _escNote(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function editSlotNote(doc, key) {
+  const dd = getDoctorData(doc);
+  const cur = getSlotNote(dd, key);
+  const _dayL = ['lunedì','martedì','mercoledì','giovedì','venerdì','sabato'];
+  const _kp = key.split('_');
+  const human = (_dayL[_kp[0]] || _kp[0]) + (_kp[1] === '1' ? ' pomeriggio' : ' mattina');
+  const inp = prompt('Nota orario — ' + doc + ', ' + human + '\n(es. 16-18, dalle 15, fino alle 13 — lascia vuoto per togliere)', cur);
+  if (inp === null) return;
+  const v = inp.trim();
+  if (v) { if (!dd.notes) dd.notes = {}; dd.notes[key] = v; }
+  else if (dd.notes) { delete dd.notes[key]; if (!Object.keys(dd.notes).length) delete dd.notes; }
+  logAudit('Nota orario ' + doc + ' (' + human + '): ' + (v || 'rimossa'));
+  renderTable();
+  if (typeof renderCalendar === 'function') renderCalendar();
+  autoSave();
+}
+
 // =============================================
 // PERSISTENCE
 // =============================================
@@ -3050,12 +3085,17 @@ function renderTable() {
         const val = dd.slots[key] || '';
         const cls = val;
         const lbl = SLOT_LABELS[val] || '—';
+        const _nt = getSlotNote(dd, key);
+        const _docJs = doc.replace(/'/g,"\\'");
+        const _noteHtml = _nt
+          ? `<div class="slot-note" onclick="editSlotNote('${_docJs}','${key}')" title="${_escNote(noteLabel(_nt))} — clicca per modificare">${_escNote(_nt)}</div>`
+          : (val ? `<div class="slot-note slot-note-add" onclick="editSlotNote('${_docJs}','${key}')" title="Aggiungi nota orario (es. 16-18)">🕐</div>` : '');
         bodyHtml += `<td data-day-idx="${di}">
           <button class="slot-btn ${cls}" 
             onclick="cycleSlot('${doc.replace(/'/g,"\\'")}','${key}')" 
             title="${day} ${slot}: ${val||'vuoto'}">
             ${lbl}
-          </button>
+          </button>${_noteHtml}
         </td>`;
       });
     });
@@ -3149,6 +3189,7 @@ function cycleSlot(doc, key) {
   const idx = states.indexOf(current);
   const newVal = states[(idx + 1) % states.length];
   dd.slots[key] = newVal;
+  if (!newVal && dd.notes) { delete dd.notes[key]; if (!Object.keys(dd.notes).length) delete dd.notes; } // slot svuotato → via anche la nota orario
   const LABELS = {'': 'vuoto', 'disponibile': 'X', 'solo-ecg': 'Y', 'disponibile-entrambi': 'X+Y', 'confermato': 'C', 'confermato-ecg': 'CY'};
   const _dayL = ['lunedì','martedì','mercoledì','giovedì','venerdì','sabato','domenica'];
   const _slotL = ['mattina','pomeriggio'];
@@ -4544,7 +4585,139 @@ function detectConsuntivoSections(raw) {
 
 // ── main parser ────────────────────────────────────────────────────────
 
+// ── NOTE ORARIO nei messaggi: "solo dalle 16 alle 18", "16-18", "dopo le 16", "fino alle 13" ──
+// Gli orari NON sono date: prima del parsing vengono sostituiti da un token neutro (tmra, tmrb…)
+// e poi riportati come nota sullo slot giusto (mattina/pomeriggio dedotto dall'orario).
+function _fmtHM(h, m) { return m ? h + ':' + String(m).padStart(2, '0') : String(h); }
+
+function tokenizeTimeNotes(msg) {
+  const HR = '(\\d{1,2})(?:[:.](\\d{2}))?';
+  const MONTHS = 'gennaio|febbraio|marzo|aprile|maggio|giugno|luglio|agosto|settembre|ottobre|novembre|dicembre';
+  const defs = [
+    { kind: 'range', lead: 0, re: new RegExp('\\b(?:dalle|da|tra)\\s+(?:le\\s+)?(?:ore\\s+)?' + HR + '\\s*(?:alle|a|e|-|–|—|fino\\s+alle|fino\\s+a)\\s*(?:le\\s+)?(?:ore\\s+)?' + HR + '(?![\\d:/])', 'gi') },
+    { kind: 'range', lead: 1, re: new RegExp('(^|[^\\d/:.])(?:ore\\s+)?' + HR + '\\s*[-–—]\\s*' + HR + '(?![\\d:/])(?!\\s*(?:' + MONTHS + '))', 'gi') },
+    { kind: 'from',  lead: 0, re: new RegExp('\\b(?:a\\s+partire\\s+dalle|non\\s+prima\\s+delle|dopo\\s+le|dalle)\\s+(?:le\\s+)?(?:ore\\s+)?' + HR + '(?![\\d:/])', 'gi') },
+    { kind: 'until', lead: 0, re: new RegExp('\\b(?:fino\\s+alle|fino\\s+a|entro\\s+le|prima\\s+delle|non\\s+oltre\\s+le)\\s+(?:le\\s+)?(?:ore\\s+)?' + HR + '(?![\\d:/])', 'gi') },
+  ];
+  const found = [];
+  const overlaps = (a, b) => found.some(f => a < f.e && b > f.s);
+  defs.forEach(def => {
+    def.re.lastIndex = 0;
+    let m;
+    while ((m = def.re.exec(msg)) !== null) {
+      const o = def.lead ? 1 : 0;
+      const st = m.index + (def.lead ? m[1].length : 0);
+      const en = m.index + m[0].length;
+      const g = i => (m[i] !== undefined ? parseInt(m[i], 10) : 0);
+      let r = null;
+      if (def.kind === 'range') {
+        const h1 = g(1 + o), mi1 = g(2 + o), h2 = g(3 + o), mi2 = g(4 + o);
+        const a = h1 * 60 + mi1, b = h2 * 60 + mi2;
+        if (h1 >= 6 && h1 <= 23 && h2 >= 7 && h2 <= 24 && mi1 < 60 && mi2 < 60 && b > a)
+          r = { startMin: a, endMin: b, text: _fmtHM(h1, mi1) + '-' + _fmtHM(h2, mi2) };
+      } else {
+        const h = g(1), mi = g(2);
+        if (h >= 5 && h <= 23 && mi < 60) {
+          r = def.kind === 'from'
+            ? { startMin: h * 60 + mi, endMin: null, text: 'dalle ' + _fmtHM(h, mi) }
+            : { startMin: null, endMin: h * 60 + mi, text: 'fino alle ' + _fmtHM(h, mi) };
+        }
+      }
+      if (r && !overlaps(st, en)) found.push({ s: st, e: en, ...r });
+      if (m[0].length === 0) def.re.lastIndex++;
+    }
+  });
+  if (!found.length) return { text: msg, ranges: [] };
+  found.sort((a, b) => a.s - b.s);
+  const ranges = [];
+  let out = '', pos = 0;
+  found.forEach((f, i) => {
+    const token = 'tmr' + String.fromCharCode(97 + (i % 26));
+    out += msg.slice(pos, f.s) + ' ' + token + ' ';
+    pos = f.e;
+    ranges.push({ token, text: f.text, startMin: f.startMin, endMin: f.endMin });
+  });
+  out += msg.slice(pos);
+  return { text: out, ranges };
+}
+
+// Assegna le note orario agli slot di result.slots. Se l'orario indica chiaramente
+// mattina (finisce entro le 13:30) o pomeriggio (inizia dalle 13) e il messaggio non
+// nomina la fascia, tiene solo quella fascia (es. "solo dalle 16 alle 18" → solo pomeriggio).
+function attachTimeNotes(result, tn) {
+  if (!result || !tn || !tn.ranges || !tn.ranges.length || result.ferie) return result;
+  const byToken = {};
+  tn.ranges.forEach(r => { byToken[r.token] = r; });
+  const dateMap = buildDateMap(currentWeek);
+  const low = normalizeMsg(tn.text.toLowerCase().replace(/[''`´]/g, "'").replace(/\r\n/g, '\n'));
+  const slotKeys = new Set((result.slots || []).map(x => x.key));
+  const allDays = [...new Set((result.slots || []).map(x => parseInt(x.key, 10)))].sort((a, b) => a - b);
+  const notes = {};
+  const drop = new Set();
+  let prevDays = [];
+  const addNote = (key, text) => {
+    if (!notes[key]) notes[key] = text;
+    else if (!notes[key].split(' / ').includes(text)) notes[key] += ' / ' + text;
+  };
+
+  low.split(/[,;\n.]+/).map(x => x.trim()).filter(Boolean).forEach(seg => {
+    const segToks = seg.match(/tmr[a-z]/g) || [];
+    if (!segToks.length) { const d = findDays(seg, dateMap); if (d.length) prevDays = d; return; }
+    const _seenTok = new Set();
+    const subs = splitByDayTokens(seg, dateMap).map(sub => {
+      const toks = (sub.match(/tmr[a-z]/g) || []).filter(t => { if (_seenTok.has(t)) return false; _seenTok.add(t); return true; });
+      return { sub, days: findDays(sub, dateMap), toks };
+    });
+    subs.forEach((info, k) => {
+      if (!info.toks.length) return;
+      // giorni dell'orario: quelli della sua frase + quelli elencati subito prima senza orario/fascia propri ("mer e gio dalle 16 alle 18")
+      let days = info.days.slice();
+      for (let j = k - 1; j >= 0; j--) {
+        const pj = subs[j];
+        if (pj.toks.length || hasMat(pj.sub) || hasPom(pj.sub)) break;
+        days = days.concat(pj.days);
+      }
+      if (!days.length) days = prevDays.length ? prevDays.slice() : allDays.slice();
+      days = [...new Set(days)].filter(d => d >= 0 && d < 6);
+      const exMat = hasMat(info.sub), exPom = hasPom(info.sub);
+      days.forEach(di => {
+        const used = new Set();
+        let canDrop = !(exMat || exPom);
+        info.toks.forEach(tok => {
+          const r = byToken[tok];
+          if (!r) return;
+          let want;
+          const timeWant = (r.startMin != null && r.startMin >= 13 * 60) ? [1]
+                         : (r.endMin != null && r.endMin <= 13 * 60 + 30 && (r.startMin == null || r.startMin < 13 * 60)) ? [0]
+                         : [0, 1];
+          if (exMat || exPom) {
+            want = [exMat ? 0 : null, exPom ? 1 : null].filter(x => x !== null);
+            if (want.length === 2 && timeWant.length === 1) want = timeWant;   // "mattina e pomeriggio … solo dalle 16" → pomeriggio
+          } else want = timeWant;
+          let keys = want.map(si => di + '_' + si).filter(key => slotKeys.has(key));
+          if (want.length !== 1 || keys.length !== 1) canDrop = false;
+          if (!keys.length) keys = [di + '_0', di + '_1'].filter(key => slotKeys.has(key));
+          keys.forEach(key => { addNote(key, r.text); used.add(parseInt(key.split('_')[1], 10)); });
+        });
+        if (canDrop) [0, 1].forEach(si => { if (!used.has(si)) drop.add(di + '_' + si); });
+      });
+    });
+  });
+
+  result.slots = (result.slots || []).filter(x => !drop.has(x.key));
+  const keep = new Set(result.slots.map(x => x.key));
+  Object.keys(notes).forEach(k => { if (!keep.has(k)) delete notes[k]; });
+  if (Object.keys(notes).length) result.notes = notes;
+  return result;
+}
+
 function interpretMessage(msg, docName) {
+  const tn = tokenizeTimeNotes(msg);
+  const res = _interpretMessageCore(tn.text, docName);
+  return attachTimeNotes(res, tn);
+}
+
+function _interpretMessageCore(msg, docName) {
   const result = { slots: [], holterSlots: [], hcSlots: [], hpSlots: [], spiroSlots: [], plsSlots: [], ferie: false };
   let low = normalizeMsg(
     msg.toLowerCase()
@@ -4944,6 +5117,7 @@ async function aiParseMessage(msg, docSel) {
   const prompt = `Parser turni medici. Settimana: ${dates.join(', ')}
 Medico: ${docSel} | Campi ABILITATI: [${allow.join(',')}]
 Genera SOLO campi abilitati. Rispondi SOLO JSON valido.
+Gli ORARI (es. "dalle 16 alle 18", "16-18", "dopo le 16") NON sono date né giorni: ignorali per le chiavi. Dalle 13 in poi = pomeriggio (slot 1), entro le 13 = mattina (slot 0).
 ⚠️ CHIAVI: usa SEMPRE INDICI NUMERICI 0-6. MAI usare date, nomi giorni, o formati tipo "6/4". Riferisciti al mapping: ${dates.join(', ')}
 
 ${_canTurni ? 'Regole slots: mattina=slot 0, pomeriggio=slot 1. Se non specifica matt/pom→entrambi. key="INDICE_SLOT" (es "2_0"=mercoledì mattina).' + (_onlyEcg ? ' Questo medico fa SOLO ECG: usa SEMPRE type:"solo-ecg" per OGNI turno.' : _canEcg ? (' type:"disponibile" default. "turno ecg"/"solo ecg"→type:"solo-ecg".' + (_canBoth ? ' "completo o ecg"/"normale o ecg"/"completo + ecg"/"x+y"→type:"disponibile-entrambi" (disponibile a entrambi i tipi di turno).' : '')) : ' type:"disponibile" SEMPRE. MAI type "solo-ecg".') : 'NON generare slots.'}
@@ -5258,7 +5432,7 @@ function _applyDoctorFilters(docSel, msg) {
     if (_inAnyList && _numConsTypes >= 1 && _noConsParsed && !_holterOnlyNew) {
       const _autoDays = new Set();
       pendingWaResult.slots.forEach(s => _autoDays.add(parseInt(s.key.split('_')[0], 10)));
-      const _origLow = tokenizeHolter16(msg.toLowerCase().replace(/[''`´]/g,"'"), docSel);
+      const _origLow = tokenizeHolter16(tokenizeTimeNotes(msg).text.toLowerCase().replace(/[''`´]/g,"'"), docSel);
       const _normLow = normalizeMsg(_origLow);
       DAY_MAP.forEach(([name, idx]) => {
         if (idx < 6 && _normLow.includes(name)) _autoDays.add(idx);
@@ -5317,6 +5491,7 @@ async function parseWaMessageAI() {
 
   try {
     const aiResult = await aiParseMessage(msg, docSel);
+    attachTimeNotes(aiResult, tokenizeTimeNotes(msg));
     pendingWaResult = aiResult;
     pendingWaDoctor = docSel;
     pendingWaMsg    = msg;
@@ -5379,8 +5554,13 @@ function renderPendingResult() {
           style="background:none;border:none;cursor:pointer;color:inherit;font-size:12px;line-height:1;padding:0;opacity:0.65;"
           title="Cambia tipo (X/Y)">✏️</button>`
         : '';
+      const _pn = (result.notes && result.notes[s.key]) || '';
+      const _noteChip = _pn
+        ? `<span onclick="editPendingNote('${s.key}')" style="cursor:pointer;background:rgba(0,0,0,0.18);border-radius:4px;padding:0 5px;font-size:10px;font-weight:700;" title="Nota orario — clicca per modificare">🕐 ${_escNote(_pn)}</span>`
+        : `<button onclick="editPendingNote('${s.key}')" style="background:none;border:none;cursor:pointer;color:inherit;font-size:12px;line-height:1;padding:0;opacity:0.5;" title="Aggiungi nota orario (es. 16-18)">🕐</button>`;
       html += `<span class="badge ${cls}" style="display:inline-flex;align-items:center;gap:5px;padding:3px 8px 3px 10px;">
         ${dayName} ${slotName} <em style="opacity:0.75;" id="sl-type-${s.key}">(${typeLabel})</em>
+        ${_noteChip}
         ${_editTypeBtn}
         <button onclick="removeSlotFromPending('${s.key}')"
           style="background:none;border:none;cursor:pointer;color:inherit;font-size:14px;line-height:1;padding:0 0 0 2px;opacity:0.65;"
@@ -5476,6 +5656,18 @@ function renderPendingResult() {
 function removeSlotFromPending(key) {
   if (!pendingWaResult) return;
   pendingWaResult.slots = pendingWaResult.slots.filter(s => s.key !== key);
+  if (pendingWaResult.notes) delete pendingWaResult.notes[key];
+  renderPendingResult();
+}
+
+function editPendingNote(key) {
+  if (!pendingWaResult) return;
+  const cur = (pendingWaResult.notes && pendingWaResult.notes[key]) || '';
+  const inp = prompt('Nota orario per questo slot\n(es. 16-18, dalle 15, fino alle 13 — lascia vuoto per togliere)', cur);
+  if (inp === null) return;
+  const v = inp.trim();
+  if (!pendingWaResult.notes) pendingWaResult.notes = {};
+  if (v) pendingWaResult.notes[key] = v; else delete pendingWaResult.notes[key];
   renderPendingResult();
 }
 
@@ -5659,7 +5851,12 @@ function applyParsedResult() {
       tipo = (docTipo === 'ecg75' || docTipo === 'ecg100') ? 'solo-ecg' : 'disponibile'; // il medico non può avere entrambi
     }
     dd.slots[s.key] = tipo;
+    // Nota orario: nuova se presente nel messaggio, altrimenti toglie quella vecchia dello slot
+    const _newNote = pendingWaResult.notes && pendingWaResult.notes[s.key];
+    if (_newNote) { if (!dd.notes) dd.notes = {}; dd.notes[s.key] = _newNote; }
+    else if (dd.notes) delete dd.notes[s.key];
   });
+  if (dd.notes && !Object.keys(dd.notes).length) delete dd.notes;
 
   // Save WA history
   if (!state.weeks[currentWeek]) state.weeks[currentWeek] = {};
@@ -6281,14 +6478,15 @@ function renderCalendar() {
         const mattVal = (dd.slots && dd.slots[di + '_0']) || null;
         const pomVal  = (dd.slots && dd.slots[di + '_1']) || null;
         let cellText = '';
-        if (mattVal === 'confermato') cellText += '01 ' + doc + ' MATTINA';
-        else if (mattVal === 'confermato-ecg') cellText += '01 ' + doc + ' (ECG) MATTINA';
+        const _nM = _escNote(calNoteSuffix(dd, di + '_0')), _nP = _escNote(calNoteSuffix(dd, di + '_1'));
+        if (mattVal === 'confermato') cellText += '01 ' + doc + ' MATTINA' + _nM;
+        else if (mattVal === 'confermato-ecg') cellText += '01 ' + doc + ' (ECG) MATTINA' + _nM;
         if (pomVal === 'confermato') {
           if (cellText) cellText += '<br>';
-          cellText += '02 ' + doc + ' POMERIGGIO';
+          cellText += '02 ' + doc + ' POMERIGGIO' + _nP;
         } else if (pomVal === 'confermato-ecg') {
           if (cellText) cellText += '<br>';
-          cellText += '02 ' + doc + ' (ECG) POMERIGGIO';
+          cellText += '02 ' + doc + ' (ECG) POMERIGGIO' + _nP;
         }
         const cellBg = cellText ? rowBg : '#ffffff';
         t1 += '<td style="' + tdEmptyS + 'background:' + cellBg + ';">' + cellText + '</td>';
@@ -6630,19 +6828,18 @@ async function doSyncCalendar() {
         const pomVal  = (dd.slots && dd.slots[di + '_1']) || null;
         const dateStr = addDays(currentWeek, di);
 
-        if (mattVal === 'confermato') {
-          try { await gcalCreateEvent(calId, '01 ' + doc + ' MATTINA', dateStr, colorId); created++; }
-          catch(e) { errors++; errorList.push('01 ' + doc + ' MATTINA: ' + e.message); }
-        } else if (mattVal === 'confermato-ecg') {
-          try { await gcalCreateEvent(calId, '01 ' + doc + ' (ECG) MATTINA', dateStr, colorId); created++; }
-          catch(e) { errors++; errorList.push('01 ' + doc + ' (ECG) MATTINA: ' + e.message); }
+        // Titolo evento = stesso testo della tabella Calendar, con l'eventuale nota orario (es. "(ORE 16-18)")
+        const tM = mattVal === 'confermato' ? '01 ' + doc + ' MATTINA' + calNoteSuffix(dd, di + '_0')
+                 : mattVal === 'confermato-ecg' ? '01 ' + doc + ' (ECG) MATTINA' + calNoteSuffix(dd, di + '_0') : null;
+        const tP = pomVal === 'confermato' ? '02 ' + doc + ' POMERIGGIO' + calNoteSuffix(dd, di + '_1')
+                 : pomVal === 'confermato-ecg' ? '02 ' + doc + ' (ECG) POMERIGGIO' + calNoteSuffix(dd, di + '_1') : null;
+        if (tM) {
+          try { await gcalCreateEvent(calId, tM, dateStr, colorId); created++; }
+          catch(e) { errors++; errorList.push(tM + ': ' + e.message); }
         }
-        if (pomVal === 'confermato') {
-          try { await gcalCreateEvent(calId, '02 ' + doc + ' POMERIGGIO', dateStr, colorId); created++; }
-          catch(e) { errors++; errorList.push('02 ' + doc + ' POMERIGGIO: ' + e.message); }
-        } else if (pomVal === 'confermato-ecg') {
-          try { await gcalCreateEvent(calId, '02 ' + doc + ' (ECG) POMERIGGIO', dateStr, colorId); created++; }
-          catch(e) { errors++; errorList.push('02 ' + doc + ' (ECG) POMERIGGIO: ' + e.message); }
+        if (tP) {
+          try { await gcalCreateEvent(calId, tP, dateStr, colorId); created++; }
+          catch(e) { errors++; errorList.push(tP + ': ' + e.message); }
         }
       }
     }
