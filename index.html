@@ -4332,7 +4332,8 @@ function tokenizeHolter16(low, docName) {
       R('(?<![\\d/.:-])\\b16\\b(?![\\d/.:-])(?!\\s*(?:spiro|hp|pls|psg|pol|abpm|polisonn|pressori|' + MESI + '))', 'tagsedici');
     }
   } catch (e) {}
-  return t.replace(/\s+/g, ' ').trim();
+  // ATTENZIONE: non appiattire gli a-capo — ogni riga è un segmento a sé (es. una riga per giorno)
+  return t.replace(/[ \t]+/g, ' ').replace(/ ?\n ?/g, '\n').trim();
 }
 // Tipo holter di un frammento di testo: null | 'std' | '16' | 'both'
 function holterKindOf(s) {
@@ -4353,6 +4354,9 @@ function normalizeMsg(s) {
     .replace(/\bpomerig+io\b/g,  'pomeriggio')// typo pomerigio
     .replace(/\bpomerigg\b/g,    'pomeriggio')
     .replace(/\bpom\b/g,         'pomeriggio')
+    .replace(/\bpome\b/g,        'pomeriggio')   // pome → pomeriggio
+    .replace(/\bpomer\b/g,       'pomeriggio')
+    .replace(/\bpomeriggi\b/g,   'pomeriggio')
     .replace(/\bsera\b/g,        'pomeriggio')
     .replace(/\btarde?\b/g,      'pomeriggio')
     // giorno abbreviations (word-boundary safe)
@@ -4623,6 +4627,7 @@ function tokenizeTimeNotes(msg) {
             : { startMin: null, endMin: h * 60 + mi, text: 'fino alle ' + _fmtHM(h, mi) };
         }
       }
+      if (r && def.kind === 'range' && /\b(?:il|dal|dai|del|i|giorni)\s+$/.test(msg.slice(0, st))) r = null; // "il 12-15" = giorni
       if (r && !overlaps(st, en)) found.push({ s: st, e: en, ...r });
       if (m[0].length === 0) def.re.lastIndex++;
     }
@@ -4655,6 +4660,17 @@ function attachTimeNotes(result, tn) {
   const notes = {};
   const drop = new Set();
   let prevDays = [];
+  // slot citati esplicitamente nel messaggio (giorno + mattina/pomeriggio): non vanno mai cancellati
+  const explicit = new Set();
+  low.split(/[,;\n.]+/).map(x => x.trim()).filter(Boolean).forEach(seg => {
+    splitByDayTokens(seg, dateMap).forEach(sub => {
+      if (!(hasMat(sub) || hasPom(sub))) return;
+      findDays(sub, dateMap).forEach(di => {
+        if (hasMat(sub)) explicit.add(di + '_0');
+        if (hasPom(sub)) explicit.add(di + '_1');
+      });
+    });
+  });
   const addNote = (key, text) => {
     if (!notes[key]) notes[key] = text;
     else if (!notes[key].split(' / ').includes(text)) notes[key] += ' / ' + text;
@@ -4699,7 +4715,7 @@ function attachTimeNotes(result, tn) {
           if (!keys.length) keys = [di + '_0', di + '_1'].filter(key => slotKeys.has(key));
           keys.forEach(key => { addNote(key, r.text); used.add(parseInt(key.split('_')[1], 10)); });
         });
-        if (canDrop) [0, 1].forEach(si => { if (!used.has(si)) drop.add(di + '_' + si); });
+        if (canDrop) [0, 1].forEach(si => { if (!used.has(si) && !explicit.has(di + '_' + si)) drop.add(di + '_' + si); });
       });
     });
   });
@@ -4711,8 +4727,60 @@ function attachTimeNotes(result, tn) {
   return result;
 }
 
-function interpretMessage(msg, docName) {
+// ── Intervalli di giorni: "dal 12 al 15", "dal lunedì al venerdì", "il 12-15", "12-15 ottobre" ──
+// Vengono espansi in tutti i giorni compresi (per nome), prima del parsing.
+// I messaggi con sezioni consuntivo (HC/HP/Spiro/PLS) non vengono toccati: lì i numeri sono quantità.
+function expandDayRanges(text) {
+  try { if (detectConsuntivoSections(text)) return text; } catch (e) {}
+  const dateMap = buildDateMap(currentWeek);
+  const FULL = ['lunedì','martedì','mercoledì','giovedì','venerdì','sabato','domenica'];
+  const t = normalizeMsg(String(text).toLowerCase().replace(/[''`´]/g, "'"));
+  const NAMES = DAY_MAP.map(x => x[0]).sort((a, b) => b.length - a.length).join('|');
+  const MONTHS = 'gennaio|febbraio|marzo|aprile|maggio|giugno|luglio|agosto|settembre|ottobre|novembre|dicembre';
+  const toIdx = tok => {
+    if (/^\d/.test(tok)) { const n = parseInt(tok, 10); return dateMap.hasOwnProperty(n) ? dateMap[n] : null; }
+    const hit = DAY_MAP.find(x => x[0] === tok);
+    return hit ? hit[1] : null;
+  };
+  const list = (a, b) => {
+    const from = toIdx(a), to = toIdx(b);
+    if (from === null || to === null || to < from) return null;
+    const out = [];
+    for (let i = from; i <= to; i++) out.push(FULL[i]);
+    return out.join(' ');
+  };
+  const ITEM = '(\\d{1,2}|' + NAMES + ')(?:\\/\\d{1,2})?';
+  // dal 12 al 15 / dal lunedì al venerdì / dal 12 fino al 15 / da 12 a 15
+  let out = t.replace(new RegExp('\\b(?:dal|da)\\s+(?:il\\s+)?' + ITEM + '\\s*(?:al|a|fino\\s+al|fino\\s+a|-|–)\\s*(?:il\\s+)?' + ITEM + '(?![\\d:])', 'g'),
+    (m, a, b) => list(a, b) || m);
+  // il 12-15 / dal 12-15 / 12-15 ottobre
+  out = out.replace(new RegExp('(\\b(?:il|dal|dai|del|i)\\s+)?(\\d{1,2})\\s*[-–]\\s*(\\d{1,2})(?![\\d:.])(?=(\\s*(?:' + MONTHS + ')|\\/\\d)?)', 'g'),
+    (m, pre, a, b, post) => ((pre || post || (dateMap.hasOwnProperty(+a) && dateMap.hasOwnProperty(+b) && +b > +a)) ? (list(a, b) || m) : m));   // "5-7 mattina" = 5,6,7 se sono giorni della settimana
+  return out;
+}
+
+// Riunisce le righe "spezzate" dal telefono/WhatsApp: se una riga finisce con un connettore
+// (solo / o / e / oppure / turno / dalle) la sua continuazione è nella riga dopo.
+function joinWrappedLines(msg) {
+  const lines = String(msg).replace(/\r\n/g, '\n').split('\n');
+  const out = [];
+  lines.forEach(l => {
+    if (out.length && /\b(?:solo|o|oppure|e|ed|turno|dalle|alle|fino)\s*$/i.test(out[out.length - 1].trim()) && l.trim()) {
+      out[out.length - 1] = out[out.length - 1].replace(/\s+$/, '') + ' ' + l.trim();
+    } else out.push(l);
+  });
+  return out.join('\n');
+}
+
+function prepareTimeNotes(msg) {
+  msg = joinWrappedLines(msg);   // orari → token + intervalli di giorni espansi (usata da parser regex e AI)
   const tn = tokenizeTimeNotes(msg);
+  tn.text = expandDayRanges(tn.text);
+  return tn;
+}
+
+function interpretMessage(msg, docName) {
+  const tn = prepareTimeNotes(msg);
   const res = _interpretMessageCore(tn.text, docName);
   return attachTimeNotes(res, tn);
 }
@@ -4887,7 +4955,9 @@ function _interpretMessageCore(msg, docName) {
       const subKind = holterKindOf(sub);
       const holterKind = subKind || ((!subHasSlotWords && parentKind) ? parentKind : (parentKind || 'std'));
       const subOwnTag = hasHolterTag(sub) || (hasHolterTag(seg) && !subHasSlotWords && !/\bholter\b/.test(sub));
-      const isTurnoHolter = hasTurnoHolter(sub) || hasTurnoHolter(seg) || subOwnTag; // solo holter, niente turni
+      // "solo Holter" (senza normale/completo/ecg) = solo holter, nessun turno. "normale o solo holter" = alternative → turno + holter
+      const _holterOnly = /\bsolo\s+holter\b/.test(sub) && !hasCompletoWord(sub) && !hasEcg(sub) && !hasBoth(sub);
+      const isTurnoHolter = hasTurnoHolter(sub) || hasTurnoHolter(seg) || subOwnTag || _holterOnly; // solo holter, niente turni
       const isTurnoCompleto = hasTurnoCompleto(sub) && !isTurnoHolter;
       const isSpiro = /spirometr|\bspiro\b/.test(sub) || /spirometr|\bspiro\b/.test(seg);
       const isPls   = /polisonno|\bpls\b|\bpsg\b|\bpol\b/.test(sub) || /polisonno|\bpls\b|\bpsg\b|\bpol\b/.test(seg);
@@ -4984,7 +5054,9 @@ function splitByDayTokens(seg, dateMap) {
     const start = unique[i].pos;
     const end   = (i + 1 < unique.length) ? unique[i + 1].pos : seg.length;
     // Include a small look-behind (up to 10 chars) for slot words before the day name
-    const lookBehind = i === 0 ? 0 : Math.max(unique[i-1].pos + unique[i-1].len, unique[i].pos - 12);
+    let lookBehind = i === 0 ? 0 : Math.max(unique[i-1].pos + unique[i-1].len, unique[i].pos - 12);
+    // Se il sotto-segmento precedente ha già la sua fascia ("6 mattina e 7 pomeriggio"), non rubargliela
+    if (i > 0 && (hasMat(seg.slice(unique[i-1].pos, start)) || hasPom(seg.slice(unique[i-1].pos, start)))) lookBehind = start;
     subs.push(seg.slice(lookBehind, end).trim());
   }
   return subs.filter(Boolean);
@@ -5084,6 +5156,7 @@ function _normAiSlotType(t) {
 }
 
 async function aiParseMessage(msg, docSel) {
+  msg = normalizeMsg(joinWrappedLines(msg).toLowerCase());   // righe spezzate riunite, pome→pomeriggio, ecc.
   // ── Profilo medico ──
   const _tipo = state.doctorTypes[docSel] || 'completo';
   const _holter = state.holterEnabled?.[docSel] || false;
@@ -5117,7 +5190,10 @@ async function aiParseMessage(msg, docSel) {
   const prompt = `Parser turni medici. Settimana: ${dates.join(', ')}
 Medico: ${docSel} | Campi ABILITATI: [${allow.join(',')}]
 Genera SOLO campi abilitati. Rispondi SOLO JSON valido.
+OGNI giorno/fascia citato esplicitamente ("lunedì matt", "lunedì pome") va considerato: NON omettere le mattine quando c'è anche un orario nel pomeriggio.
+Regola Holter: "X o solo Holter" (con normale/ecg tra le alternative)→ genera SIA lo slot SIA l'holterSlot. "solo Holter" / "turno solo Holter" senza normale/ecg→ SOLO holterSlot, nessuno slot. Una riga che inizia con un giorno è una voce a sé.
 Gli ORARI (es. "dalle 16 alle 18", "16-18", "dopo le 16") NON sono date né giorni: ignorali per le chiavi. Dalle 13 in poi = pomeriggio (slot 1), entro le 13 = mattina (slot 0).
+I giorni possono essere indicati col numero del mese (es. "il 12 e il 15", "13/10"): usa il mapping delle date sopra. Un intervallo "dal 12 al 15" comprende TUTTI i giorni dal 12 al 15 inclusi.
 ⚠️ CHIAVI: usa SEMPRE INDICI NUMERICI 0-6. MAI usare date, nomi giorni, o formati tipo "6/4". Riferisciti al mapping: ${dates.join(', ')}
 
 ${_canTurni ? 'Regole slots: mattina=slot 0, pomeriggio=slot 1. Se non specifica matt/pom→entrambi. key="INDICE_SLOT" (es "2_0"=mercoledì mattina).' + (_onlyEcg ? ' Questo medico fa SOLO ECG: usa SEMPRE type:"solo-ecg" per OGNI turno.' : _canEcg ? (' type:"disponibile" default. "turno ecg"/"solo ecg"→type:"solo-ecg".' + (_canBoth ? ' "completo o ecg"/"normale o ecg"/"completo + ecg"/"x+y"→type:"disponibile-entrambi" (disponibile a entrambi i tipi di turno).' : '')) : ' type:"disponibile" SEMPRE. MAI type "solo-ecg".') : 'NON generare slots.'}
@@ -5491,7 +5567,7 @@ async function parseWaMessageAI() {
 
   try {
     const aiResult = await aiParseMessage(msg, docSel);
-    attachTimeNotes(aiResult, tokenizeTimeNotes(msg));
+    attachTimeNotes(aiResult, prepareTimeNotes(msg));
     pendingWaResult = aiResult;
     pendingWaDoctor = docSel;
     pendingWaMsg    = msg;
