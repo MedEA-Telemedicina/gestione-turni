@@ -1128,6 +1128,12 @@
   .ai-tag.single { background: rgba(5,150,105,.1); border-color: rgba(5,150,105,.25); }
   .ai-tag .x { background: none; border: none; color: #ef4444; cursor: pointer; font-size: 13px; padding: 0 2px; line-height: 1; opacity: .6; }
   .ai-tag .x:hover { opacity: 1; }
+  /* ×2 turno doppio ECG: invisibile se non selezionato (compare al passaggio sul medico), fisso se attivo */
+  .ai-tag { position: relative; }
+  .ai-tag .ai-dbl { border: 1px solid #d946ef; border-radius: 4px; padding: 0 4px; margin-left: 2px; font-size: 9px; font-weight: 700; cursor: pointer; line-height: 1.4; }
+  .ai-tag .ai-dbl.on { background: #d946ef; color: #fff; }
+  .ai-tag .ai-dbl.off { position: absolute; top: -8px; right: -3px; background: var(--surface); color: #d946ef; opacity: 0; pointer-events: none; z-index: 2; }
+  .ai-tag:hover .ai-dbl.off { opacity: 1; pointer-events: auto; }
   .ai-plus { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; background: rgba(5,150,105,.08); border: 1px dashed rgba(5,150,105,.4); border-radius: 6px; color: #059669; cursor: pointer; font-size: 16px; font-weight: 700; margin: 2px; }
   .ai-plus:hover { background: rgba(5,150,105,.18); border-style: solid; }
   .ai-popup { position: fixed; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.18); padding: 6px; z-index: 9999; max-height: 220px; overflow-y: auto; min-width: 170px; }
@@ -1829,6 +1835,28 @@
     </div>
 
 
+    <!-- TURNO DOPPIO ECG (admin-only) -->
+    <div class="card admin-only" id="ai-doubleecg-card">
+      <div class="card-title">🔁 Turno Doppio ECG</div>
+      <p style="font-size:11px;color:var(--muted);margin-bottom:10px;">Medici ECG che possono fare il <strong>turno doppio del pomeriggio</strong> (es. 200 ECG invece di 100). Per questi medici, nella tabella disponibilità compare il pulsante <strong>×2</strong> sugli slot ECG del pomeriggio. Impostazione persistente.</p>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
+        <select id="cfg-doubleecg-select" class="styled" style="flex:1;min-width:140px;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:7px 10px;border-radius:6px;font-size:12px;"></select>
+        <button class="btn btn-sm" style="background:#d946ef;color:#fff;border:none;font-weight:700;" onclick="_cfgAddDoubleEcg()">+ Aggiungi</button>
+      </div>
+      <div class="ai-selected-tags" id="cfg-doubleecg-tags"><span class="ai-no-tags">Caricamento...</span></div>
+    </div>
+
+    <!-- HOLTER DA 16 (admin-only) -->
+    <div class="card admin-only" id="ai-holter16-card">
+      <div class="card-title">⏱️ Turno Holter da 16</div>
+      <p style="font-size:11px;color:var(--muted);margin-bottom:10px;">Medici che possono fare il <strong>turno Holter da 16</strong>. Solo per questi medici nella tabella Holter sono disponibili gli stati <strong>16</strong>, <strong>X+16</strong> e <strong>C16</strong>; gli altri hanno solo X e C. Impostazione persistente.</p>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
+        <select id="cfg-holter16-select" class="styled" style="flex:1;min-width:140px;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:7px 10px;border-radius:6px;font-size:12px;"></select>
+        <button class="btn btn-sm" style="background:#6366f1;color:#fff;border:none;font-weight:700;" onclick="_cfgAddHolter16()">+ Aggiungi</button>
+      </div>
+      <div class="ai-selected-tags" id="cfg-holter16-tags"><span class="ai-no-tags">Caricamento...</span></div>
+    </div>
+
     <!-- VALUTAZIONE AFFIDABILITÀ MEDICI (admin-only) -->
     <div class="card admin-only" id="ratings-card">
       <div class="card-title">⭐ Valutazione Affidabilità Medici</div>
@@ -2372,6 +2400,25 @@ function noteLabel(note) {
 function calNoteSuffix(dd, key) {            // suffisso per titoli/celle Calendar, es. " (ORE 16-18)"
   const n = noteLabel(getSlotNote(dd, key));
   return n ? ' (' + n.toUpperCase() + ')' : '';
+}
+// ── Doppio turno ECG pomeriggio (es. 200 ECG invece di 100) ──
+// Flag in state.weeks[settimana][medico].doppio["giorno_1"] = true; attivabile solo per medici in _aiDoubleEcg
+function isSlotDoppio(dd, key) { return !!(dd && dd.doppio && dd.doppio[key]); }
+function slotIsEcgVal(v) { return v === 'solo-ecg' || v === 'confermato-ecg' || v === 'disponibile-entrambi'; }
+function ecgTag(dd, key) { return '(ECG)'; }   // il turno doppio compare duplicato (2 righe/eventi), non con un'etichetta diversa
+function toggleSlotDoppio(doc, key) {
+  const dd = getDoctorData(doc);
+  const _kp = key.split('_');
+  if (_kp[1] !== '1') return;                       // solo pomeriggio
+  if (!dd.doppio) dd.doppio = {};
+  const on = !dd.doppio[key];
+  if (on) dd.doppio[key] = true; else delete dd.doppio[key];
+  if (dd.doppio && !Object.keys(dd.doppio).length) delete dd.doppio;
+  const _dayL = ['lunedì','martedì','mercoledì','giovedì','venerdì','sabato','domenica'];
+  logAudit('Turno doppio ECG ' + doc + ' (' + (_dayL[_kp[0]] || _kp[0]) + ' pomeriggio): ' + (on ? 'attivato' : 'tolto'));
+  renderTable();
+  if (typeof renderCalendar === 'function') renderCalendar();
+  autoSave();
 }
 function _escNote(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function editSlotNote(doc, key) {
@@ -3021,6 +3068,17 @@ function clearWeek() {
 // TABLE RENDER
 // =============================================
 function renderTable() {
+  if (!_aiDoubleEcgLoaded && !window._aiDoubleEcgLoading) {   // lista medici "turno doppio ECG" (una volta sola)
+    window._aiDoubleEcgLoading = true;
+    try {
+      _aiLoadDoubleEcg(function() {
+        _aiLoadHolter16(function() {
+          renderTable();
+          if (typeof renderHolterTable === 'function') renderHolterTable();
+        });
+      });
+    } catch (e) { window._aiDoubleEcgLoading = false; }
+  }
   const head = document.getElementById('disp-head');
   const body = document.getElementById('disp-body');
   const filter = (document.getElementById('filter-input')?.value || '').toLowerCase();
@@ -3094,12 +3152,16 @@ function renderTable() {
         const _noteHtml = _nt
           ? `<div class="slot-note" onclick="editSlotNote('${_docJs}','${key}')" title="${_escNote(noteLabel(_nt))} — clicca per modificare">${_escNote(_nt)}</div>`
           : (val ? `<div class="slot-note slot-note-add" onclick="editSlotNote('${_docJs}','${key}')" title="Aggiungi nota orario (es. 16-18)">🕐</div>` : '');
-        bodyHtml += `<td data-day-idx="${di}">
+        const _dblOn = isSlotDoppio(dd, key) && slotIsEcgVal(val);
+        const _dblHtml = (si === 1 && _aiDoubleEcg.has(doc) && slotIsEcgVal(val))
+          ? `<div class="slot-note${_dblOn ? '' : ' slot-note-add'}" style="position:absolute;top:1px;right:1px;margin:0;max-width:none;padding:0 3px;cursor:pointer;font-weight:700;z-index:1;${_dblOn ? 'background:#d946ef;color:#fff;opacity:1;' : ''}" onclick="toggleSlotDoppio('${_docJs}','${key}')" title="${_dblOn ? 'Turno doppio ECG (200) — clicca per togliere' : 'Segna come turno doppio ECG (200 invece di 100)'}">×2</div>`
+          : '';
+        bodyHtml += `<td data-day-idx="${di}"${_dblHtml ? ' style="position:relative;"' : ''}>
           <button class="slot-btn ${cls}" 
             onclick="cycleSlot('${doc.replace(/'/g,"\\'")}','${key}')" 
             title="${day} ${slot}: ${val||'vuoto'}">
             ${lbl}
-          </button>${_noteHtml}
+          </button>${_noteHtml}${_dblHtml}
         </td>`;
       });
     });
@@ -3141,7 +3203,7 @@ function renderTable() {
         if (matV === 'confermato') nConfMat++;
         if (matV === 'confermato-ecg') nEcgMat++;
         if (pomV === 'confermato') nConfPom++;
-        if (pomV === 'confermato-ecg') nEcgPom++;
+        if (pomV === 'confermato-ecg') nEcgPom += isSlotDoppio(dd, `${di}_1`) ? 2 : 1;   // turno doppio (×2) conta 2
       }
       const matEl = document.getElementById(`badge-mat-${di}`);
       const pomEl = document.getElementById(`badge-pom-${di}`);
@@ -3194,6 +3256,7 @@ function cycleSlot(doc, key) {
   const newVal = states[(idx + 1) % states.length];
   dd.slots[key] = newVal;
   if (!newVal && dd.notes) { delete dd.notes[key]; if (!Object.keys(dd.notes).length) delete dd.notes; } // slot svuotato → via anche la nota orario
+  if (dd.doppio && dd.doppio[key] && !slotIsEcgVal(newVal)) { delete dd.doppio[key]; if (!Object.keys(dd.doppio).length) delete dd.doppio; } // non più ECG → via il doppio turno
   const LABELS = {'': 'vuoto', 'disponibile': 'X', 'solo-ecg': 'Y', 'disponibile-entrambi': 'X+Y', 'confermato': 'C', 'confermato-ecg': 'CY'};
   const _dayL = ['lunedì','martedì','mercoledì','giovedì','venerdì','sabato','domenica'];
   const _slotL = ['mattina','pomeriggio'];
@@ -3544,8 +3607,9 @@ function getHolterDoctorData(name) {
 function cycleHolterSlot(doc, dayIdx) {
   const dd = getHolterDoctorData(doc);
   const cur = dd.slots[dayIdx] || '';
-  const _hi = HOLTER_STATES.indexOf(cur);
-  const next = HOLTER_STATES[(_hi + 1) % HOLTER_STATES.length];
+  const _hStates = canHolter16(doc) ? HOLTER_STATES : ['', 'disponibile', 'confermato'];   // 16 / X+16 / C16 solo per i medici abilitati
+  const _hi = _hStates.indexOf(cur);
+  const next = _hi < 0 ? '' : _hStates[(_hi + 1) % _hStates.length];
 
   if (next === '') delete dd.slots[dayIdx];
   else dd.slots[dayIdx] = next;
@@ -5952,7 +6016,7 @@ function applyParsedResult() {
     if (!hdoc.slots) hdoc.slots = {};
     hSlots.forEach(s => {
       const di = parseInt(s.key, 10);
-      const _newState = HOLTER_KIND_TO_STATE[s.kind || 'std'] || 'disponibile';
+      const _newState = canHolter16(pendingWaDoctor) ? (HOLTER_KIND_TO_STATE[s.kind || 'std'] || 'disponibile') : 'disponibile';   // solo i medici abilitati possono dare 16
       hdoc.slots[di] = _newState;
     });
   }
@@ -6271,7 +6335,7 @@ function renderConferma() {
     // ── Build confirmation message ──
     const slotNames = confSlots.map(([key, val]) => {
       const [di, si] = key.split('_').map(Number);
-      const ecgLabel = val === 'confermato-ecg' ? ' (SOLO ECG)' : '';
+      const ecgLabel = val === 'confermato-ecg' ? (si === 1 && isSlotDoppio(dd, key) ? ' (SOLO ECG DOPPIO TURNO)' : ' (SOLO ECG)') : '';
       const dayNum = parseLocalDate(addDays(currentWeek, di)).getDate();
       return `${DAYS[di]} ${dayNum} ${si === 0 ? 'mattina' : 'pomeriggio'}${ecgLabel}`;
     });
@@ -6567,6 +6631,7 @@ function renderCalendar() {
         } else if (pomVal === 'confermato-ecg') {
           if (cellText) cellText += '<br>';
           cellText += '02 ' + doc + ' (ECG) POMERIGGIO' + _nP;
+          if (isSlotDoppio(dd, di + '_1')) cellText += '<br>02 ' + doc + ' (ECG) POMERIGGIO' + _nP;   // turno doppio ×2 → 2 volte
         }
         const cellBg = cellText ? rowBg : '#ffffff';
         t1 += '<td style="' + tdEmptyS + 'background:' + cellBg + ';">' + cellText + '</td>';
@@ -6912,14 +6977,17 @@ async function doSyncCalendar() {
         const tM = mattVal === 'confermato' ? '01 ' + doc + ' MATTINA' + calNoteSuffix(dd, di + '_0')
                  : mattVal === 'confermato-ecg' ? '01 ' + doc + ' (ECG) MATTINA' + calNoteSuffix(dd, di + '_0') : null;
         const tP = pomVal === 'confermato' ? '02 ' + doc + ' POMERIGGIO' + calNoteSuffix(dd, di + '_1')
-                 : pomVal === 'confermato-ecg' ? '02 ' + doc + ' (ECG) POMERIGGIO' + calNoteSuffix(dd, di + '_1') : null;
+                 : pomVal === 'confermato-ecg' ? '02 ' + doc + ' ' + ecgTag(dd, di + '_1') + ' POMERIGGIO' + calNoteSuffix(dd, di + '_1') : null;
         if (tM) {
           try { await gcalCreateEvent(calId, tM, dateStr, colorId); created++; }
           catch(e) { errors++; errorList.push(tM + ': ' + e.message); }
         }
         if (tP) {
-          try { await gcalCreateEvent(calId, tP, dateStr, colorId); created++; }
-          catch(e) { errors++; errorList.push(tP + ': ' + e.message); }
+          const _nTP = (pomVal === 'confermato-ecg' && isSlotDoppio(dd, di + '_1')) ? 2 : 1;   // turno doppio ×2 → 2 eventi
+          for (let _r = 0; _r < _nTP; _r++) {
+            try { await gcalCreateEvent(calId, tP, dateStr, colorId); created++; }
+            catch(e) { errors++; errorList.push(tP + ': ' + e.message); }
+          }
         }
       }
     }
@@ -7034,7 +7102,7 @@ function renderRiepilogo() {
     Object.entries(dd.slots).forEach(([key, val]) => {
       if (!val) return;
       const isEcg = val === 'solo-ecg' || val === 'confermato-ecg';
-      let label = doc + (isEcg ? ' (SOLO ECG)' : val === 'disponibile-entrambi' ? ' (ecg o completo)' : '') + _escNote(calNoteSuffix(dd, key));   // + eventuale nota orario (es. " (ORE 16-18)")
+      let label = doc + (isEcg ? (key.slice(-1) === '1' && isSlotDoppio(dd, key) ? ' (SOLO ECG DOPPIO)' : ' (SOLO ECG)') : val === 'disponibile-entrambi' ? ' (ecg o completo)' : '') + _escNote(calNoteSuffix(dd, key));   // + eventuale nota orario (es. " (ORE 16-18)")
       // Evidenzia chi ha 1 sola disponibilità: giallo=turno completo, fucsia=ecg
       const info = docDispCount[doc];
       if (info && info.total === 1) {
@@ -7043,7 +7111,12 @@ function renderRiepilogo() {
         label = `<span style="color:${color};background:${bg};padding:0 3px;border-radius:3px;font-weight:700;">${label}</span>`;
       }
       if (slotDisp[key]) slotDisp[key].push(label);
-      if ((val === 'confermato' || val === 'confermato-ecg') && slotConf[key]) slotConf[key].push(label);
+      if ((val === 'confermato' || val === 'confermato-ecg') && slotConf[key]) {
+        if (isEcg && key.slice(-1) === '1' && isSlotDoppio(dd, key)) {   // turno doppio ×2 → compare 2 volte, come un normale ECG
+          const _lblConf = label.replace(' (SOLO ECG DOPPIO)', ' (SOLO ECG)');
+          slotConf[key].push(_lblConf, _lblConf);
+        } else slotConf[key].push(label);
+      }
     });
   });
 
@@ -9706,8 +9779,14 @@ function saveCursorColors() {
 function renderAIConfigInSettings() {
   _aiLoadAlwaysConfirm(function() {
     _aiLoadMinConfPerDay(function() {
-      _cfgRenderAlways();
-      _cfgRenderMinConf();
+      _aiLoadDoubleEcg(function() {
+        _aiLoadHolter16(function() {
+          _cfgRenderAlways();
+          _cfgRenderMinConf();
+          _cfgRenderDoubleEcg();
+          _cfgRenderHolter16();
+        });
+      });
     });
   });
 }
@@ -9782,6 +9861,106 @@ function _cfgRenderMinConf() {
   });
 }
 
+function _cfgRenderDoubleEcg() {
+  var allDocs = (state.doctors || []).slice().sort();
+  var sel = document.getElementById('cfg-doubleecg-select');
+  var tags = document.getElementById('cfg-doubleecg-tags');
+  if (!sel || !tags) return;
+  tags.innerHTML = '';
+  var hasTags = false;
+  _aiDoubleEcg.forEach(function(doc) {
+    if (!allDocs.includes(doc)) return;
+    hasTags = true;
+    var span = document.createElement('span');
+    span.className = 'ai-mincpd-tag';
+    span.dataset.doc = doc;
+    var rm = document.createElement('span');
+    rm.className = 'ai-mincpd-tag-remove';
+    rm.title = 'Rimuovi';
+    rm.textContent = '✕';
+    rm.onclick = function() { _cfgRemoveDoubleEcg(doc); };
+    span.textContent = '🔁 ' + doc + ' ';
+    span.appendChild(rm);
+    tags.appendChild(span);
+  });
+  if (!hasTags) tags.innerHTML = '<span class="ai-no-tags">Nessun medico selezionato</span>';
+  sel.innerHTML = '<option value="">Seleziona medico...</option>';
+  allDocs.filter(function(d) { return !_aiDoubleEcg.has(d); }).forEach(function(doc) {
+    var opt = document.createElement('option');
+    opt.value = doc;
+    opt.textContent = doc;
+    sel.appendChild(opt);
+  });
+}
+
+function _cfgAddDoubleEcg() {
+  var sel = document.getElementById('cfg-doubleecg-select');
+  if (!sel || !sel.value) { showToast('⚠️ Seleziona un medico dal menu', 'warning'); return; }
+  var doc = sel.value;
+  _aiDoubleEcg.add(doc);
+  _aiSaveDoubleEcg();
+  _cfgRenderDoubleEcg();
+  showToast('🔁 ' + doc + ' può fare il turno doppio ECG');
+}
+
+function _cfgRemoveDoubleEcg(doc) {
+  _aiDoubleEcg.delete(doc);
+  _aiSaveDoubleEcg();
+  _cfgRenderDoubleEcg();
+  showToast('✕ ' + doc + ' rimosso dal turno doppio ECG');
+}
+
+function _cfgRenderHolter16() {
+  var allDocs = (state.doctors || []).slice().sort();
+  var sel = document.getElementById('cfg-holter16-select');
+  var tags = document.getElementById('cfg-holter16-tags');
+  if (!sel || !tags) return;
+  tags.innerHTML = '';
+  var hasTags = false;
+  _aiHolter16Docs.forEach(function(doc) {
+    if (!allDocs.includes(doc)) return;
+    hasTags = true;
+    var span = document.createElement('span');
+    span.className = 'ai-mincpd-tag';
+    span.dataset.doc = doc;
+    var rm = document.createElement('span');
+    rm.className = 'ai-mincpd-tag-remove';
+    rm.title = 'Rimuovi';
+    rm.textContent = '✕';
+    rm.onclick = function() { _cfgRemoveHolter16(doc); };
+    span.textContent = '⏱️ ' + doc + ' ';
+    span.appendChild(rm);
+    tags.appendChild(span);
+  });
+  if (!hasTags) tags.innerHTML = '<span class="ai-no-tags">Nessun medico selezionato</span>';
+  sel.innerHTML = '<option value="">Seleziona medico...</option>';
+  allDocs.filter(function(d) { return !_aiHolter16Docs.has(d); }).forEach(function(doc) {
+    var opt = document.createElement('option');
+    opt.value = doc;
+    opt.textContent = doc;
+    sel.appendChild(opt);
+  });
+}
+
+function _cfgAddHolter16() {
+  var sel = document.getElementById('cfg-holter16-select');
+  if (!sel || !sel.value) { showToast('⚠️ Seleziona un medico dal menu', 'warning'); return; }
+  var doc = sel.value;
+  _aiHolter16Docs.add(doc);
+  _aiSaveHolter16();
+  _cfgRenderHolter16();
+  if (typeof renderHolterTable === 'function') renderHolterTable();
+  showToast('⏱️ ' + doc + ' può fare il turno Holter da 16');
+}
+
+function _cfgRemoveHolter16(doc) {
+  _aiHolter16Docs.delete(doc);
+  _aiSaveHolter16();
+  _cfgRenderHolter16();
+  if (typeof renderHolterTable === 'function') renderHolterTable();
+  showToast('✕ ' + doc + ' rimosso dal turno Holter da 16');
+}
+
 function _cfgAddAlways() {
   var sel = document.getElementById('cfg-always-select');
   if (!sel || !sel.value) { showToast('⚠️ Seleziona un medico dal menu', 'warning'); return; }
@@ -9847,6 +10026,27 @@ let _aiAlwaysConfirm = new Set();
 let _aiAlwaysLoaded = false;
 let _aiMinConfPerDay = new Set();
 let _aiMinConfPerDayLoaded = false;
+let _aiDoubleEcg = new Set();          // medici ECG che possono fare turno doppio (mattina + pomeriggio)
+let _aiDoubleEcgLoaded = false;
+let _aiHolter16Docs = new Set();       // medici che possono fare il turno Holter da 16
+let _aiHolter16Loaded = false;
+function canHolter16(doc) { return _aiHolter16Docs.has(doc); }
+function _aiLoadHolter16(cb) {
+  if (_aiHolter16Loaded) { if (cb) cb(); return; }
+  firebase.database().ref('cardio_ai_config/holter16Docs').once('value').then(snap => {
+    const arr = snap.val();
+    _aiHolter16Docs = new Set(Array.isArray(arr) ? arr : []);
+    _aiHolter16Loaded = true;
+    if (cb) cb();
+  }).catch(function() {
+    _aiHolter16Loaded = true;
+    if (cb) cb();
+  });
+}
+function _aiSaveHolter16() {
+  const arr = Array.from(_aiHolter16Docs);
+  firebase.database().ref('cardio_ai_config/holter16Docs').set(arr.length > 0 ? arr : null);
+}
 
 // ── Load/save "always confirm" list from Firebase ──
 function _aiLoadAlwaysConfirm(cb) {
@@ -9878,6 +10078,24 @@ function _aiLoadMinConfPerDay(cb) {
     _aiMinConfPerDayLoaded = true;
     if (cb) cb();
   });
+}
+
+function _aiLoadDoubleEcg(cb) {
+  if (_aiDoubleEcgLoaded) { if (cb) cb(); return; }
+  firebase.database().ref('cardio_ai_config/doubleEcg').once('value').then(snap => {
+    const arr = snap.val();
+    _aiDoubleEcg = new Set(Array.isArray(arr) ? arr : []);
+    _aiDoubleEcgLoaded = true;
+    if (cb) cb();
+  }).catch(function() {
+    _aiDoubleEcgLoaded = true;
+    if (cb) cb();
+  });
+}
+
+function _aiSaveDoubleEcg() {
+  const arr = Array.from(_aiDoubleEcg);
+  firebase.database().ref('cardio_ai_config/doubleEcg').set(arr.length > 0 ? arr : null);
 }
 
 function _aiSaveMinConfPerDay() {
@@ -10136,7 +10354,7 @@ function _aiCountWeek(weekKey) {
         var v = sl[k] || '';
         if (!counts[k]) counts[k] = { completo: 0, ecg: 0 };
         if (v === 'confermato') counts[k].completo++;
-        else if (v === 'confermato-ecg') counts[k].ecg++;
+        else if (v === 'confermato-ecg') counts[k].ecg += (si === 1 && isSlotDoppio(dd, k)) ? 2 : 1;   // turno doppio (×2) conta 2
       }
     }
   });
@@ -10162,7 +10380,11 @@ function renderTurniAI() {
   _aiHistoryLoaded = false;
   _aiLoadAlwaysConfirm(function() {
     _aiLoadMinConfPerDay(function() {
-      _aiLoadHistory(function() { _aiRenderInner(); });
+      _aiLoadDoubleEcg(function() {
+        _aiLoadHolter16(function() {
+          _aiLoadHistory(function() { _aiRenderInner(); });
+        });
+      });
     });
   });
 }
@@ -10656,18 +10878,18 @@ function _generateAIDraftCore() {
       }
 
       // Fill ECG slots - selezione con copertura servizi (SSR, Pediatrico, FirmaDigitale)
-      var placedEcgCount = placed.filter(function(p) { return p.type === 'ecg'; }).length;
+      var placedEcgCount = _aiEcgCount(placed, key);
       var candEcg = sortCand(availEcg, 'ecg');
       var toFillEcg = targetEcg - placedEcgCount;
       if (toFillEcg > 0 && candEcg.length > 0) {
         var alreadyEcgDocs = placed.filter(function(p) { return p.type === 'ecg'; }).map(function(p) { return p.doc; });
-        var selectedEcg = _selectEcgWithCoverage(candEcg, toFillEcg, alreadyEcgDocs, placed);
+        var selectedEcg = _aiTrimEcgSel(_selectEcgWithCoverage(candEcg, toFillEcg, alreadyEcgDocs, placed), toFillEcg, key);
         selectedEcg.forEach(function(doc2) {
           placed.push({ doc: doc2, type: 'ecg', always: false, single: false });
           assignCount[doc2] = (assignCount[doc2] || 0) + 1;
           if (!usedOnDay[doc2]) usedOnDay[doc2] = new Set();
           usedOnDay[doc2].add(di);
-          placedEcgCount++;
+          placedEcgCount += _aiEcgW({ doc: doc2, type: 'ecg' }, key);
         });
       }
       // ── Secondo giro copertura ECG: se il target non è raggiunto,
@@ -10686,13 +10908,13 @@ function _generateAIDraftCore() {
           return (assignCount[a] || 0) - (assignCount[b] || 0);
         });
         var alreadyEcgDocs2 = placed.filter(function(p) { return p.type === 'ecg'; }).map(function(p) { return p.doc; });
-        var selectedEcg2 = _selectEcgWithCoverage(doubleOkEcg, toFillEcg2, alreadyEcgDocs2, placed);
+        var selectedEcg2 = _aiTrimEcgSel(_selectEcgWithCoverage(doubleOkEcg, toFillEcg2, alreadyEcgDocs2, placed), toFillEcg2, key);
         selectedEcg2.forEach(function(doc2e) {
           placed.push({ doc: doc2e, type: 'ecg', always: false, single: false });
           assignCount[doc2e] = (assignCount[doc2e] || 0) + 1;
           if (!usedOnDay[doc2e]) usedOnDay[doc2e] = new Set();
           usedOnDay[doc2e].add(di);
-          placedEcgCount++;
+          placedEcgCount += _aiEcgW({ doc: doc2e, type: 'ecg' }, key);
         });
       }
 
@@ -10995,7 +11217,7 @@ function _aiRenderDraftTable() {
     var _pTargetC = parseInt((document.getElementById('ai-pc-' + di) || {}).value) || 0;
     var _pTargetE = parseInt((document.getElementById('ai-pe-' + di) || {}).value) || 0;
     var _pPlacedC = _pItems.filter(function(p){ return p.type === 'completo'; }).length;
-    var _pPlacedE = _pItems.filter(function(p){ return p.type === 'ecg'; }).length;
+    var _pPlacedE = _aiEcgCount(_pItems, di + '_1');
     var _pOverflow = (_pPlacedC > _pTargetC) || (_pPlacedE > _pTargetE);
     var _pTdStyle = 'position:relative;padding-bottom:22px;' + (_pOverflow ? 'background:rgba(220,38,38,0.15);border:2px solid #dc2626;' : '');
     var _pColC = _pPlacedC > _pTargetC ? '#dc2626' : (_pPlacedC === _pTargetC && _pTargetC > 0 ? '#059669' : 'var(--muted)');
@@ -11140,6 +11362,26 @@ function _aiGetServicesTooltip(doc) {
   return lines.join('\n');
 }
 
+// Peso ECG di un inserimento in bozza: 2 se turno doppio ECG del pomeriggio (200 invece di 100), altrimenti 1
+function _aiEcgW(item, key) {
+  if (!item || item.type !== 'ecg' || String(key).slice(-2) !== '_1') return 1;
+  if (!_aiDoubleEcg.has(item.doc)) return 1;
+  return isSlotDoppio((state.weeks[currentWeek] || {})[item.doc], key) ? 2 : 1;
+}
+function _aiEcgCount(items, key) {
+  return (items || []).reduce(function(n, p) { return n + (p.type === 'ecg' ? _aiEcgW(p, key) : 0); }, 0);
+}
+// Dalla selezione tiene solo i medici che servono: un medico doppio copre 2 posti ECG
+function _aiTrimEcgSel(sel, toFill, key) {
+  var out = [], acc = 0;
+  for (var i = 0; i < sel.length; i++) {
+    if (acc >= toFill) break;
+    out.push(sel[i]);
+    acc += _aiEcgW({ doc: sel[i], type: 'ecg' }, key);
+  }
+  return out;
+}
+
 function _aiRenderSlotCell(di, si) {
   var key = di + '_' + si;
   var items = _aiDraft.slots[key] || [];
@@ -11165,6 +11407,7 @@ function _aiRenderSlotCell(di, si) {
     var label = item.doc;
     if (isDouble) label = '⚠️ ' + label;
     if (item.type === 'ecg') label += ' <span style="font-size:9px;opacity:.7;">(ECG)</span>';
+    if (_aiEcgW(item, key) === 2) label += ' <span style="font-size:9px;font-weight:700;color:#d946ef;" title="Turno doppio ECG pomeriggio (200 ECG)">🔁 DOPPIO</span>';
     var _noteSfx = calNoteSuffix((state.weeks[currentWeek] || {})[item.doc], key);   // nota orario, es. (ORE 16-18)
     if (_noteSfx) label += ' <span style="font-size:9px;font-weight:700;opacity:.85;">' + _escNote(_noteSfx.trim()) + '</span>';
     if (item.always) label = '👑 ' + label;
@@ -11173,6 +11416,10 @@ function _aiRenderSlotCell(di, si) {
     else if (item.rule) label = '📋 ' + label;
     var _tt = _aiGetServicesTooltip(item.doc).replace(/"/g, '&quot;');
     h += '<span class="' + cls + '"' + extraStyle + ' data-doc="' + item.doc.replace(/"/g,'&quot;') + '" data-ai-tooltip="' + _tt + '">' + label;
+    if (si === 1 && item.type === 'ecg' && _aiDoubleEcg.has(item.doc)) {
+      var _dOn = _aiEcgW(item, key) === 2;
+      h += ' <button class="ai-dbl ' + (_dOn ? 'on' : 'off') + '" onclick="_aiToggleDoppio(' + di + ',' + idx + ')" title="' + (_dOn ? 'Turno doppio ECG (200) — clicca per togliere' : 'Assegna turno doppio ECG (200 invece di 100)') + '">×2</button>';
+    }
     h += ' <button class="x" onclick="_aiRemoveFromSlot(' + di + ',' + si + ',' + idx + ')" title="Rimuovi">✕</button>';
     h += '</span>';
   });
@@ -11244,6 +11491,17 @@ function _aiRenderHolterCell(di) {
   }
   h += '</div>';
   return h;
+}
+
+// ── Assegna/togli turno doppio ECG (200) dalla bozza Turni AI ──
+function _aiToggleDoppio(di, idx) {
+  var key = di + '_1';
+  var items = _aiDraft && _aiDraft.slots[key];
+  if (!items || !items[idx]) return;
+  var doc = items[idx].doc;
+  if (!_aiDoubleEcg.has(doc)) return;
+  toggleSlotDoppio(doc, key);   // salva il flag sulla settimana, aggiorna tabelle e calendario
+  _aiRenderDraftTable();        // ricalcola contatori ECG della bozza (il doppio vale 2)
 }
 
 // ── Remove doctor from draft slot ──
@@ -11344,8 +11602,8 @@ function _aiShowHolterPopup(evt, di) {
   var _hChoices = [];
   liveAvail.forEach(function(doc) {
     var _v = ((holterWeekData[doc] || {}).slots || {})[di];
-    if (_v === 'disponibile-entrambi') { _hChoices.push({ doc: doc, kind: 'std' }); _hChoices.push({ doc: doc, kind: '16' }); }
-    else _hChoices.push({ doc: doc, kind: _v === 'disponibile16' ? '16' : 'std' });
+    if (_v === 'disponibile-entrambi' && canHolter16(doc)) { _hChoices.push({ doc: doc, kind: 'std' }); _hChoices.push({ doc: doc, kind: '16' }); }
+    else _hChoices.push({ doc: doc, kind: (_v === 'disponibile16' && canHolter16(doc)) ? '16' : 'std' });
   });
   _hChoices.forEach(function(ch) {
     var div = document.createElement('div');
