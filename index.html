@@ -2283,6 +2283,10 @@ function addDays(str, n) {
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
 }
+// Data GG/MM da mostrare sotto il nome del giorno nelle intestazioni delle tabelle
+function dayDateSpan(str) {
+  return '<span style="font-size:10px;font-weight:600;display:block;line-height:1.2;opacity:0.8;">' + str.slice(8,10) + '/' + str.slice(5,7) + '</span>';
+}
 // ─── Festivi italiani ───────────────────────────────────────────────────────
 function getEasterDate(year) {
   // Meeus/Jones/Butcher algorithm
@@ -3029,7 +3033,7 @@ function renderTable() {
     const _hStyle = _hName ? 'background:rgba(220,38,38,0.15);color:var(--danger);' : '';
     const _hTitle = _hName ? _hName + ' — Clicca per evidenziare' : 'Clicca per evidenziare';
     const _hSuffix = _hName ? '<span style="font-size:8px;display:block;line-height:1.1;opacity:0.85;">🇮🇹 ' + _hName + '</span>' : '';
-    headHtml += `<th colspan="2" class="day-header${_hName ? ' day-header-holiday' : ''}" data-day-idx="${di}" onclick="toggleDayHighlight(this, ${di}, 'disp-table')" style="width:74px;cursor:pointer;${_hStyle}" title="${_hTitle}"><span class="day-badge-left" id="badge-mat-${di}"></span>${d}${_hSuffix}<span class="day-badge-right" id="badge-pom-${di}"></span></th>`;
+    headHtml += `<th colspan="2" class="day-header${_hName ? ' day-header-holiday' : ''}" data-day-idx="${di}" onclick="toggleDayHighlight(this, ${di}, 'disp-table')" style="width:74px;cursor:pointer;${_hStyle}" title="${_hTitle}"><span class="day-badge-left" id="badge-mat-${di}"></span>${d}<span class="day-badge-right" id="badge-pom-${di}"></span><span style="font-size:10px;font-weight:600;display:block;line-height:1.2;opacity:0.8;">${_hDate.slice(8,10)}/${_hDate.slice(5,7)}</span>${_hSuffix}</th>`;
   });
   headHtml += '<th rowspan="2" style="width:54px;min-width:54px;white-space:nowrap;font-size:11px;" title="Disponibilità / Conferme">DISP.<br>CONF.</th>';
   headHtml += '<th rowspan="2" style="width:44px;min-width:44px;">FERIE</th></tr><tr>';
@@ -3585,7 +3589,7 @@ function renderHolterTable() {
     const _hName = getItalianHolidayName(_hDate);
     const _hBg = _hName ? '#dc2626' : '#6366f1';
     const _hSuffix = _hName ? '<span style="font-size:8px;display:block;line-height:1.1;opacity:0.85;">🇮🇹 ' + _hName + '</span>' : '';
-    headHtml += `<th class="day-header" data-day-idx="${di}" onclick="toggleDayHighlight(this, ${di}, 'holter-table')" style="width:70px;min-width:70px;background:${_hBg};color:#fff;cursor:pointer;" title="${_hName ? _hName + ' — ' : ''}Clicca per evidenziare">${d}${_hSuffix}<span class="day-badge-right" id="holter-badge-${di}"></span></th>`;
+    headHtml += `<th class="day-header" data-day-idx="${di}" onclick="toggleDayHighlight(this, ${di}, 'holter-table')" style="width:70px;min-width:70px;background:${_hBg};color:#fff;cursor:pointer;" title="${_hName ? _hName + ' — ' : ''}Clicca per evidenziare">${d}<span class="day-badge-right" id="holter-badge-${di}"></span>${dayDateSpan(_hDate)}${_hSuffix}</th>`;
   });
   headHtml += '<th rowspan="2" style="width:54px;min-width:54px;white-space:nowrap;font-size:11px;background:#f0f4ff;" title="Disponibilità / Conferme">DISP.<br>CONF.</th>';
   headHtml += '<th rowspan="2" style="width:44px;min-width:44px;background:#f0f4ff;">FERIE</th></tr>';
@@ -3735,7 +3739,7 @@ function renderHcTable() {
     const _hBg = _hName ? '#dc2626' : COLOR;
     const _hSuffix = _hName ? '<span style="font-size:8px;display:block;line-height:1.1;opacity:0.85;">🇮🇹 ' + _hName + '</span>' : '';
     const _hTitleAttr = _hName ? ` title="${_hName}"` : '';
-    headHtml += `<th class="day-header" style="width:70px;min-width:70px;background:${_hBg};color:#fff;"${_hTitleAttr}>${d}${_hSuffix}</th>`;
+    headHtml += `<th class="day-header" style="width:70px;min-width:70px;background:${_hBg};color:#fff;"${_hTitleAttr}>${d}${dayDateSpan(_hDate)}${_hSuffix}</th>`;
   });
   headHtml += `<th rowspan="2" style="width:54px;min-width:54px;white-space:nowrap;font-size:11px;background:#f0f4ff;" title="Disponibilità / Conferme">DISP.<br>CONF.</th>`;
   headHtml += `<th rowspan="2" style="width:44px;min-width:44px;background:#f0f4ff;">FERIE</th></tr>`;
@@ -3873,7 +3877,7 @@ function renderHpTable() {
     const _hBg = _hName ? '#dc2626' : COLOR;
     const _hSuffix = _hName ? '<span style="font-size:8px;display:block;line-height:1.1;opacity:0.85;">🇮🇹 ' + _hName + '</span>' : '';
     const _hTitleAttr = _hName ? ` title="${_hName}"` : '';
-    headHtml += `<th class="day-header" style="width:70px;min-width:70px;background:${_hBg};color:#fff;"${_hTitleAttr}>${d}${_hSuffix}</th>`;
+    headHtml += `<th class="day-header" style="width:70px;min-width:70px;background:${_hBg};color:#fff;"${_hTitleAttr}>${d}${dayDateSpan(_hDate)}${_hSuffix}</th>`;
   });
   headHtml += `<th rowspan="2" style="width:54px;min-width:54px;white-space:nowrap;font-size:11px;background:#f0f4ff;" title="Disponibilità / Conferme">DISP.<br>CONF.</th>`;
   headHtml += `<th rowspan="2" style="width:44px;min-width:44px;background:#f0f4ff;">FERIE</th></tr>`;
@@ -4017,7 +4021,7 @@ function renderSpiroTable() {
     const _hBg = _hName ? '#dc2626' : COLOR;
     const _hSuffix = _hName ? '<span style="font-size:8px;display:block;line-height:1.1;opacity:0.85;">🇮🇹 ' + _hName + '</span>' : '';
     const _hTitleAttr = _hName ? ` title="${_hName}"` : '';
-    headHtml += `<th class="day-header" style="width:70px;min-width:70px;background:${_hBg};color:#fff;"${_hTitleAttr}>${d}${_hSuffix}</th>`;
+    headHtml += `<th class="day-header" style="width:70px;min-width:70px;background:${_hBg};color:#fff;"${_hTitleAttr}>${d}${dayDateSpan(_hDate)}${_hSuffix}</th>`;
   });
   headHtml += `<th rowspan="2" style="width:54px;min-width:54px;white-space:nowrap;font-size:11px;background:#f0f4ff;" title="Disponibilità / Conferme">DISP.<br>CONF.</th>`;
   headHtml += `<th rowspan="2" style="width:44px;min-width:44px;background:#f0f4ff;">FERIE</th></tr>`;
@@ -4179,7 +4183,7 @@ function renderPlsTable() {
     const _hBg = _hName ? '#dc2626' : COLOR;
     const _hSuffix = _hName ? '<span style="font-size:8px;display:block;line-height:1.1;opacity:0.85;">🇮🇹 ' + _hName + '</span>' : '';
     const _hTitleAttr = _hName ? ` title="${_hName}"` : '';
-    headHtml += `<th class="day-header" style="width:70px;min-width:70px;background:${_hBg};color:#fff;"${_hTitleAttr}>${d}${_hSuffix}</th>`;
+    headHtml += `<th class="day-header" style="width:70px;min-width:70px;background:${_hBg};color:#fff;"${_hTitleAttr}>${d}${dayDateSpan(_hDate)}${_hSuffix}</th>`;
   });
   headHtml += `<th rowspan="2" style="width:54px;min-width:54px;white-space:nowrap;font-size:11px;background:#f0f4ff;" title="Disponibilità / Conferme">DISP.<br>CONF.</th>`;
   headHtml += `<th rowspan="2" style="width:44px;min-width:44px;background:#f0f4ff;">FERIE</th></tr>`;
@@ -7030,7 +7034,7 @@ function renderRiepilogo() {
     Object.entries(dd.slots).forEach(([key, val]) => {
       if (!val) return;
       const isEcg = val === 'solo-ecg' || val === 'confermato-ecg';
-      let label = doc + (isEcg ? ' (SOLO ECG)' : val === 'disponibile-entrambi' ? ' (ecg o completo)' : '');
+      let label = doc + (isEcg ? ' (SOLO ECG)' : val === 'disponibile-entrambi' ? ' (ecg o completo)' : '') + _escNote(calNoteSuffix(dd, key));   // + eventuale nota orario (es. " (ORE 16-18)")
       // Evidenzia chi ha 1 sola disponibilità: giallo=turno completo, fucsia=ecg
       const info = docDispCount[doc];
       if (info && info.total === 1) {
@@ -11161,6 +11165,8 @@ function _aiRenderSlotCell(di, si) {
     var label = item.doc;
     if (isDouble) label = '⚠️ ' + label;
     if (item.type === 'ecg') label += ' <span style="font-size:9px;opacity:.7;">(ECG)</span>';
+    var _noteSfx = calNoteSuffix((state.weeks[currentWeek] || {})[item.doc], key);   // nota orario, es. (ORE 16-18)
+    if (_noteSfx) label += ' <span style="font-size:9px;font-weight:700;opacity:.85;">' + _escNote(_noteSfx.trim()) + '</span>';
     if (item.always) label = '👑 ' + label;
     else if (item.single) label = '🎯 ' + label;
     else if (item.mincpd) label = '📅 ' + label;
@@ -11299,7 +11305,7 @@ function _aiShowAddPopup(evt, di, si) {
   allAvail.forEach(function(item) {
     var div = document.createElement('div');
     div.className = 'ai-popup-item' + (item.type === 'ecg' ? ' ecg' : '');
-    div.textContent = item.doc + (item.type === 'ecg' ? ' (ECG)' : '');
+    div.textContent = item.doc + (item.type === 'ecg' ? ' (ECG)' : '') + calNoteSuffix(weekData[item.doc], key);
     div.onclick = function() {
       _aiAddToSlot(di, si, item.doc, item.type);
       _aiClosePopup();
