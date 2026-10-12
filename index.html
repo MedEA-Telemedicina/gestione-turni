@@ -10086,6 +10086,11 @@ function _aiPersistInputCounts() {
   saved['h_6'] = parseInt((document.getElementById('ai-ho-6') || {}).value) || 0;
   _aiSavedCounts[currentWeek] = saved;
 }
+
+// Salva automaticamente ogni modifica manuale ai numeri (così non si perde cambiando tab)
+document.addEventListener('input', function(e) {
+  if (e.target && /^ai-(mc|me|pc|pe|ho)-\d$/.test(e.target.id || '')) _aiPersistInputCounts();
+});
 let _aiHistory = {};           // { weekKey: { slotKey: [docs] } } — storico conferme AI
 let _aiHistoryLoaded = false;  // flag caricamento storico
 const _AI_HISTORY_WEEKS = 8;   // settimane di storia da considerare
