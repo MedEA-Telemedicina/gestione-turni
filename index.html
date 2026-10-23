@@ -3647,6 +3647,48 @@ function holterNameLabel(doc, v) {
   return doc;
 }
 
+// ── Medici "solo 8 hc": 2 turni da 8 = 1 turno da 16 sdoppiato (contratto) ──
+// Giorni (indici) con turno da 8 confermato, in ordine di settimana
+function holter8ConfDays(hdoc) {
+  const out = [];
+  if (!hdoc || !hdoc.slots) return out;
+  for (let di = 0; di < 7; di++) if (hdoc.slots[di] === 'confermato8') out.push(di);
+  return out;
+}
+// Per il CALENDAR: i turni da 8 confermati vengono accoppiati (1°+2°, 3°+4°...).
+// Sul 1° giorno della coppia si scrive "(TURNO DA 16HC)", sul 2° nulla; un 8 senza coppia resta "(TURNO DA 8HC)".
+// Ritorna { di: 'first' | 'second' | 'single' }
+function holter8CalRoles(hdoc) {
+  const days = holter8ConfDays(hdoc), roles = {};
+  for (let i = 0; i < days.length; i++) {
+    if (i % 2 === 0) roles[days[i]] = (i + 1 < days.length) ? 'first' : 'single';
+    else roles[days[i]] = 'second';
+  }
+  return roles;
+}
+// Testo calendar per una cella holter confermata. Ritorna '' se la cella non va scritta.
+function holterCalLabel(doc, di, hdoc) {
+  const val = hdoc && hdoc.slots ? hdoc.slots[di] : null;
+  if (val === 'confermato8') {
+    const role = holter8CalRoles(hdoc)[di];
+    if (role === 'first')  return doc + ' (' + HOLTER_16_TAG + ')';
+    if (role === 'second') return '';
+  }
+  return holterNameLabel(doc, val);
+}
+// Medici "solo 8 hc" con UN solo turno da 8 confermato nella settimana corrente
+function holter8IncompleteDocs() {
+  const hw = state.holterWeeks[currentWeek] || {};
+  return (state.doctors || []).filter(d => !isDoctorPaused(d) && state.holterEnabled[d] && holterOnlyKind(d) === '8'
+    && hw[d] && !hw[d].ferie && holter8ConfDays(hw[d]).length % 2 === 1);
+}
+function holter8WarnMsg(doc) {
+  const hw = state.holterWeeks[currentWeek] || {};
+  const n = holter8ConfDays(hw[doc]).length;
+  return doc + ': ' + (n === 1 ? 'confermato un solo turno da 8 hc' : 'confermati ' + n + ' turni da 8 hc (numero dispari)')
+    + '. I turni da 8 hc vanno sempre assegnati a coppie (2 turni da 8 = 1 turno da 16 sdoppiato): aggiungine o togline uno.';
+}
+
 function getHolterWeekData() {
   if (!state.holterWeeks[currentWeek]) state.holterWeeks[currentWeek] = {};
   return state.holterWeeks[currentWeek];
@@ -3688,6 +3730,9 @@ function cycleHolterSlot(doc, dayIdx) {
       }
     }
     if (warnings.length > 0) showWarningBanner(warnings);
+  }
+  if (_onlyK === '8' && (next === 'confermato8' || cur === 'confermato8') && holter8ConfDays(dd).length % 2 === 1) {
+    showWarningBanner([holter8WarnMsg(doc)]);
   }
   renderHolterTable();
   autoSave();
@@ -6734,7 +6779,7 @@ function renderCalendar() {
       t2 += '<tr>';
       for (let di = 0; di < nDays; di++) {
         const val = (hdoc.slots && hdoc.slots[di]) || null;
-        const cellText = isHolterConf(val) ? holterNameLabel(doc, val) : '';
+        const cellText = isHolterConf(val) ? holterCalLabel(doc, di, hdoc) : '';
         const cellBg = cellText ? holterColor : '#ffffff';
         t2 += '<td style="' + tdEmptyS + 'background:' + cellBg + ';">' + cellText + '</td>';
       }
@@ -7054,6 +7099,7 @@ async function doSyncCalendar() {
     }
 
     // --- TABELLA 2: Holter confermati ---
+    { const _inc8 = holter8IncompleteDocs(); if (_inc8.length) showWarningBanner(_inc8.map(holter8WarnMsg)); }
     const holterW = state.holterWeeks[currentWeek] || {};
     for (const doc of state.doctors.filter(d => !isDoctorPaused(d) && state.holterEnabled[d])) {
       const hdoc = holterW[doc];
@@ -7062,7 +7108,8 @@ async function doSyncCalendar() {
         const val = (hdoc.slots && hdoc.slots[di]) || null;
         if (isHolterConf(val)) {
           const dateStr = addDays(currentWeek, di);
-          const holterTitle = holterNameLabel(doc, val); // es. "BARTOLI L. (TURNO DA 16HC)" come nella tabella
+          const holterTitle = holterCalLabel(doc, di, hdoc); // es. "BARTOLI L. (TURNO DA 16HC)" come nella tabella; per i turni da 8 hc: coppia → 16 sul 1° giorno
+          if (!holterTitle) continue;   // 2° turno da 8 della coppia: nessun evento
           try { await gcalCreateEvent(GCAL_TURNO_ID, holterTitle, dateStr, '3'); created++; }
           catch(e) { errors++; errorList.push('Holter ' + holterTitle + ': ' + e.message); }
         }
@@ -11980,6 +12027,8 @@ function _aiApplyDraft() {
       }
     });
   }
+
+  { var _inc8 = holter8IncompleteDocs(); if (_inc8.length) showWarningBanner(_inc8.map(holter8WarnMsg)); }
 
   // Salva storico per apprendimento AI
   _aiSaveHistory(currentWeek, _aiDraft);
