@@ -539,6 +539,10 @@
   .slot-btn.disp16 { background: rgba(217,119,6,0.12); border-color: var(--warn); color: var(--warn); font-weight:700; }
   .slot-btn.disp-both { background: rgba(5,150,105,0.12); border-color: var(--warn); color: var(--success); font-weight:700; border-style:dashed; }
   .slot-btn.conf16 { background: rgba(124,58,237,0.14); border-color: var(--accent2); color: var(--accent2); font-weight:700; }
+  .slot-btn.disp20 { background: rgba(8,145,178,0.12); border-color: #0891b2; color: #0891b2; font-weight:700; }
+  .slot-btn.conf20 { background: rgba(8,145,178,0.26); border-color: #0e7490; color: #0e7490; font-weight:700; }
+  .slot-btn.disp8 { background: rgba(219,39,119,0.10); border-color: #db2777; color: #db2777; font-weight:700; }
+  .slot-btn.conf8 { background: rgba(219,39,119,0.24); border-color: #be185d; color: #be185d; font-weight:700; }
   .slot-btn.ferie { background: rgba(220,38,38,0.12); border-color: var(--danger); color: var(--danger); font-weight:700; }
 
   .ferie-td { padding: 4px 6px; }
@@ -1866,6 +1870,28 @@
         <button class="btn btn-sm" style="background:#f97316;color:#fff;border:none;font-weight:700;" onclick="_cfgAddHolter16Only()">+ Aggiungi</button>
       </div>
       <div class="ai-selected-tags" id="cfg-holter16only-tags"><span class="ai-no-tags">Caricamento...</span></div>
+    </div>
+
+    <!-- HOLTER SOLO DA 20 (admin-only) -->
+    <div class="card admin-only" id="ai-holter20only-card">
+      <div class="card-title">⏱️ Solo Holter da 20 hc</div>
+      <p style="font-size:11px;color:var(--muted);margin-bottom:10px;">Medici che fanno <strong>solo il turno Holter da 20 hc</strong> (non il 10 e 10 e non il 16). Nella tabella Holter hanno solo gli stati <strong>20</strong> e <strong>C20</strong>; WhatsApp e bozza Turni AI li trattano sempre come turno da 20 hc. Impostazione persistente.</p>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
+        <select id="cfg-holter20only-select" class="styled" style="flex:1;min-width:140px;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:7px 10px;border-radius:6px;font-size:12px;"></select>
+        <button class="btn btn-sm" style="background:#0891b2;color:#fff;border:none;font-weight:700;" onclick="_cfgAddHolterOnly('20')">+ Aggiungi</button>
+      </div>
+      <div class="ai-selected-tags" id="cfg-holter20only-tags"><span class="ai-no-tags">Caricamento...</span></div>
+    </div>
+
+    <!-- HOLTER SOLO DA 8 (admin-only) -->
+    <div class="card admin-only" id="ai-holter8only-card">
+      <div class="card-title">⏱️ Solo turni da 8 hc</div>
+      <p style="font-size:11px;color:var(--muted);margin-bottom:10px;">Medici che fanno <strong>solo turni da 8 hc</strong> (non il 10 e 10, non il 16 e non il 20). Nella tabella Holter hanno solo gli stati <strong>8</strong> e <strong>C8</strong>; WhatsApp e bozza Turni AI li trattano sempre come turno da 8 hc. Impostazione persistente.</p>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
+        <select id="cfg-holter8only-select" class="styled" style="flex:1;min-width:140px;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:7px 10px;border-radius:6px;font-size:12px;"></select>
+        <button class="btn btn-sm" style="background:#db2777;color:#fff;border:none;font-weight:700;" onclick="_cfgAddHolterOnly('8')">+ Aggiungi</button>
+      </div>
+      <div class="ai-selected-tags" id="cfg-holter8only-tags"><span class="ai-no-tags">Caricamento...</span></div>
     </div>
 
     <!-- VALUTAZIONE AFFIDABILITÀ MEDICI (admin-only) -->
@@ -3595,10 +3621,28 @@ const CONS_DAYS  = ['LUN','MAR','MER','GIO','VEN','SAB','DOM'];
 // Stati cella Holter: '' → X → 16 → X+16 → C → C16 → ''
 const HOLTER_STATES = ['', 'disponibile', 'disponibile16', 'disponibile-entrambi', 'confermato', 'confermato16'];
 const HOLTER_16_TAG = 'TURNO DA 16HC';
-function isHolterAvail(v) { return v === 'disponibile' || v === 'disponibile16' || v === 'disponibile-entrambi'; }
-function isHolterConf(v)  { return v === 'confermato' || v === 'confermato16'; }
+const HOLTER_20_TAG = 'TURNO DA 20HC';
+const HOLTER_8_TAG  = 'TURNO DA 8HC';
+function isHolterAvail(v) { return v === 'disponibile' || v === 'disponibile16' || v === 'disponibile-entrambi' || v === 'disponibile20' || v === 'disponibile8'; }
+function isHolterConf(v)  { return v === 'confermato' || v === 'confermato16' || v === 'confermato20' || v === 'confermato8'; }
+// Medici "solo X": ritorna '16' | '20' | '8' | null. Per questi medici disponibile/confermato vengono sempre convertiti nel loro turno.
+function holterOnlyKind(doc) {
+  if (_aiHolter16OnlyDocs.has(doc)) return '16';
+  if (_aiHolter20OnlyDocs.has(doc)) return '20';
+  if (_aiHolter8OnlyDocs.has(doc))  return '8';
+  return null;
+}
+function holterOnlyNormalize(doc, val) {
+  const k = holterOnlyKind(doc);
+  if (!k) return val;
+  if (val === 'disponibile' || val === 'disponibile-entrambi' || val === 'disponibile16' || val === 'disponibile20' || val === 'disponibile8') return 'disponibile' + k;
+  if (val === 'confermato' || val === 'confermato16' || val === 'confermato20' || val === 'confermato8') return 'confermato' + k;
+  return val;
+}
 function holterNameLabel(doc, v) {
   if (v === 'confermato16' || v === 'disponibile16') return doc + ' (' + HOLTER_16_TAG + ')';
+  if (v === 'confermato20' || v === 'disponibile20') return doc + ' (' + HOLTER_20_TAG + ')';
+  if (v === 'confermato8'  || v === 'disponibile8')  return doc + ' (' + HOLTER_8_TAG + ')';
   if (v === 'disponibile-entrambi') return doc + ' (x o 16)';
   return doc;
 }
@@ -3619,10 +3663,10 @@ function cycleHolterSlot(doc, dayIdx) {
   const dd = getHolterDoctorData(doc);
   let cur = dd.slots[dayIdx] || '';
   let _hStates = canHolter16(doc) ? HOLTER_STATES : ['', 'disponibile', 'confermato'];   // 16 / X+16 / C16 solo per i medici abilitati
-  if (isHolter16Only(doc)) {   // solo turno da 16: '' → 16 → C16 (eventuali vecchi valori X/C/X+16 vengono convertiti)
-    _hStates = ['', 'disponibile16', 'confermato16'];
-    if (cur === 'disponibile' || cur === 'disponibile-entrambi') cur = 'disponibile16';
-    else if (cur === 'confermato') cur = 'confermato16';
+  const _onlyK = holterOnlyKind(doc);
+  if (_onlyK) {   // solo turno da 16 / 20 / 8: '' → N → CN (eventuali vecchi valori X/C/X+16 vengono convertiti)
+    _hStates = ['', 'disponibile' + _onlyK, 'confermato' + _onlyK];
+    cur = holterOnlyNormalize(doc, cur);
   }
   const _hi = _hStates.indexOf(cur);
   const next = _hi < 0 ? '' : _hStates[(_hi + 1) % _hStates.length];
@@ -3680,8 +3724,8 @@ function renderHolterTable() {
   const _hFv = (document.getElementById('filter-input')?.value || '').toLowerCase().trim();
   const _allHolterDocs = (state.doctors || []).filter(d => !isDoctorPaused(d) && state.holterEnabled[d]).sort((a, b) => a.localeCompare(b));
   const docs = _hFv ? _allHolterDocs.filter(d => d.toLowerCase().includes(_hFv)) : _allHolterDocs;
-  const SLOT_LABELS_H = { '': '—', 'disponibile': 'X', 'disponibile16': '16', 'disponibile-entrambi': 'X+16', 'confermato': 'C', 'confermato16': 'C16' };
-  const SLOT_CSS_H = { '': '', 'disponibile': 'disponibile', 'disponibile16': 'disp16', 'disponibile-entrambi': 'disp-both', 'confermato': 'confermato', 'confermato16': 'conf16' };
+  const SLOT_LABELS_H = { '': '—', 'disponibile': 'X', 'disponibile16': '16', 'disponibile-entrambi': 'X+16', 'confermato': 'C', 'confermato16': 'C16', 'disponibile20': '20', 'confermato20': 'C20', 'disponibile8': '8', 'confermato8': 'C8' };
+  const SLOT_CSS_H = { '': '', 'disponibile': 'disponibile', 'disponibile16': 'disp16', 'disponibile-entrambi': 'disp-both', 'confermato': 'confermato', 'confermato16': 'conf16', 'disponibile20': 'disp20', 'confermato20': 'conf20', 'disponibile8': 'disp8', 'confermato8': 'conf8' };
 
   docs.forEach(doc => {
     const dd = getHolterDoctorData(doc);
@@ -3705,7 +3749,7 @@ function renderHolterTable() {
     bodyHtml += `<td class="name-cell${nameStatusCls}" style="background:${nameBg};color:${nameColor};border-left:${nameBorder};font-weight:600;">${doc}</td>`;
     HOLTER_DAYS.forEach((day, di) => {
       let val = dd.slots[di] || '';
-      if (isHolter16Only(doc)) val = val === 'disponibile' || val === 'disponibile-entrambi' ? 'disponibile16' : val === 'confermato' ? 'confermato16' : val;
+      val = holterOnlyNormalize(doc, val);
       const lbl = SLOT_LABELS_H[val] || '—';
       const cls = SLOT_CSS_H[val] || '';
       bodyHtml += `<td data-day-idx="${di}"><button class="slot-btn ${cls}" onclick="cycleHolterSlot('${doc.replace(/'/g,"\\'")}',${di})" title="${day}: ${val||'vuoto'}">${lbl}</button></td>`;
@@ -4378,8 +4422,8 @@ function buildDateMap(mondayStr) {
 
 
 // ── HOLTER: tipi di disponibilità (X standard / 16 = turno da 16hc / X+16 = entrambi) ──
-const HOLTER_KIND_TO_STATE = { std: 'disponibile', '16': 'disponibile16', both: 'disponibile-entrambi' };
-const HOLTER_KIND_LABEL    = { std: 'X', '16': '16', both: 'X+16' };
+const HOLTER_KIND_TO_STATE = { std: 'disponibile', '16': 'disponibile16', both: 'disponibile-entrambi', '20': 'disponibile20', '8': 'disponibile8' };
+const HOLTER_KIND_LABEL    = { std: 'X', '16': '16', both: 'X+16', '20': '20', '8': '8' };
 const HOLTER_KIND_ORDER    = ['std', '16', 'both'];
 function mergeHolterKind(a, b) {
   a = a || 'std'; b = b || 'std';
@@ -6033,7 +6077,7 @@ function applyParsedResult() {
     if (!hdoc.slots) hdoc.slots = {};
     hSlots.forEach(s => {
       const di = parseInt(s.key, 10);
-      const _newState = isHolter16Only(pendingWaDoctor) ? 'disponibile16' : canHolter16(pendingWaDoctor) ? (HOLTER_KIND_TO_STATE[s.kind || 'std'] || 'disponibile') : 'disponibile';   // solo i medici abilitati possono dare 16
+      const _newState = holterOnlyKind(pendingWaDoctor) ? ('disponibile' + holterOnlyKind(pendingWaDoctor)) : canHolter16(pendingWaDoctor) ? (HOLTER_KIND_TO_STATE[s.kind || 'std'] || 'disponibile') : 'disponibile';   // solo i medici abilitati possono dare 16
       hdoc.slots[di] = _newState;
     });
   }
@@ -6360,7 +6404,7 @@ function renderConferma() {
     const holterNames = holterConfSlots.map(([di, hv]) => {
       const idx = parseInt(di, 10);
       const dayNum = parseLocalDate(addDays(currentWeek, idx)).getDate();
-      return { label: `${HNAMES_FULL[idx]} ${dayNum}` + (hv === 'confermato16' ? ' (turno da 16hc)' : ''), idx };
+      return { label: `${HNAMES_FULL[idx]} ${dayNum}` + (hv === 'confermato16' ? ' (turno da 16hc)' : hv === 'confermato20' ? ' (turno da 20hc)' : hv === 'confermato8' ? ' (turno da 8hc)' : ''), idx };
     });
     holterNames.sort((a,b) => a.idx - b.idx);
     const holterNamesLabels = holterNames.map(h => h.label);
@@ -9803,6 +9847,8 @@ function renderAIConfigInSettings() {
           _cfgRenderDoubleEcg();
           _cfgRenderHolter16();
           _cfgRenderHolter16Only();
+          _cfgRenderHolterOnly('20');
+          _cfgRenderHolterOnly('8');
         });
       });
     });
@@ -10015,11 +10061,78 @@ function _cfgAddHolter16Only() {
   var sel = document.getElementById('cfg-holter16only-select');
   if (!sel || !sel.value) { showToast('⚠️ Seleziona un medico dal menu', 'warning'); return; }
   var doc = sel.value;
+  ['20','8'].forEach(function(o) {
+    if (_holterOnlySet(o).has(doc)) { _holterOnlySet(o).delete(doc); _aiSaveHolterOnly(o); _cfgRenderHolterOnly(o); }
+  });
   _aiHolter16OnlyDocs.add(doc);
   _aiSaveHolter16Only();
   _cfgRenderHolter16Only();
   if (typeof renderHolterTable === 'function') renderHolterTable();
   showToast('⏱️ ' + doc + ' fa solo il turno Holter da 16');
+}
+
+
+// ── Solo Holter da 20 hc / Solo turni da 8 hc ──
+var _HOLTER_ONLY_META = {
+  '20': { label: 'Holter da 20 hc', msgAdd: 'fa solo il turno Holter da 20 hc', msgRem: 'rimosso da "solo Holter da 20 hc"' },
+  '8':  { label: 'turni da 8 hc',   msgAdd: 'fa solo turni da 8 hc',            msgRem: 'rimosso da "solo turni da 8 hc"' }
+};
+function _cfgRenderHolterOnly(k) {
+  var set = _holterOnlySet(k);
+  var allDocs = (state.doctors || []).slice().sort();
+  var sel = document.getElementById('cfg-holter' + k + 'only-select');
+  var tags = document.getElementById('cfg-holter' + k + 'only-tags');
+  if (!sel || !tags) return;
+  tags.innerHTML = '';
+  var hasTags = false;
+  set.forEach(function(doc) {
+    if (!allDocs.includes(doc)) return;
+    hasTags = true;
+    var span = document.createElement('span');
+    span.className = 'ai-mincpd-tag';
+    span.dataset.doc = doc;
+    var rm = document.createElement('span');
+    rm.className = 'ai-mincpd-tag-remove';
+    rm.title = 'Rimuovi';
+    rm.textContent = '✕';
+    rm.onclick = function() { _cfgRemoveHolterOnly(k, doc); };
+    span.textContent = '⏱️ ' + doc + ' ';
+    span.appendChild(rm);
+    tags.appendChild(span);
+  });
+  if (!hasTags) tags.innerHTML = '<span class="ai-no-tags">Nessun medico selezionato</span>';
+  sel.innerHTML = '<option value="">Seleziona medico...</option>';
+  allDocs.filter(function(d) { return !set.has(d); }).forEach(function(doc) {
+    var opt = document.createElement('option');
+    opt.value = doc;
+    opt.textContent = doc;
+    sel.appendChild(opt);
+  });
+}
+function _cfgAddHolterOnly(k) {
+  var sel = document.getElementById('cfg-holter' + k + 'only-select');
+  if (!sel || !sel.value) { showToast('⚠️ Seleziona un medico dal menu', 'warning'); return; }
+  var doc = sel.value;
+  // un medico può appartenere a una sola categoria "solo": lo tolgo dalle altre
+  ['16','20','8'].forEach(function(o) {
+    if (o !== k && _holterOnlySet(o).has(doc)) {
+      _holterOnlySet(o).delete(doc);
+      _aiSaveHolterOnly(o);
+      if (o === '16') _cfgRenderHolter16Only(); else _cfgRenderHolterOnly(o);
+    }
+  });
+  _holterOnlySet(k).add(doc);
+  _aiSaveHolterOnly(k);
+  _cfgRenderHolterOnly(k);
+  if (typeof renderHolterTable === 'function') renderHolterTable();
+  showToast('⏱️ ' + doc + ' ' + _HOLTER_ONLY_META[k].msgAdd);
+}
+function _cfgRemoveHolterOnly(k, doc) {
+  _holterOnlySet(k).delete(doc);
+  _aiSaveHolterOnly(k);
+  _cfgRenderHolterOnly(k);
+  if (typeof renderHolterTable === 'function') renderHolterTable();
+  showToast('✕ ' + doc + ' ' + _HOLTER_ONLY_META[k].msgRem);
 }
 
 function _cfgRemoveHolter16Only(doc) {
@@ -10105,16 +10218,27 @@ let _aiDoubleEcgLoaded = false;
 let _aiHolter16Docs = new Set();       // medici che possono fare il turno Holter da 16
 let _aiHolter16Loaded = false;
 let _aiHolter16OnlyDocs = new Set();   // medici che fanno SOLO il turno Holter da 16 (non il 10 e 10)
+let _aiHolter20OnlyDocs = new Set();   // medici che fanno SOLO il turno Holter da 20 hc
+let _aiHolter8OnlyDocs  = new Set();   // medici che fanno SOLO turni da 8 hc
 function isHolter16Only(doc) { return _aiHolter16OnlyDocs.has(doc); }
+function _holterOnlySet(k) { return k === '16' ? _aiHolter16OnlyDocs : k === '20' ? _aiHolter20OnlyDocs : _aiHolter8OnlyDocs; }
+function _aiSaveHolterOnly(k) {
+  const arr = Array.from(_holterOnlySet(k));
+  firebase.database().ref('cardio_ai_config/holter' + k + 'OnlyDocs').set(arr.length > 0 ? arr : null);
+}
 function canHolter16(doc) { return _aiHolter16Docs.has(doc) || _aiHolter16OnlyDocs.has(doc); }
 function _aiLoadHolter16(cb) {
   if (_aiHolter16Loaded) { if (cb) cb(); return; }
   const _db = firebase.database();
   Promise.all([
     _db.ref('cardio_ai_config/holter16Docs').once('value'),
-    _db.ref('cardio_ai_config/holter16OnlyDocs').once('value')
+    _db.ref('cardio_ai_config/holter16OnlyDocs').once('value'),
+    _db.ref('cardio_ai_config/holter20OnlyDocs').once('value'),
+    _db.ref('cardio_ai_config/holter8OnlyDocs').once('value')
   ]).then(function(snaps) {
     const arr = snaps[0].val(), arrOnly = snaps[1].val();
+    _aiHolter20OnlyDocs = new Set(Array.isArray(snaps[2].val()) ? snaps[2].val() : []);
+    _aiHolter8OnlyDocs  = new Set(Array.isArray(snaps[3].val()) ? snaps[3].val() : []);
     _aiHolter16Docs = new Set(Array.isArray(arr) ? arr : []);
     _aiHolter16OnlyDocs = new Set(Array.isArray(arrOnly) ? arrOnly : []);
     _aiHolter16Loaded = true;
@@ -11536,7 +11660,7 @@ function _aiRenderSlotCell(di, si) {
 
 // Tipo holter effettivo di un medico in bozza: '16' se scelto come 16 (o disponibile solo 16), altrimenti 'std'
 function _aiHolterKind(di, doc) {
-  if (isHolter16Only(doc)) return '16';   // medico solo turno da 16
+  if (holterOnlyKind(doc)) return holterOnlyKind(doc);   // medico solo turno da 16 / 20 / 8
   if (_aiDraft && _aiDraft.holter16 && _aiDraft.holter16[di] && _aiDraft.holter16[di][doc]) return '16';
   var hd = (state.holterWeeks[currentWeek] || {})[doc];
   return (hd && hd.slots && hd.slots[di] === 'disponibile16') ? '16' : 'std';
@@ -11551,7 +11675,8 @@ function _aiRenderHolterCell(di) {
     var cls = 'ai-tag';
     if (_aiAlwaysConfirm.has(doc)) cls += ' crown';
     var label = _aiAlwaysConfirm.has(doc) ? '👑 ' + doc : doc;
-    if (_aiHolterKind(di, doc) === '16') label += ' <span style="font-size:9px;opacity:.7;">(16)</span>';
+    var _hk = _aiHolterKind(di, doc);
+    if (_hk !== 'std') label += ' <span style="font-size:9px;opacity:.7;">(' + _hk + ')</span>';
     var _htt = _aiGetServicesTooltip(doc).replace(/"/g, '&quot;');
     h += '<span class="' + cls + '" data-doc="' + doc.replace(/"/g,'&quot;') + '" data-ai-tooltip="' + _htt + '">' + label;
     h += ' <button class="x" onclick="_aiRemoveHolter(' + di + ',' + idx + ')" title="Rimuovi">✕</button>';
@@ -11688,14 +11813,14 @@ function _aiShowHolterPopup(evt, di) {
   var _hChoices = [];
   liveAvail.forEach(function(doc) {
     var _v = ((holterWeekData[doc] || {}).slots || {})[di];
-    if (isHolter16Only(doc)) _hChoices.push({ doc: doc, kind: '16' });
+    if (holterOnlyKind(doc)) _hChoices.push({ doc: doc, kind: holterOnlyKind(doc) });
     else if (_v === 'disponibile-entrambi' && canHolter16(doc)) { _hChoices.push({ doc: doc, kind: 'std' }); _hChoices.push({ doc: doc, kind: '16' }); }
     else _hChoices.push({ doc: doc, kind: (_v === 'disponibile16' && canHolter16(doc)) ? '16' : 'std' });
   });
   _hChoices.forEach(function(ch) {
     var div = document.createElement('div');
     div.className = 'ai-popup-item';
-    div.textContent = ch.doc + (ch.kind === '16' ? ' (16)' : '');
+    div.textContent = ch.doc + (ch.kind !== 'std' ? ' (' + ch.kind + ')' : '');
     div.onclick = function() {
       _aiAddHolter(di, ch.doc, ch.kind);
       _aiClosePopup();
@@ -11849,7 +11974,8 @@ function _aiApplyDraft() {
       if (!holterWeek[doc].slots) holterWeek[doc].slots = {};
       var _cv = holterWeek[doc].slots[di];
       if (isHolterAvail(_cv) || !_cv) {
-        holterWeek[doc].slots[di] = (_cv === 'disponibile16' || _aiHolterKind(di, doc) === '16') ? 'confermato16' : 'confermato';
+        var _hk2 = _aiHolterKind(di, doc);
+        holterWeek[doc].slots[di] = _hk2 === '20' ? 'confermato20' : _hk2 === '8' ? 'confermato8' : (_cv === 'disponibile16' || _hk2 === '16') ? 'confermato16' : 'confermato';
         applied++;
       }
     });
